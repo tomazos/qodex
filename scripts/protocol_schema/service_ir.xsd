@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:group name="LeadingCommentsGroup">
+    <xs:sequence>
+      <xs:element name="comment" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:element name="service">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LeadingCommentsGroup"/>
+        <xs:element name="types" type="TypesType" minOccurs="0"/>
+        <xs:element name="enumerations" type="EnumerationsType"/>
+        <xs:element name="structs" type="StructsType"/>
+        <xs:element name="unions" type="UnionsType"/>
+        <xs:element name="messages" type="MessagesType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="TypesType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="type" type="TypeDefType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TypeDefType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="EnumerationsType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="enumeration" type="EnumerationType"/>
+        <xs:element name="extendedEnumeration" type="ExtendedEnumerationType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EnumerationType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="enumerator" type="EnumeratorType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="EnumeratorType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ExtendedEnumerationType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="enumerator" type="ExtendedEnumeratorType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ExtendedEnumeratorType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="StructsType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="struct" type="StructType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StructType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="member" type="MemberType" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="anything" type="EmptyElementType" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="UnionsType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="union" type="UnionType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="UnionType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="alternative" type="AlternativeType" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="discriminator">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="type"/>
+          <xs:enumeration value="mode"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="AlternativeType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="MessagesType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="request" type="RequestType"/>
+        <xs:element name="notification" type="NotificationType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RequestType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="params" type="ParamsType" minOccurs="0"/>
+      <xs:element name="response" type="InlineTypeExprType"/>
+    </xs:sequence>
+    <xs:attribute name="origin" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="client"/>
+          <xs:enumeration value="server"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="method" type="xs:string" use="required"/>
+    <xs:attribute name="title" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="NotificationType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="params" type="ParamsType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="origin" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="client"/>
+          <xs:enumeration value="server"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="method" type="xs:string" use="required"/>
+    <xs:attribute name="title" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ParamsType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="param" type="ParamType"/>
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ParamType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="use" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="optional"/>
+          <xs:enumeration value="required"/>
+          <xs:enumeration value="nullable"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="MemberType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="use" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="optional"/>
+          <xs:enumeration value="required"/>
+          <xs:enumeration value="nullable"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="ObjectType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="member" type="MemberType" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="anything" type="EmptyElementType" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InlineTypeExprType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="VariantType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:element name="alternative" type="VariantAlternativeType" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="VariantAlternativeType" mixed="true">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+      <xs:choice minOccurs="0" maxOccurs="1">
+        <xs:element name="array" type="InlineTypeExprType"/>
+        <xs:element name="map" type="InlineTypeExprType"/>
+        <xs:element name="variant" type="VariantType"/>
+        <xs:element name="object" type="ObjectType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EmptyElementType">
+    <xs:sequence>
+      <xs:group ref="LeadingCommentsGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
