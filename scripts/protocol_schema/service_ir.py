@@ -45,6 +45,7 @@ class ServiceIrEntry:
     method: str
     title: str
     has_params_element: bool
+    params_is_null: bool = False
     comments: tuple[str, ...] = ()
     params_comments: tuple[str, ...] = ()
     response_comments: tuple[str, ...] = ()
@@ -279,9 +280,12 @@ class ServiceIrExporter:
         analysis: ProtocolAnalysis,
     ) -> list[ServiceIrStructEntry]:
         mentioned_type_names = self._reachable_named_types(analysis)
+        inline_params_struct_names = self._inline_message_params_struct_type_names(analysis)
         entries: list[ServiceIrStructEntry] = []
 
         for type_name in sorted(mentioned_type_names):
+            if type_name in inline_params_struct_names:
+                continue
             enumorstruct_struct_entry = self._enumorstruct_struct_entry_for_type_name(
                 analysis,
                 type_name,
@@ -460,20 +464,30 @@ class ServiceIrExporter:
     ) -> ServiceIrEntry:
         has_params_element = variant.params_shape != ParamsShape.MISSING
         params_expr: ServiceIrTypeExpr | None = None
+        param_fields: tuple[ServiceIrParamField, ...] = ()
         params_comments: tuple[str, ...] = ()
 
         if variant.params_shape == ParamsShape.REF and variant.params_type_name is not None:
-            params_expr = self._type_expr_for_named_type_name(
-                analysis,
-                variant.params_type_name,
-                stack=set(),
-            )
+            named_schema = self._lookup_named_schema(analysis, variant.params_type_name)
             params_comments = self._comments_from_nodes(
                 variant.params_schema,
-                self._lookup_named_schema(analysis, variant.params_type_name).node
-                if self._lookup_named_schema(analysis, variant.params_type_name) is not None
-                else None,
+                named_schema.node if named_schema is not None else None,
             )
+            if (
+                named_schema is not None
+                and variant.params_type_name in self._inline_message_params_struct_type_names(analysis)
+            ):
+                param_fields = self._param_fields_from_object_node(
+                    analysis,
+                    named_schema.node,
+                    stack={variant.params_type_name},
+                )
+            else:
+                params_expr = self._type_expr_for_named_type_name(
+                    analysis,
+                    variant.params_type_name,
+                    stack=set(),
+                )
         elif variant.params_schema is not None:
             params_comments = self._node_comments(variant.params_schema)
 
@@ -495,8 +509,10 @@ class ServiceIrExporter:
             method=variant.method,
             title=variant.title,
             has_params_element=has_params_element,
+            params_is_null=variant.params_shape == ParamsShape.NULL,
             comments=self._node_comments(variant.node),
             params_comments=params_comments,
+            param_fields=param_fields,
             response_comments=response_comments,
             params_expr=params_expr,
             response_expr=response_expr,
@@ -515,15 +531,50 @@ class ServiceIrExporter:
         self._append_comments(element, entry.comments)
 
         if entry.has_params_element:
-            params_el = ET.SubElement(element, "params")
-            self._append_comments(params_el, entry.params_comments)
-            if entry.params_expr is not None:
+            params_attrs: dict[str, str] = {}
+            if entry.params_is_null:
+                params_attrs["null"] = "true"
+            params_el = ET.SubElement(element, "params", params_attrs)
+            self._append_comments(
+                params_el,
+                self._merge_comments(
+                    entry.params_comments,
+                    entry.params_expr.comments
+                    if self._is_empty_object_expr(entry.params_expr)
+                    else (),
+                ),
+            )
+            for param_field in entry.param_fields:
+                param_el = ET.SubElement(
+                    params_el,
+                    "param",
+                    {
+                        "id": param_field.id,
+                        "use": param_field.use,
+                    },
+                )
+                self._append_comments(param_el, param_field.comments)
+                self._append_type_expr(param_el, param_field.type_expr)
+            if (
+                not entry.param_fields
+                and entry.params_expr is not None
+                and not self._is_empty_object_expr(entry.params_expr)
+            ):
                 self._append_type_expr(params_el, entry.params_expr)
 
         if entry.kind == "request" and entry.response_expr is not None:
             response_el = ET.SubElement(element, "response")
-            self._append_comments(response_el, entry.response_comments)
-            self._append_type_expr(response_el, entry.response_expr)
+            self._append_comments(
+                response_el,
+                self._merge_comments(
+                    entry.response_comments,
+                    entry.response_expr.comments
+                    if self._is_empty_object_expr(entry.response_expr)
+                    else (),
+                ),
+            )
+            if not self._is_empty_object_expr(entry.response_expr):
+                self._append_type_expr(response_el, entry.response_expr)
 
     def _append_type_expr(self, parent: ET.Element, expr: ServiceIrTypeExpr) -> None:
         last_comment = self._append_comments(parent, expr.comments)
@@ -563,6 +614,18 @@ class ServiceIrExporter:
             return
 
         self._set_text_after_comments(parent, expr.text, last_comment)
+
+    def _is_empty_object_expr(self, expr: ServiceIrTypeExpr | None) -> bool:
+        return (
+            expr is not None
+            and expr.object_members is not None
+            and not expr.object_members
+            and not expr.object_allows_anything
+            and expr.text is None
+            and expr.array_item is None
+            and expr.map_value is None
+            and expr.variant_alternatives is None
+        )
 
     def _append_struct_body(self, parent: ET.Element, expr: ServiceIrTypeExpr) -> None:
         if expr.object_members is None:
@@ -665,6 +728,51 @@ class ServiceIrExporter:
             )
 
         return tuple(fields)
+
+    def _inline_message_params_struct_type_names(
+        self,
+        analysis: ProtocolAnalysis,
+    ) -> set[str]:
+        known_type_names = set(analysis.named_schemas)
+        protocol_wrapper_schema_names = {
+            "ClientRequest",
+            "ServerRequest",
+            "ClientNotification",
+            "ServerNotification",
+        }
+        params_type_names: set[str] = set()
+        non_param_references: set[str] = set()
+
+        for family in (
+            analysis.client_requests,
+            analysis.server_requests,
+            analysis.client_notifications,
+            analysis.server_notifications,
+        ):
+            for variant in family.variants:
+                if variant.params_shape == ParamsShape.REF and variant.params_type_name is not None:
+                    params_type_names.add(variant.params_type_name)
+
+        for mapping in analysis.request_response_mappings:
+            non_param_references.add(mapping.response_type_name)
+
+        for schema_name, candidates in analysis.named_schemas.items():
+            if schema_name in protocol_wrapper_schema_names:
+                continue
+            for candidate in candidates:
+                for referenced_name in self._collect_named_type_mentions_from_schema_node(
+                    candidate.node,
+                    known_type_names,
+                ):
+                    if referenced_name != schema_name:
+                        non_param_references.add(referenced_name)
+
+        return {
+            type_name
+            for type_name in params_type_names
+            if self._is_struct_type_name(analysis, type_name)
+            and type_name not in non_param_references
+        }
 
     def _type_expr_for_named_type_name(
         self,
@@ -1813,6 +1921,7 @@ class ServiceIrExporter:
             self._invalid_union_alternative_targets(unions_el, listed_structs)
         )
         invalid_union_attrs = sorted(self._invalid_union_attributes(unions_el))
+        invalid_params_null = sorted(self._invalid_message_params_null(messages_el))
 
         problems: list[str] = []
         if overlapping_names:
@@ -1838,6 +1947,12 @@ class ServiceIrExporter:
                 "unions must have discriminator: "
                 + ", ".join(invalid_union_attrs[:20])
                 + (" ..." if len(invalid_union_attrs) > 20 else "")
+            )
+        if invalid_params_null:
+            problems.append(
+                "params with null=\"true\" must not contain a nested type expression: "
+                + ", ".join(invalid_params_null[:20])
+                + (" ..." if len(invalid_params_null) > 20 else "")
             )
         if problems:
             raise ValueError("; ".join(problems))
@@ -1898,6 +2013,22 @@ class ServiceIrExporter:
             has_discriminator = bool(union_el.attrib.get("discriminator", "").strip())
             if not has_discriminator:
                 invalid.add(union_id)
+        return invalid
+
+    def _invalid_message_params_null(self, messages_el: ET.Element) -> set[str]:
+        invalid: set[str] = set()
+        for message_el in messages_el:
+            if message_el.tag not in {"request", "notification"}:
+                continue
+            params_el = message_el.find("params")
+            if params_el is None:
+                continue
+            if params_el.attrib.get("null") not in {"true", "1"}:
+                continue
+            if self._collect_type_mentions_from_expr_element(params_el) or any(
+                child.tag != "comment" for child in params_el
+            ):
+                invalid.add(f"{message_el.tag}:{message_el.attrib.get('method', '').strip()}")
         return invalid
 
     def _collect_type_mentions_from_expr_element(self, element: ET.Element) -> set[str]:

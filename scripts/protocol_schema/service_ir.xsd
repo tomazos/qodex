@@ -187,6 +187,7 @@
         <xs:element name="object" type="ObjectType"/>
       </xs:choice>
     </xs:sequence>
+    <xs:attribute name="null" type="xs:boolean" use="optional"/>
   </xs:complexType>
 
   <xs:complexType name="ParamType" mixed="true">

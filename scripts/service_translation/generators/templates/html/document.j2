@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Service UML</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f1e7;
+      --panel: #fffdf8;
+      --grid: #2f271b;
+      --muted: #786b56;
+      --accent: #8d4b29;
+      --header: #ece2d0;
+      --shadow: rgba(47, 39, 27, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(141, 75, 41, 0.11), transparent 32rem),
+        linear-gradient(180deg, #faf7f0 0%, var(--bg) 100%);
+      color: #201910;
+      font: 14px/1.45 "Iosevka Term", "SFMono-Regular", "Consolas", monospace;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 6px;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 28px 0 12px;
+      color: var(--accent);
+    }
+    h3 {
+      font-size: 15px;
+      margin: 18px 0 10px;
+      color: #5f331b;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .summary {
+      margin-top: 14px;
+      color: var(--muted);
+    }
+    .catalog {
+      margin: 16px 0 6px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(47, 39, 27, 0.14);
+    }
+    .catalog-line {
+      margin: 4px 0;
+    }
+    .catalog-label {
+      color: var(--muted);
+    }
+    .message-group {
+      margin-top: 14px;
+    }
+    .message-group:first-of-type {
+      margin-top: 0;
+    }
+    .section-grid {
+      column-count: 4;
+      column-gap: 16px;
+    }
+    .section-grid > * {
+      break-inside: avoid;
+      margin: 0 0 16px;
+      width: 100%;
+    }
+    table.uml {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      box-shadow: 0 10px 24px var(--shadow);
+      table-layout: fixed;
+    }
+    table.uml th,
+    table.uml td {
+      border: 2px solid var(--grid);
+      padding: 8px 10px;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    table.uml thead th {
+      background: var(--header);
+      text-align: left;
+      font-size: 15px;
+    }
+    .comment {
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .nested {
+      padding-left: 18px;
+    }
+    @media (max-width: 1800px) {
+      .section-grid {
+        column-count: 3;
+      }
+    }
+    @media (max-width: 1350px) {
+      .section-grid {
+        column-count: 2;
+      }
+    }
+    @media (max-width: 900px) {
+      .section-grid {
+        column-count: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+{{ body }}
+</body>
+</html>
