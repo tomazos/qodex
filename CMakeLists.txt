@@ -10,11 +10,12 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Test)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(BASH_EXECUTABLE bash REQUIRED)
 
 qt_standard_project_setup()
+include(CTest)
 
 set(QODEX_SETUP_PYTHON_SCRIPT "${PROJECT_SOURCE_DIR}/setup_python.sh")
 set(QODEX_VENV_PYTHON "${PROJECT_SOURCE_DIR}/.venv/bin/python")
@@ -40,8 +41,11 @@ set(QODEX_SERVICE_TRANSLATION_SOURCES
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/model.py"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/parser.py"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/__init__.py"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/cpp.py"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/html.py"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/null.py"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/qt.py"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/cpp/header.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/card.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/catalog.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/catalog_line.j2"
@@ -49,6 +53,10 @@ set(QODEX_SERVICE_TRANSLATION_SOURCES
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/header.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/message_group.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/html/section.j2"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexProtocol.h.j2"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexProtocol.cpp.j2"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexClient.h.j2"
+    "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexClient.cpp.j2"
 )
 
 add_custom_command(
@@ -66,7 +74,18 @@ add_custom_target(qodex_python_env
     DEPENDS "${QODEX_PYTHON_ENV_STAMP}"
 )
 
-function(qodex_add_service_variant variant schema_marker output_xml output_html)
+function(
+    qodex_add_service_variant
+    variant
+    schema_marker
+    output_xml
+    output_html
+    output_h
+    output_protocol_h
+    output_protocol_cpp
+    output_client_h
+    output_client_cpp
+)
     add_custom_command(
         OUTPUT "${output_xml}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<SHELL_PATH:${QODEX_PROTOCOL_MODEL_ROOT}>/${QODEX_CODEX_VERSION}/${variant}"
@@ -92,6 +111,46 @@ function(qodex_add_service_variant variant schema_marker output_xml output_html)
                 "${output_xml}"
                 html
                 "${output_html}"
+                --xsd "${PROJECT_SOURCE_DIR}/scripts/protocol_schema/service_ir.xsd"
+        DEPENDS
+            "${QODEX_PYTHON_ENV_STAMP}"
+            "${output_xml}"
+            ${QODEX_PROTOCOL_SCHEMA_SOURCES}
+            ${QODEX_SERVICE_TRANSLATION_SOURCES}
+        VERBATIM
+    )
+
+    add_custom_command(
+        OUTPUT "${output_h}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<SHELL_PATH:${QODEX_PROTOCOL_MODEL_ROOT}>/${QODEX_CODEX_VERSION}/${variant}"
+        COMMAND "${BASH_EXECUTABLE}" "${QODEX_SETUP_PYTHON_SCRIPT}"
+        COMMAND "${QODEX_VENV_PYTHON}"
+                "${PROJECT_SOURCE_DIR}/scripts/translate_service.py"
+                "${output_xml}"
+                cpp
+                "${output_h}"
+                --xsd "${PROJECT_SOURCE_DIR}/scripts/protocol_schema/service_ir.xsd"
+        DEPENDS
+            "${QODEX_PYTHON_ENV_STAMP}"
+            "${output_xml}"
+            ${QODEX_PROTOCOL_SCHEMA_SOURCES}
+            ${QODEX_SERVICE_TRANSLATION_SOURCES}
+        VERBATIM
+    )
+
+    add_custom_command(
+        OUTPUT
+            "${output_protocol_h}"
+            "${output_protocol_cpp}"
+            "${output_client_h}"
+            "${output_client_cpp}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<SHELL_PATH:${QODEX_PROTOCOL_MODEL_ROOT}>/${QODEX_CODEX_VERSION}/${variant}"
+        COMMAND "${BASH_EXECUTABLE}" "${QODEX_SETUP_PYTHON_SCRIPT}"
+        COMMAND "${QODEX_VENV_PYTHON}"
+                "${PROJECT_SOURCE_DIR}/scripts/translate_service.py"
+                "${output_xml}"
+                qt
+                "$<SHELL_PATH:${QODEX_PROTOCOL_MODEL_ROOT}>/${QODEX_CODEX_VERSION}/${variant}"
                 --xsd "${PROJECT_SOURCE_DIR}/scripts/protocol_schema/service_ir.xsd"
         DEPENDS
             "${QODEX_PYTHON_ENV_STAMP}"
@@ -151,11 +210,41 @@ if(CODEX_EXECUTABLE AND QODEX_CODEX_VERSION)
     set(QODEX_NONEXPERIMENTAL_SERVICE_HTML
         "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/service.html"
     )
+    set(QODEX_NONEXPERIMENTAL_SERVICE_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/service.h"
+    )
+    set(QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/CodexClient.h"
+    )
+    set(QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/CodexProtocol.h"
+    )
+    set(QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/CodexProtocol.cpp"
+    )
+    set(QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental/CodexClient.cpp"
+    )
     set(QODEX_EXPERIMENTAL_SERVICE_XML
         "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/service.xml"
     )
     set(QODEX_EXPERIMENTAL_SERVICE_HTML
         "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/service.html"
+    )
+    set(QODEX_EXPERIMENTAL_SERVICE_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/service.h"
+    )
+    set(QODEX_EXPERIMENTAL_CODEX_CLIENT_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/CodexClient.h"
+    )
+    set(QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/CodexProtocol.h"
+    )
+    set(QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/CodexProtocol.cpp"
+    )
+    set(QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental/CodexClient.cpp"
     )
 
     qodex_add_service_variant(
@@ -163,20 +252,40 @@ if(CODEX_EXECUTABLE AND QODEX_CODEX_VERSION)
         "${QODEX_NONEXPERIMENTAL_SCHEMA_MARKER}"
         "${QODEX_NONEXPERIMENTAL_SERVICE_XML}"
         "${QODEX_NONEXPERIMENTAL_SERVICE_HTML}"
+        "${QODEX_NONEXPERIMENTAL_SERVICE_H}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
     )
     qodex_add_service_variant(
         experimental
         "${QODEX_EXPERIMENTAL_SCHEMA_MARKER}"
         "${QODEX_EXPERIMENTAL_SERVICE_XML}"
         "${QODEX_EXPERIMENTAL_SERVICE_HTML}"
+        "${QODEX_EXPERIMENTAL_SERVICE_H}"
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
+        "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
     )
 
     add_custom_target(qodex_protocol_artifacts
         DEPENDS
             "${QODEX_NONEXPERIMENTAL_SERVICE_XML}"
             "${QODEX_NONEXPERIMENTAL_SERVICE_HTML}"
+            "${QODEX_NONEXPERIMENTAL_SERVICE_H}"
+            "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
+            "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+            "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
+            "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
             "${QODEX_EXPERIMENTAL_SERVICE_XML}"
             "${QODEX_EXPERIMENTAL_SERVICE_HTML}"
+            "${QODEX_EXPERIMENTAL_SERVICE_H}"
+            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
+            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
     )
 else()
     message(STATUS "codex executable not found or version unreadable; skipping protocol artifact generation targets.")
@@ -186,12 +295,70 @@ qt_add_executable(qodex
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
+    src/codex/AppServerTransport.cpp
+    src/codex/AppServerTransport.h
+    src/codex/CodexClientBase.cpp
+    src/codex/CodexClientBase.h
+    src/codex/JsonRpcMessage.h
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Widgets)
+target_include_directories(qodex PRIVATE
+    "${PROJECT_SOURCE_DIR}/src"
+)
+
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Widgets)
 
 if(TARGET qodex_protocol_artifacts)
     add_dependencies(qodex qodex_protocol_artifacts)
+    target_sources(qodex PRIVATE
+        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
+        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
+    )
+endif()
+
+if(BUILD_TESTING)
+    qt_add_executable(AppServerTransportTest
+        tests/codex/AppServerTransportTest.cpp
+        src/codex/AppServerTransport.cpp
+        src/codex/AppServerTransport.h
+        src/codex/JsonRpcMessage.h
+    )
+
+    target_include_directories(AppServerTransportTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(AppServerTransportTest PRIVATE Qt6::Core Qt6::Test)
+
+    add_test(NAME AppServerTransportTest COMMAND AppServerTransportTest)
+
+    if(TARGET qodex_protocol_artifacts)
+        qt_add_executable(CodexClientGeneratedTest
+            tests/codex/CodexClientGeneratedTest.cpp
+            src/codex/AppServerTransport.cpp
+            src/codex/AppServerTransport.h
+            src/codex/CodexClientBase.cpp
+            src/codex/CodexClientBase.h
+            src/codex/JsonRpcMessage.h
+            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
+            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
+        )
+
+        add_dependencies(CodexClientGeneratedTest qodex_protocol_artifacts)
+
+        target_include_directories(CodexClientGeneratedTest PRIVATE
+            "${PROJECT_SOURCE_DIR}/src"
+            "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
+        )
+
+        target_link_libraries(CodexClientGeneratedTest PRIVATE Qt6::Core Qt6::Test)
+
+        add_test(NAME CodexClientGeneratedTest COMMAND CodexClientGeneratedTest)
+    endif()
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)

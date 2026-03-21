@@ -1,0 +1,502 @@
+// AUTOMATICALLY GENERATED - DO NOT EDIT
+#pragma once
+
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QList>
+#include <QMap>
+#include <QMetaType>
+#include <QSharedPointer>
+#include <QString>
+#include <QtGlobal>
+
+#include <cstddef>
+#include <optional>
+#include <type_traits>
+#include <utility>
+#include <variant>
+
+namespace qodex::codex {
+
+struct EmptyObject {};
+
+template <typename T>
+using Ref = QSharedPointer<T>;
+
+template <typename T>
+class Nullable {
+public:
+    enum class State {
+        Missing,
+        Null,
+        Value,
+    };
+
+    Nullable() = default;
+
+    [[nodiscard]] static Nullable missing() {
+        return Nullable{};
+    }
+
+    [[nodiscard]] static Nullable null() {
+        Nullable result;
+        result.m_state = State::Null;
+        return result;
+    }
+
+    [[nodiscard]] static Nullable fromValue(T value) {
+        Nullable result;
+        result.m_state = State::Value;
+        result.m_value = std::move(value);
+        return result;
+    }
+
+    [[nodiscard]] bool isMissing() const {
+        return m_state == State::Missing;
+    }
+
+    [[nodiscard]] bool isNull() const {
+        return m_state == State::Null;
+    }
+
+    [[nodiscard]] bool hasValue() const {
+        return m_state == State::Value;
+    }
+
+    [[nodiscard]] const T &value() const {
+        return *m_value;
+    }
+
+    [[nodiscard]] T &value() {
+        return *m_value;
+    }
+
+private:
+    State m_state = State::Missing;
+    std::optional<T> m_value;
+};
+
+{% for enumeration in plain_enumerations %}
+{% for line in enumeration.comment_lines %}
+{{ line }}
+{% endfor %}
+enum class {{ enumeration.name }} {
+{% for enumerator in enumeration.enumerators %}
+{% for line in enumerator.comment_lines %}
+    {{ line }}
+{% endfor %}
+    {{ enumerator.cpp_name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+};
+
+{% endfor %}
+{% for name in forward_composite_names %}
+struct {{ name }};
+{% endfor %}
+
+QJsonValue toJson(const EmptyObject &value);
+bool fromJson(const QJsonValue &json, EmptyObject &value, QString *error = nullptr);
+
+{% for enumeration in plain_enumerations %}
+QJsonValue toJson({{ enumeration.name }} value);
+bool fromJson(const QJsonValue &json, {{ enumeration.name }} &value, QString *error = nullptr);
+{% endfor %}
+{% for struct in structs %}
+QJsonValue toJson(const {{ struct.name }} &value);
+bool fromJson(const QJsonValue &json, {{ struct.name }} &value, QString *error = nullptr);
+{% endfor %}
+{% for enumeration in extended_enumerations %}
+QJsonValue toJson(const {{ enumeration.name }} &value);
+bool fromJson(const QJsonValue &json, {{ enumeration.name }} &value, QString *error = nullptr);
+{% endfor %}
+{% for union in unions %}
+QJsonValue toJson(const {{ union.name }} &value);
+bool fromJson(const QJsonValue &json, {{ union.name }} &value, QString *error = nullptr);
+{% endfor %}
+
+inline void setDecodeError(QString *error, const QString &message) {
+    if (error != nullptr) {
+        *error = message;
+    }
+}
+
+inline QJsonValue toJson(const QString &value) {
+    return QJsonValue(value);
+}
+
+inline bool fromJson(const QJsonValue &json, QString &value, QString *error = nullptr) {
+    if (!json.isString()) {
+        setDecodeError(error, QStringLiteral("Expected string."));
+        return false;
+    }
+    value = json.toString();
+    return true;
+}
+
+inline QJsonValue toJson(bool value) {
+    return QJsonValue(value);
+}
+
+inline bool fromJson(const QJsonValue &json, bool &value, QString *error = nullptr) {
+    if (!json.isBool()) {
+        setDecodeError(error, QStringLiteral("Expected boolean."));
+        return false;
+    }
+    value = json.toBool();
+    return true;
+}
+
+inline QJsonValue toJson(qint64 value) {
+    return QJsonValue(value);
+}
+
+inline bool fromJson(const QJsonValue &json, qint64 &value, QString *error = nullptr) {
+    if (!json.isDouble()) {
+        setDecodeError(error, QStringLiteral("Expected integer."));
+        return false;
+    }
+    value = json.toInteger();
+    return true;
+}
+
+inline QJsonValue toJson(double value) {
+    return QJsonValue(value);
+}
+
+inline bool fromJson(const QJsonValue &json, double &value, QString *error = nullptr) {
+    if (!json.isDouble()) {
+        setDecodeError(error, QStringLiteral("Expected number."));
+        return false;
+    }
+    value = json.toDouble();
+    return true;
+}
+
+inline QJsonValue toJson(const QJsonArray &value) {
+    return value;
+}
+
+inline bool fromJson(const QJsonValue &json, QJsonArray &value, QString *error = nullptr) {
+    if (!json.isArray()) {
+        setDecodeError(error, QStringLiteral("Expected array."));
+        return false;
+    }
+    value = json.toArray();
+    return true;
+}
+
+inline QJsonValue toJson(const QJsonObject &value) {
+    return value;
+}
+
+inline bool fromJson(const QJsonValue &json, QJsonObject &value, QString *error = nullptr) {
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected object."));
+        return false;
+    }
+    value = json.toObject();
+    return true;
+}
+
+inline QJsonValue toJson(const QJsonValue &value) {
+    return value;
+}
+
+inline bool fromJson(const QJsonValue &json, QJsonValue &value, QString *error = nullptr) {
+    Q_UNUSED(error);
+    value = json;
+    return true;
+}
+
+inline QJsonValue toJson(std::monostate value) {
+    Q_UNUSED(value);
+    return QJsonValue(QJsonValue::Null);
+}
+
+inline bool fromJson(const QJsonValue &json, std::monostate &value, QString *error = nullptr) {
+    Q_UNUSED(value);
+    if (!json.isNull()) {
+        setDecodeError(error, QStringLiteral("Expected null."));
+        return false;
+    }
+    return true;
+}
+
+template <typename T>
+QJsonValue toJson(const QList<T> &values);
+
+template <typename T>
+bool fromJson(const QJsonValue &json, QList<T> &values, QString *error = nullptr);
+
+template <typename T>
+QJsonValue toJson(const QMap<QString, T> &values);
+
+template <typename T>
+bool fromJson(const QJsonValue &json, QMap<QString, T> &values, QString *error = nullptr);
+
+template <typename T>
+QJsonValue toJson(const Ref<T> &value);
+
+template <typename T>
+bool fromJson(const QJsonValue &json, Ref<T> &value, QString *error = nullptr);
+
+template <typename... Ts>
+QJsonValue toJson(const std::variant<Ts...> &value);
+
+template <typename... Ts>
+bool fromJson(const QJsonValue &json, std::variant<Ts...> &value, QString *error = nullptr);
+
+template <typename T>
+QJsonValue toJson(const QList<T> &values) {
+    QJsonArray array;
+    for (const T &value : values) {
+        array.append(toJson(value));
+    }
+    return array;
+}
+
+template <typename T>
+bool fromJson(const QJsonValue &json, QList<T> &values, QString *error) {
+    if (!json.isArray()) {
+        setDecodeError(error, QStringLiteral("Expected array."));
+        return false;
+    }
+
+    values.clear();
+    const QJsonArray array = json.toArray();
+    values.reserve(array.size());
+    for (qsizetype index = 0; index < array.size(); ++index) {
+        T decoded{};
+        if (!fromJson(array.at(index), decoded, error)) {
+            return false;
+        }
+        values.append(std::move(decoded));
+    }
+    return true;
+}
+
+template <typename T>
+QJsonValue toJson(const QMap<QString, T> &values) {
+    QJsonObject object;
+    for (auto it = values.cbegin(); it != values.cend(); ++it) {
+        object.insert(it.key(), toJson(it.value()));
+    }
+    return object;
+}
+
+template <typename T>
+bool fromJson(const QJsonValue &json, QMap<QString, T> &values, QString *error) {
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected object."));
+        return false;
+    }
+
+    values.clear();
+    const QJsonObject object = json.toObject();
+    for (auto it = object.begin(); it != object.end(); ++it) {
+        T decoded{};
+        if (!fromJson(it.value(), decoded, error)) {
+            return false;
+        }
+        values.insert(it.key(), std::move(decoded));
+    }
+    return true;
+}
+
+template <typename T>
+QJsonValue toJson(const Ref<T> &value) {
+    return value ? toJson(*value) : QJsonValue(QJsonValue::Null);
+}
+
+template <typename T>
+bool fromJson(const QJsonValue &json, Ref<T> &value, QString *error) {
+    if (json.isNull()) {
+        setDecodeError(error, QStringLiteral("Unexpected null for referenced type."));
+        return false;
+    }
+
+    Ref<T> decoded = Ref<T>::create();
+    if (!fromJson(json, *decoded, error)) {
+        return false;
+    }
+    value = std::move(decoded);
+    return true;
+}
+
+template <typename... Ts>
+QJsonValue toJson(const std::variant<Ts...> &value) {
+    return std::visit(
+        [](const auto &alternative) -> QJsonValue {
+            return toJson(alternative);
+        },
+        value
+    );
+}
+
+template <typename Variant, std::size_t Index = 0>
+bool decodeVariantFirstMatch(const QJsonValue &json, Variant &value, QString *error = nullptr) {
+    if constexpr (Index >= std::variant_size_v<Variant>) {
+        setDecodeError(error, QStringLiteral("No variant alternative matched the JSON value."));
+        return false;
+    } else {
+        using Alternative = std::variant_alternative_t<Index, Variant>;
+        Alternative decoded{};
+        if (fromJson(json, decoded, nullptr)) {
+            value = std::move(decoded);
+            return true;
+        }
+        return decodeVariantFirstMatch<Variant, Index + 1>(json, value, error);
+    }
+}
+
+template <typename... Ts>
+bool fromJson(const QJsonValue &json, std::variant<Ts...> &value, QString *error) {
+    return decodeVariantFirstMatch<std::variant<Ts...>>(json, value, error);
+}
+
+template <typename T>
+void writeOptionalMember(QJsonObject &object, const QString &key, const std::optional<T> &value) {
+    if (value.has_value()) {
+        object.insert(key, toJson(*value));
+    }
+}
+
+template <typename T>
+void writeNullableMember(QJsonObject &object, const QString &key, const Nullable<T> &value) {
+    if (value.isMissing()) {
+        return;
+    }
+    if (value.isNull()) {
+        object.insert(key, QJsonValue(QJsonValue::Null));
+        return;
+    }
+    object.insert(key, toJson(value.value()));
+}
+
+template <typename T>
+bool readRequiredMember(
+    const QJsonObject &object,
+    const QString &key,
+    T &value,
+    QString *error = nullptr
+) {
+    if (!object.contains(key)) {
+        setDecodeError(error, QStringLiteral("Missing required member: %1").arg(key));
+        return false;
+    }
+    return fromJson(object.value(key), value, error);
+}
+
+template <typename T>
+bool readOptionalMember(
+    const QJsonObject &object,
+    const QString &key,
+    std::optional<T> &value,
+    QString *error = nullptr
+) {
+    if (!object.contains(key)) {
+        value.reset();
+        return true;
+    }
+    T decoded{};
+    if (!fromJson(object.value(key), decoded, error)) {
+        return false;
+    }
+    value = std::move(decoded);
+    return true;
+}
+
+template <typename T>
+bool readNullableMember(
+    const QJsonObject &object,
+    const QString &key,
+    Nullable<T> &value,
+    QString *error = nullptr
+) {
+    if (!object.contains(key)) {
+        value = Nullable<T>::missing();
+        return true;
+    }
+    const QJsonValue jsonValue = object.value(key);
+    if (jsonValue.isNull()) {
+        value = Nullable<T>::null();
+        return true;
+    }
+    T decoded{};
+    if (!fromJson(jsonValue, decoded, error)) {
+        return false;
+    }
+    value = Nullable<T>::fromValue(std::move(decoded));
+    return true;
+}
+
+{% for struct in structs %}
+{% for line in struct.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ struct.name }} {
+{% for member in struct.members %}
+{% for line in member.comment_lines %}
+    {{ line }}
+{% endfor %}
+    {% if member.use == "optional" %}
+    std::optional<{{ member.cpp_type }}> {{ member.field_name }};
+    {% elif member.use == "nullable" %}
+    Nullable<{{ member.cpp_type }}> {{ member.field_name }};
+    {% else %}
+    {{ member.cpp_type }} {{ member.field_name }}{};
+    {% endif %}
+{% endfor %}
+{% if struct.allows_anything %}
+    QJsonObject additionalProperties;
+{% endif %}
+};
+
+{% endfor %}
+{% for enumeration in extended_enumerations %}
+{% for line in enumeration.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ enumeration.name }} {
+    enum class Kind {
+{% for enumerator in enumeration.enumerators %}
+{% for line in enumerator.comment_lines %}
+        {{ line }}
+{% endfor %}
+        {{ enumerator.kind_name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+    };
+
+    Kind kind{};
+    {{ enumeration.payload_variant_cpp }} payload{};
+};
+
+{% endfor %}
+{% for union in unions %}
+{% for line in union.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ union.name }} {
+    enum class Kind {
+{% for alternative in union.alternatives %}
+{% for line in alternative.comment_lines %}
+        {{ line }}
+{% endfor %}
+        {{ alternative.kind_name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+    };
+
+    Kind kind{};
+    {{ union.payload_variant_cpp }} payload{};
+};
+
+{% endfor %}
+}  // namespace qodex::codex
+
+Q_DECLARE_METATYPE(qodex::codex::EmptyObject)
+{% for name in declared_type_names %}
+{% if name != "EmptyObject" %}
+Q_DECLARE_METATYPE(qodex::codex::{{ name }})
+{% endif %}
+{% endfor %}

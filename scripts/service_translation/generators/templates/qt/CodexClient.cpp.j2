@@ -1,0 +1,90 @@
+// AUTOMATICALLY GENERATED - DO NOT EDIT
+#include "CodexClient.h"
+
+namespace qodex::codex {
+
+CodexClient::CodexClient(AppServerTransport *transport, QObject *parent)
+    : CodexClientBase(transport, parent) {
+}
+
+{% for request in client_requests %}
+JsonRpcId CodexClient::{{ request.method_name }}({% for parameter in request.parameters %}{% if not loop.first %}, {% endif %}{{ parameter.declaration }}{% endfor %}) {
+{% for line in request.send_setup_lines %}
+    {{ line }}
+{% endfor %}
+    return sendClientRequest(
+        QStringLiteral("{{ request.method }}"),
+        {{ request.send_argument }},
+        [this](const JsonRpcId &id, const QJsonValue &result) {
+            {{ request.response_cpp_type }} decoded{};
+            QString error;
+            if (!fromJson(result, decoded, &error)) {
+                emit transportErrorOccurred(QStringLiteral("Failed to decode response for {{ request.method }}: %1").arg(error));
+                return;
+            }
+            emit {{ request.success_signal_name }}(id, decoded);
+        },
+        [this](const JsonRpcId &id, const JsonRpcErrorObject &error) {
+            emit {{ request.failure_signal_name }}(id, error);
+        }
+    );
+}
+
+{% endfor %}
+{% for notification in client_notifications %}
+bool CodexClient::{{ notification.method_name }}({% for parameter in notification.parameters %}{% if not loop.first %}, {% endif %}{{ parameter.declaration }}{% endfor %}) {
+{% for line in notification.send_setup_lines %}
+    {{ line }}
+{% endfor %}
+    return sendClientNotification(
+        QStringLiteral("{{ notification.method }}"),
+        {{ notification.send_argument }}
+    );
+}
+
+{% endfor %}
+bool CodexClient::handleServerNotification(const JsonRpcNotificationMessage &message) {
+{% if server_notifications %}
+{% for notification in server_notifications %}
+    if (message.method == QStringLiteral("{{ notification.method }}")) {
+{% if notification.has_payload %}
+        {{ notification.payload_cpp_type }} params{};
+        QString error;
+        if (!fromJson(message.params, params, &error)) {
+            emit transportErrorOccurred(QStringLiteral("Failed to decode notification {{ notification.method }}: %1").arg(error));
+            return true;
+        }
+        emit {{ notification.signal_name }}(params);
+{% else %}
+        emit {{ notification.signal_name }}();
+{% endif %}
+        return true;
+    }
+{% endfor %}
+{% endif %}
+    return false;
+}
+
+bool CodexClient::handleServerRequest(const JsonRpcRequestMessage &message) {
+{% if server_requests %}
+{% for request in server_requests %}
+    if (message.method == QStringLiteral("{{ request.method }}")) {
+{% if request.has_payload %}
+        {{ request.payload_cpp_type }} params{};
+        QString error;
+        if (!fromJson(message.params, params, &error)) {
+            emit transportErrorOccurred(QStringLiteral("Failed to decode request {{ request.method }}: %1").arg(error));
+            return true;
+        }
+        emit {{ request.signal_name }}(message.id, params);
+{% else %}
+        emit {{ request.signal_name }}(message.id);
+{% endif %}
+        return true;
+    }
+{% endfor %}
+{% endif %}
+    return false;
+}
+
+}  // namespace qodex::codex

@@ -1,0 +1,59 @@
+// AUTOMATICALLY GENERATED - DO NOT EDIT
+#pragma once
+
+#include "CodexProtocol.h"
+#include "codex/CodexClientBase.h"
+
+namespace qodex::codex {
+
+class CodexClient final : public CodexClientBase {
+    Q_OBJECT
+
+public:
+    explicit CodexClient(AppServerTransport *transport, QObject *parent = nullptr);
+
+{% for request in client_requests %}
+{% for line in request.comment_lines %}
+    {{ line }}
+{% endfor %}
+    JsonRpcId {{ request.method_name }}({% for parameter in request.parameters %}{% if not loop.first %}, {% endif %}{{ parameter.declaration }}{% endfor %});
+{% endfor %}
+{% for notification in client_notifications %}
+{% for line in notification.comment_lines %}
+    {{ line }}
+{% endfor %}
+    bool {{ notification.method_name }}({% for parameter in notification.parameters %}{% if not loop.first %}, {% endif %}{{ parameter.declaration }}{% endfor %});
+{% endfor %}
+
+signals:
+{% for request in client_requests %}
+    void {{ request.success_signal_name }}(const qodex::codex::JsonRpcId &id, {{ request.response_signal_cpp_type }} response);
+    void {{ request.failure_signal_name }}(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
+{% endfor %}
+{% for notification in server_notifications %}
+{% for line in notification.comment_lines %}
+    {{ line }}
+{% endfor %}
+    {% if notification.has_payload %}
+    void {{ notification.signal_name }}({{ notification.payload_signal_cpp_type }} params);
+    {% else %}
+    void {{ notification.signal_name }}();
+    {% endif %}
+{% endfor %}
+{% for request in server_requests %}
+{% for line in request.comment_lines %}
+    {{ line }}
+{% endfor %}
+    {% if request.has_payload %}
+    void {{ request.signal_name }}(const qodex::codex::JsonRpcId &id, {{ request.payload_signal_cpp_type }} params);
+    {% else %}
+    void {{ request.signal_name }}(const qodex::codex::JsonRpcId &id);
+    {% endif %}
+{% endfor %}
+
+protected:
+    bool handleServerNotification(const JsonRpcNotificationMessage &message) override;
+    bool handleServerRequest(const JsonRpcRequestMessage &message) override;
+};
+
+}  // namespace qodex::codex

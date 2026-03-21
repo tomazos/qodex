@@ -1,0 +1,233 @@
+// AUTOMATICALLY GENERATED - DO NOT EDIT
+#include "CodexProtocol.h"
+
+namespace qodex::codex {
+
+QJsonValue toJson(const EmptyObject &value) {
+    Q_UNUSED(value);
+    return QJsonObject{};
+}
+
+bool fromJson(const QJsonValue &json, EmptyObject &value, QString *error) {
+    Q_UNUSED(value);
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected empty object."));
+        return false;
+    }
+    return true;
+}
+
+{% for enumeration in plain_enumerations %}
+QJsonValue toJson({{ enumeration.name }} value) {
+    switch (value) {
+{% for enumerator in enumeration.enumerators %}
+    case {{ enumeration.name }}::{{ enumerator.cpp_name }}:
+        return QJsonValue(QStringLiteral("{{ enumerator.json_value }}"));
+{% endfor %}
+    }
+    return QJsonValue(QJsonValue::Undefined);
+}
+
+bool fromJson(const QJsonValue &json, {{ enumeration.name }} &value, QString *error) {
+    if (!json.isString()) {
+        setDecodeError(error, QStringLiteral("Expected string for {{ enumeration.name }}."));
+        return false;
+    }
+    const QString tag = json.toString();
+{% for enumerator in enumeration.enumerators %}
+    if (tag == QStringLiteral("{{ enumerator.json_value }}")) {
+        value = {{ enumeration.name }}::{{ enumerator.cpp_name }};
+        return true;
+    }
+{% endfor %}
+    setDecodeError(error, QStringLiteral("Unknown {{ enumeration.name }} value: %1").arg(tag));
+    return false;
+}
+
+{% endfor %}
+{% for struct in structs %}
+QJsonValue toJson(const {{ struct.name }} &value) {
+    QJsonObject object;
+{% for member in struct.members %}
+{% if member.use == "required" %}
+    object.insert(QStringLiteral("{{ member.json_key }}"), toJson(value.{{ member.field_name }}));
+{% elif member.use == "optional" %}
+    writeOptionalMember(object, QStringLiteral("{{ member.json_key }}"), value.{{ member.field_name }});
+{% else %}
+    writeNullableMember(object, QStringLiteral("{{ member.json_key }}"), value.{{ member.field_name }});
+{% endif %}
+{% endfor %}
+{% if struct.allows_anything %}
+    for (auto it = value.additionalProperties.begin(); it != value.additionalProperties.end(); ++it) {
+        if (!object.contains(it.key())) {
+            object.insert(it.key(), it.value());
+        }
+    }
+{% endif %}
+    return object;
+}
+
+bool fromJson(const QJsonValue &json, {{ struct.name }} &value, QString *error) {
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected object for {{ struct.name }}."));
+        return false;
+    }
+
+    const QJsonObject object = json.toObject();
+{% for member in struct.members %}
+{% if member.use == "required" %}
+    if (!readRequiredMember(object, QStringLiteral("{{ member.json_key }}"), value.{{ member.field_name }}, error)) {
+        return false;
+    }
+{% elif member.use == "optional" %}
+    if (!readOptionalMember(object, QStringLiteral("{{ member.json_key }}"), value.{{ member.field_name }}, error)) {
+        return false;
+    }
+{% else %}
+    if (!readNullableMember(object, QStringLiteral("{{ member.json_key }}"), value.{{ member.field_name }}, error)) {
+        return false;
+    }
+{% endif %}
+{% endfor %}
+{% if struct.allows_anything %}
+    value.additionalProperties = QJsonObject{};
+    for (auto it = object.begin(); it != object.end(); ++it) {
+{% if struct.known_keys_condition %}
+        const QString &key = it.key();
+        if ({{ struct.known_keys_condition }}) {
+            continue;
+        }
+{% endif %}
+        value.additionalProperties.insert(it.key(), it.value());
+    }
+{% else %}
+    for (auto it = object.begin(); it != object.end(); ++it) {
+{% if struct.known_keys_condition %}
+        const QString &key = it.key();
+        if ({{ struct.known_keys_condition }}) {
+            continue;
+        }
+        setDecodeError(error, QStringLiteral("Unexpected member for {{ struct.name }}: %1").arg(key));
+        return false;
+{% else %}
+        setDecodeError(error, QStringLiteral("Unexpected member for {{ struct.name }}."));
+        return false;
+{% endif %}
+    }
+{% endif %}
+    return true;
+}
+
+{% endfor %}
+{% for enumeration in extended_enumerations %}
+QJsonValue toJson(const {{ enumeration.name }} &value) {
+    switch (value.kind) {
+{% for enumerator in enumeration.enumerators %}
+    case {{ enumeration.name }}::Kind::{{ enumerator.kind_name }}:
+{% if enumerator.has_payload %}
+        return QJsonObject{
+            {
+                QStringLiteral("{{ enumerator.json_value }}"),
+                toJson(std::get<{{ enumerator.payload_cpp_type }}>(value.payload)),
+            },
+        };
+{% else %}
+        return QJsonValue(QStringLiteral("{{ enumerator.json_value }}"));
+{% endif %}
+{% endfor %}
+    }
+    return QJsonValue(QJsonValue::Undefined);
+}
+
+bool fromJson(const QJsonValue &json, {{ enumeration.name }} &value, QString *error) {
+    if (json.isString()) {
+        const QString tag = json.toString();
+{% for enumerator in enumeration.enumerators if not enumerator.has_payload %}
+        if (tag == QStringLiteral("{{ enumerator.json_value }}")) {
+            value.kind = {{ enumeration.name }}::Kind::{{ enumerator.kind_name }};
+            value.payload = std::monostate{};
+            return true;
+        }
+{% endfor %}
+        setDecodeError(error, QStringLiteral("Unknown {{ enumeration.name }} value: %1").arg(tag));
+        return false;
+    }
+
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected string or object for {{ enumeration.name }}."));
+        return false;
+    }
+
+    const QJsonObject object = json.toObject();
+    if (object.size() != 1) {
+        setDecodeError(error, QStringLiteral("Expected single-key object for {{ enumeration.name }}."));
+        return false;
+    }
+
+    const auto it = object.constBegin();
+    const QString key = it.key();
+{% for enumerator in enumeration.enumerators if enumerator.has_payload %}
+    if (key == QStringLiteral("{{ enumerator.json_value }}")) {
+        {{ enumerator.payload_cpp_type }} payload{};
+        if (!fromJson(it.value(), payload, error)) {
+            return false;
+        }
+        value.kind = {{ enumeration.name }}::Kind::{{ enumerator.kind_name }};
+        value.payload = std::move(payload);
+        return true;
+    }
+{% endfor %}
+    setDecodeError(error, QStringLiteral("Unknown {{ enumeration.name }} payload key: %1").arg(key));
+    return false;
+}
+
+{% endfor %}
+{% for union in unions %}
+QJsonValue toJson(const {{ union.name }} &value) {
+    QJsonObject object;
+    switch (value.kind) {
+{% for alternative in union.alternatives %}
+    case {{ union.name }}::Kind::{{ alternative.kind_name }}: {
+        const QJsonValue payloadJson = toJson(std::get<{{ alternative.payload_cpp_type }}>(value.payload));
+        Q_ASSERT(payloadJson.isObject());
+        object = payloadJson.toObject();
+        object.insert(QStringLiteral("{{ union.discriminator }}"), QJsonValue(QStringLiteral("{{ alternative.json_value }}")));
+        return object;
+    }
+{% endfor %}
+    }
+    return object;
+}
+
+bool fromJson(const QJsonValue &json, {{ union.name }} &value, QString *error) {
+    if (!json.isObject()) {
+        setDecodeError(error, QStringLiteral("Expected object for {{ union.name }}."));
+        return false;
+    }
+
+    QJsonObject object = json.toObject();
+    const QJsonValue discriminatorJson = object.value(QStringLiteral("{{ union.discriminator }}"));
+    if (!discriminatorJson.isString()) {
+        setDecodeError(error, QStringLiteral("Missing or invalid discriminator '{{ union.discriminator }}' for {{ union.name }}."));
+        return false;
+    }
+
+    const QString discriminator = discriminatorJson.toString();
+    object.remove(QStringLiteral("{{ union.discriminator }}"));
+{% for alternative in union.alternatives %}
+    if (discriminator == QStringLiteral("{{ alternative.json_value }}")) {
+        {{ alternative.payload_cpp_type }} payload{};
+        if (!fromJson(QJsonValue(object), payload, error)) {
+            return false;
+        }
+        value.kind = {{ union.name }}::Kind::{{ alternative.kind_name }};
+        value.payload = std::move(payload);
+        return true;
+    }
+{% endfor %}
+    setDecodeError(error, QStringLiteral("Unknown discriminator for {{ union.name }}: %1").arg(discriminator));
+    return false;
+}
+
+{% endfor %}
+}  // namespace qodex::codex

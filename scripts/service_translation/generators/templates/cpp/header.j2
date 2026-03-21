@@ -1,0 +1,126 @@
+// AUTOMATICALLY GENERATED - DO NOT EDIT
+#pragma once
+
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+
+namespace qodex::protocol {
+
+{% for line in service_comment_lines %}
+{{ line }}
+{% endfor %}
+template <typename T>
+using Ref = std::shared_ptr<T>;
+
+using JsonValue = std::string;
+struct EmptyObject {};
+
+{% if forward_declarations %}
+{% for name in forward_declarations %}
+struct {{ name }};
+{% endfor %}
+
+{% endif %}
+{% for enumeration in plain_enumerations %}
+{% for line in enumeration.comment_lines %}
+{{ line }}
+{% endfor %}
+enum class {{ enumeration.name }} {
+{% for enumerator in enumeration.enumerators %}
+{% for line in enumerator.comment_lines %}
+{{ line }}
+{% endfor %}
+    {{ enumerator.name }},
+{% endfor %}
+};
+
+{% endfor %}
+{% for opaque_type in opaque_types %}
+{% for line in opaque_type.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ opaque_type.name }} {
+    JsonValue value{};
+};
+
+{% endfor %}
+{% for struct in structs %}
+{% for line in struct.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ struct.name }} {
+{% if struct.has_body %}
+{% for member in struct.members %}
+{% for line in member.comment_lines %}
+{{ line }}
+{% endfor %}
+    {{ member.cpp_type }} {{ member.cpp_name }}{};
+{% endfor %}
+{% if struct.allows_anything %}
+    std::map<std::string, JsonValue> additional_properties{};
+{% endif %}
+{% else %}
+    // Empty struct.
+{% endif %}
+};
+
+{% endfor %}
+{% for enumeration in extended_enumerations %}
+{% for line in enumeration.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ enumeration.name }} {
+    enum class Kind {
+{% for enumerator in enumeration.enumerators %}
+{% for line in enumerator.comment_lines %}
+{{ line }}
+{% endfor %}
+        {{ enumerator.name }},
+{% endfor %}
+    };
+    using Payload = {{ enumeration.payload_alias }};
+
+    Kind kind{};
+    Payload payload{};
+};
+
+{% endfor %}
+{% for union in unions %}
+{% for line in union.comment_lines %}
+{{ line }}
+{% endfor %}
+struct {{ union.name }} {
+    enum class Kind {
+{% for alternative in union.alternatives %}
+{% for line in alternative.comment_lines %}
+{{ line }}
+{% endfor %}
+        {{ alternative.name }},
+{% endfor %}
+    };
+    using Payload = {{ union.payload_alias }};
+
+    Kind kind{};
+    Payload payload{};
+};
+
+{% endfor %}
+struct Service {
+{% if messages %}
+{% for message in messages %}
+{% for line in message.comment_lines %}
+{{ line }}
+{% endfor %}
+    {{ message.return_type }} (*{{ message.name }})({{ message.parameters | join(", ") }}) = nullptr;
+{% endfor %}
+{% else %}
+    // No messages.
+{% endif %}
+};
+
+}  // namespace qodex::protocol
