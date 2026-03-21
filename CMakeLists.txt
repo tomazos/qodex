@@ -11,6 +11,10 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Test)
+find_package(KDDockWidgets QUIET)
+if(NOT KDDockWidgets_FOUND)
+    find_package(KDDockWidgets-qt6 REQUIRED)
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(BASH_EXECUTABLE bash REQUIRED)
 
@@ -291,32 +295,51 @@ else()
     message(STATUS "codex executable not found or version unreadable; skipping protocol artifact generation targets.")
 endif()
 
+if(NOT TARGET qodex_protocol_artifacts)
+    message(FATAL_ERROR "qodex requires the codex executable to generate protocol artifacts at configure time.")
+endif()
+
 qt_add_executable(qodex
     src/main.cpp
-    src/MainWindow.cpp
-    src/MainWindow.h
+    src/app/AppBootstrap.cpp
+    src/app/AppBootstrap.h
+    src/app/AppConfig.cpp
+    src/app/AppConfig.h
+    src/app/AppPaths.cpp
+    src/app/AppPaths.h
+    src/app/SessionController.cpp
+    src/app/SessionController.h
     src/codex/AppServerTransport.cpp
     src/codex/AppServerTransport.h
     src/codex/CodexClientBase.cpp
     src/codex/CodexClientBase.h
     src/codex/JsonRpcMessage.h
+    src/domain/CodexTypes.h
+    src/domain/ThreadStore.cpp
+    src/domain/ThreadStore.h
+    src/ui/MainWindow.cpp
+    src/ui/MainWindow.h
+    src/ui/ThreadListModel.cpp
+    src/ui/ThreadListModel.h
+    src/ui/ThreadListPane.cpp
+    src/ui/ThreadListPane.h
 )
 
 target_include_directories(qodex PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
+    "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Widgets)
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Widgets KDAB::kddockwidgets)
+target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
-if(TARGET qodex_protocol_artifacts)
-    add_dependencies(qodex qodex_protocol_artifacts)
-    target_sources(qodex PRIVATE
-        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
-        "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
-        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
-        "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
-    )
-endif()
+add_dependencies(qodex qodex_protocol_artifacts)
+target_sources(qodex PRIVATE
+    "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+    "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
+    "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
+    "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
+)
 
 if(BUILD_TESTING)
     qt_add_executable(AppServerTransportTest
@@ -334,31 +357,44 @@ if(BUILD_TESTING)
 
     add_test(NAME AppServerTransportTest COMMAND AppServerTransportTest)
 
-    if(TARGET qodex_protocol_artifacts)
-        qt_add_executable(CodexClientGeneratedTest
-            tests/codex/CodexClientGeneratedTest.cpp
-            src/codex/AppServerTransport.cpp
-            src/codex/AppServerTransport.h
-            src/codex/CodexClientBase.cpp
-            src/codex/CodexClientBase.h
-            src/codex/JsonRpcMessage.h
-            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
-            "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
-            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
-            "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
-        )
+    qt_add_executable(CodexClientGeneratedTest
+        tests/codex/CodexClientGeneratedTest.cpp
+        src/codex/AppServerTransport.cpp
+        src/codex/AppServerTransport.h
+        src/codex/CodexClientBase.cpp
+        src/codex/CodexClientBase.h
+        src/codex/JsonRpcMessage.h
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+        "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
+        "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
+    )
 
-        add_dependencies(CodexClientGeneratedTest qodex_protocol_artifacts)
+    add_dependencies(CodexClientGeneratedTest qodex_protocol_artifacts)
 
-        target_include_directories(CodexClientGeneratedTest PRIVATE
-            "${PROJECT_SOURCE_DIR}/src"
-            "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
-        )
+    target_include_directories(CodexClientGeneratedTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
+    )
 
-        target_link_libraries(CodexClientGeneratedTest PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(CodexClientGeneratedTest PRIVATE Qt6::Core Qt6::Test)
 
-        add_test(NAME CodexClientGeneratedTest COMMAND CodexClientGeneratedTest)
-    endif()
+    add_test(NAME CodexClientGeneratedTest COMMAND CodexClientGeneratedTest)
+
+    qt_add_executable(ThreadStoreTest
+        tests/domain/ThreadStoreTest.cpp
+        src/domain/CodexTypes.h
+        src/domain/ThreadStore.cpp
+        src/domain/ThreadStore.h
+    )
+
+    target_include_directories(ThreadStoreTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(ThreadStoreTest PRIVATE Qt6::Core Qt6::Test)
+
+    add_test(NAME ThreadStoreTest COMMAND ThreadStoreTest)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)
