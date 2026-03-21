@@ -21,7 +21,9 @@ public:
     [[nodiscard]] std::optional<ThreadSummary> threadSummaryById(const QString &threadId) const;
 
     void replaceThreadSummaries(QList<ThreadSummary> summaries);
+    void replaceThreadSummaries(QList<ThreadSummary> summaries, bool archived);
     void upsertThreadSummary(ThreadSummary summary);
+    bool setThreadArchived(const QString &threadId, bool archived);
     bool updateThreadTitle(const QString &threadId, const QString &title);
     bool updateThreadStatusText(const QString &threadId, const QString &statusText);
     bool removeThreadSummary(const QString &threadId);

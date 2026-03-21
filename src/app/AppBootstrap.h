@@ -17,7 +17,6 @@ public:
     AppBootstrap();
 
     [[nodiscard]] qodex::ui::MainWindow &mainWindow();
-    [[nodiscard]] qodex::ui::MainWindow &secondaryWindow();
     void start();
 
 private:
@@ -28,7 +27,6 @@ private:
     qodex::domain::ThreadStore m_threadStore;
     qodex::ui::ThreadListModel m_threadListModel;
     qodex::ui::MainWindow m_mainWindow;
-    qodex::ui::MainWindow m_secondaryWindow;
     SessionController m_sessionController;
 };
 

@@ -1,9 +1,10 @@
 #pragma once
 
+#include <QStringList>
 #include <QWidget>
 
-class QListView;
 class QPushButton;
+class QTreeView;
 
 namespace qodex::ui {
 
@@ -20,12 +21,15 @@ public:
 signals:
     void refreshRequested();
     void threadSelected(const QString &threadId);
+    void archiveThreadsRequested(const QStringList &threadIds);
+    void unarchiveThreadsRequested(const QStringList &threadIds);
 
 private:
     void emitSelectionForIndex(const QModelIndex &index);
+    void showContextMenu(const QPoint &position);
 
     ThreadListModel *m_model = nullptr;
-    QListView *m_listView = nullptr;
+    QTreeView *m_treeView = nullptr;
     QPushButton *m_refreshButton = nullptr;
 };
 

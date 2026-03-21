@@ -12,7 +12,6 @@ int main(int argc, char *argv[]) {
 
     qodex::app::AppBootstrap bootstrap;
     bootstrap.mainWindow().show();
-    bootstrap.secondaryWindow().show();
     bootstrap.start();
 
     return app.exec();

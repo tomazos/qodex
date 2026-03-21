@@ -10,6 +10,8 @@ struct ThreadSummary {
     QString preview;
     QString cwd;
     QString statusText;
+    bool archived = false;
+    qint64 createdAt = 0;
     qint64 updatedAt = 0;
 };
 

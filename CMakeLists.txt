@@ -395,6 +395,23 @@ if(BUILD_TESTING)
     target_link_libraries(ThreadStoreTest PRIVATE Qt6::Core Qt6::Test)
 
     add_test(NAME ThreadStoreTest COMMAND ThreadStoreTest)
+
+    qt_add_executable(ThreadListModelTest
+        tests/ui/ThreadListModelTest.cpp
+        src/domain/CodexTypes.h
+        src/domain/ThreadStore.cpp
+        src/domain/ThreadStore.h
+        src/ui/ThreadListModel.cpp
+        src/ui/ThreadListModel.h
+    )
+
+    target_include_directories(ThreadListModelTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(ThreadListModelTest PRIVATE Qt6::Core Qt6::Test)
+
+    add_test(NAME ThreadListModelTest COMMAND ThreadListModelTest)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)

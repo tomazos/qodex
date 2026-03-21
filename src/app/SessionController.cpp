@@ -1,7 +1,7 @@
 #include "app/SessionController.h"
 
-#include <QDateTime>
-#include <QLocale>
+#include <algorithm>
+
 #include <QProcess>
 
 #include "CodexClient.h"
@@ -16,6 +16,7 @@ namespace qodex::app {
 
 using qodex::codex::ClientInfo;
 using qodex::codex::CodexClient;
+using qodex::codex::EmptyObject;
 using qodex::codex::InitializeResponse;
 using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
@@ -30,6 +31,7 @@ using qodex::codex::ThreadSourceKind;
 using qodex::codex::ThreadStartedNotificationParams;
 using qodex::codex::ThreadStatus;
 using qodex::codex::ThreadStatusChangedNotificationParams;
+using qodex::codex::ThreadUnarchiveResponse;
 using qodex::codex::ThreadUnarchivedNotificationParams;
 
 SessionController::SessionController(
@@ -57,6 +59,10 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::initializeFailed, this, &SessionController::onInitializeFailed);
     connect(m_client, &CodexClient::threadListSucceeded, this, &SessionController::onThreadListSucceeded);
     connect(m_client, &CodexClient::threadListFailed, this, &SessionController::onThreadListFailed);
+    connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
+    connect(m_client, &CodexClient::threadArchiveFailed, this, &SessionController::onThreadArchiveFailed);
+    connect(m_client, &CodexClient::threadUnarchiveSucceeded, this, &SessionController::onThreadUnarchiveSucceeded);
+    connect(m_client, &CodexClient::threadUnarchiveFailed, this, &SessionController::onThreadUnarchiveFailed);
     connect(
         m_client,
         &CodexClient::threadStartedNotificationReceived,
@@ -113,6 +119,18 @@ SessionController::SessionController(
         &SessionController::onThreadSelected
     );
     connect(
+        m_mainWindow->threadListPane(),
+        &qodex::ui::ThreadListPane::archiveThreadsRequested,
+        this,
+        &SessionController::onArchiveThreadsRequested
+    );
+    connect(
+        m_mainWindow->threadListPane(),
+        &qodex::ui::ThreadListPane::unarchiveThreadsRequested,
+        this,
+        &SessionController::onUnarchiveThreadsRequested
+    );
+    connect(
         m_threadStore,
         &qodex::domain::ThreadStore::threadListChanged,
         this,
@@ -134,16 +152,10 @@ void SessionController::start() {
 
     if (m_config.codexProgram.isEmpty()) {
         m_mainWindow->setStatusMessage(QStringLiteral("codex executable not found on PATH."));
-        m_mainWindow->setThreadSummaryText(
-            QStringLiteral("Install the Codex CLI or add it to PATH, then restart qodex.")
-        );
         return;
     }
 
     m_mainWindow->setStatusMessage(QStringLiteral("Starting codex app-server..."));
-    m_mainWindow->setThreadSummaryText(
-        QStringLiteral("Connecting to codex app-server and loading threads...")
-    );
     m_transport->start(m_config.codexProgram, m_config.codexArguments);
 }
 
@@ -171,7 +183,7 @@ void SessionController::onInitializeSucceeded(const JsonRpcId &id, const Initial
         return;
     }
 
-    requestThreadList();
+    requestThreadLists();
 }
 
 void SessionController::onInitializeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
@@ -182,7 +194,12 @@ void SessionController::onInitializeFailed(const JsonRpcId &id, const JsonRpcErr
 }
 
 void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadListResponse &response) {
-    Q_UNUSED(id);
+    const QString requestKey = id.toKey();
+    const bool isArchivedRequest = requestKey == m_archivedThreadListRequestKey;
+    const bool isActiveRequest = requestKey == m_activeThreadListRequestKey;
+    if (!isArchivedRequest && !isActiveRequest) {
+        return;
+    }
 
     QList<qodex::domain::ThreadSummary> summaries;
     summaries.reserve(response.data.size());
@@ -190,30 +207,115 @@ void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadL
         if (!thread) {
             continue;
         }
-        summaries.append(projectThreadSummary(*thread));
+        summaries.append(projectThreadSummary(*thread, isArchivedRequest));
     }
 
-    m_threadListRequestInFlight = false;
-    m_threadStore->replaceThreadSummaries(std::move(summaries));
-    m_mainWindow->setStatusMessage(
-        QStringLiteral("Loaded %1 threads.").arg(m_threadStore->threadSummaries().size())
-    );
+    if (isArchivedRequest) {
+        m_archivedThreadListRequestInFlight = false;
+        m_archivedThreadListRequestKey.clear();
+    } else {
+        m_activeThreadListRequestInFlight = false;
+        m_activeThreadListRequestKey.clear();
+    }
+
+    m_threadStore->replaceThreadSummaries(std::move(summaries), isArchivedRequest);
+
+    if (!m_activeThreadListRequestInFlight && !m_archivedThreadListRequestInFlight) {
+        const QList<qodex::domain::ThreadSummary> allThreads = m_threadStore->threadSummaries();
+        const qsizetype archivedCount = static_cast<qsizetype>(std::count_if(
+            allThreads.begin(),
+            allThreads.end(),
+            [](const qodex::domain::ThreadSummary &summary) { return summary.archived; }
+        ));
+        const qsizetype activeCount = allThreads.size() - archivedCount;
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Loaded %1 threads (%2 active, %3 archived).")
+                .arg(allThreads.size())
+                .arg(activeCount)
+                .arg(archivedCount)
+        );
+    }
 }
 
 void SessionController::onThreadListFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
-    Q_UNUSED(id);
-    m_threadListRequestInFlight = false;
+    const QString requestKey = id.toKey();
+    if (requestKey == m_archivedThreadListRequestKey) {
+        m_archivedThreadListRequestInFlight = false;
+        m_archivedThreadListRequestKey.clear();
+    } else if (requestKey == m_activeThreadListRequestKey) {
+        m_activeThreadListRequestInFlight = false;
+        m_activeThreadListRequestKey.clear();
+    } else {
+        return;
+    }
+
     m_mainWindow->setStatusMessage(
         QStringLiteral("thread/list failed: %1").arg(error.message)
     );
 }
 
 void SessionController::onRefreshRequested() {
-    requestThreadList();
+    requestThreadLists();
 }
 
 void SessionController::onThreadSelected(const QString &threadId) {
     m_threadStore->setSelectedThreadId(threadId);
+}
+
+void SessionController::onArchiveThreadsRequested(const QStringList &threadIds) {
+    QStringList queuedThreadIds;
+    queuedThreadIds.reserve(threadIds.size());
+
+    for (const QString &threadId : threadIds) {
+        const auto summary = m_threadStore->threadSummaryById(threadId);
+        if (!summary.has_value() || summary->archived) {
+            continue;
+        }
+
+        const JsonRpcId requestId = m_client->sendThreadArchiveRequest(threadId);
+        if (!requestId.isValid()) {
+            m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/archive request."));
+            continue;
+        }
+
+        m_pendingArchiveRequests.insert(requestId.toKey(), threadId);
+        queuedThreadIds.append(threadId);
+    }
+
+    if (!queuedThreadIds.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            queuedThreadIds.size() == 1 ? QStringLiteral("Archiving thread...")
+                                        : QStringLiteral("Archiving %1 threads...").arg(queuedThreadIds.size())
+        );
+    }
+}
+
+void SessionController::onUnarchiveThreadsRequested(const QStringList &threadIds) {
+    QStringList queuedThreadIds;
+    queuedThreadIds.reserve(threadIds.size());
+
+    for (const QString &threadId : threadIds) {
+        const auto summary = m_threadStore->threadSummaryById(threadId);
+        if (!summary.has_value() || !summary->archived) {
+            continue;
+        }
+
+        const JsonRpcId requestId = m_client->sendThreadUnarchiveRequest(threadId);
+        if (!requestId.isValid()) {
+            m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/unarchive request."));
+            continue;
+        }
+
+        m_pendingUnarchiveRequests.insert(requestId.toKey(), threadId);
+        queuedThreadIds.append(threadId);
+    }
+
+    if (!queuedThreadIds.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            queuedThreadIds.size() == 1 ? QStringLiteral("Unarchiving thread...")
+                                        : QStringLiteral("Unarchiving %1 threads...").arg(queuedThreadIds.size())
+        );
+    }
 }
 
 void SessionController::onTransportErrorOccurred(const QString &message) {
@@ -229,11 +331,56 @@ void SessionController::onTransportProcessExited(const int exitCode, const QProc
     );
 }
 
+void SessionController::onThreadArchiveSucceeded(const JsonRpcId &id, EmptyObject response) {
+    Q_UNUSED(response);
+
+    const QString requestKey = id.toKey();
+    const QString threadId = m_pendingArchiveRequests.take(requestKey);
+    if (threadId.isEmpty()) {
+        return;
+    }
+
+    if (!m_threadStore->setThreadArchived(threadId, true)) {
+        requestThreadList(true);
+    }
+}
+
+void SessionController::onThreadArchiveFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const QString threadId = m_pendingArchiveRequests.take(id.toKey());
+    if (!threadId.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Failed to archive thread %1: %2").arg(threadId, error.message)
+        );
+    }
+}
+
+void SessionController::onThreadUnarchiveSucceeded(const JsonRpcId &id, const ThreadUnarchiveResponse &response) {
+    const QString requestKey = id.toKey();
+    const QString requestedThreadId = m_pendingUnarchiveRequests.take(requestKey);
+    if (!response.thread) {
+        if (!requestedThreadId.isEmpty()) {
+            requestThreadList(false);
+        }
+        return;
+    }
+
+    m_threadStore->upsertThreadSummary(projectThreadSummary(*response.thread, false));
+}
+
+void SessionController::onThreadUnarchiveFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const QString threadId = m_pendingUnarchiveRequests.take(id.toKey());
+    if (!threadId.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Failed to unarchive thread %1: %2").arg(threadId, error.message)
+        );
+    }
+}
+
 void SessionController::onThreadStartedNotificationReceived(const ThreadStartedNotificationParams &params) {
     if (!params.thread) {
         return;
     }
-    m_threadStore->upsertThreadSummary(projectThreadSummary(*params.thread));
+    m_threadStore->upsertThreadSummary(projectThreadSummary(*params.thread, false));
 }
 
 void SessionController::onThreadNameUpdatedNotificationReceived(const ThreadNameUpdatedNotificationParams &params) {
@@ -260,35 +407,30 @@ void SessionController::onThreadStatusChangedNotificationReceived(const ThreadSt
 }
 
 void SessionController::onThreadArchivedNotificationReceived(const ThreadArchivedNotificationParams &params) {
-    m_threadStore->removeThreadSummary(params.threadId);
+    if (!m_threadStore->setThreadArchived(params.threadId, true)) {
+        requestThreadList(true);
+    }
 }
 
 void SessionController::onThreadUnarchivedNotificationReceived(const ThreadUnarchivedNotificationParams &params) {
-    Q_UNUSED(params);
-    requestThreadList();
+    if (!m_threadStore->setThreadArchived(params.threadId, false)) {
+        requestThreadList(false);
+    }
 }
 
 void SessionController::refreshSelectedThreadUi() {
     m_mainWindow->threadListPane()->setCurrentThreadId(m_threadStore->selectedThreadId());
-
-    const auto summary = m_threadStore->threadSummaryById(m_threadStore->selectedThreadId());
-    if (!summary.has_value()) {
-        m_mainWindow->setThreadSummaryText(
-            QStringLiteral("Select a thread from the list to inspect its summary.")
-        );
-        return;
-    }
-
-    m_mainWindow->setThreadSummaryText(formatThreadSummaryText(*summary));
 }
 
-qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread) const {
+qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {
     return qodex::domain::ThreadSummary{
         .id = thread.id,
         .title = threadDisplayTitle(thread),
         .preview = thread.preview.trimmed(),
         .cwd = thread.cwd,
         .statusText = thread.status ? threadStatusText(*thread.status) : QStringLiteral("Unknown"),
+        .archived = archived,
+        .createdAt = thread.createdAt,
         .updatedAt = thread.updatedAt,
     };
 }
@@ -318,35 +460,26 @@ QString SessionController::threadDisplayTitle(const Thread &thread) const {
     return thread.id;
 }
 
-QString SessionController::formatThreadSummaryText(const qodex::domain::ThreadSummary &summary) const {
-    const QString updatedText = QLocale().toString(QDateTime::fromSecsSinceEpoch(summary.updatedAt), QLocale::ShortFormat);
-    return QStringLiteral(
-        "<b>%1</b><br><br>"
-        "<b>Status:</b> %2<br>"
-        "<b>ID:</b> %3<br>"
-        "<b>CWD:</b> %4<br>"
-        "<b>Updated:</b> %5<br><br>"
-        "<b>Preview:</b><br>%6"
-    ).arg(
-        summary.title.toHtmlEscaped(),
-        summary.statusText.toHtmlEscaped(),
-        summary.id.toHtmlEscaped(),
-        summary.cwd.toHtmlEscaped(),
-        updatedText.toHtmlEscaped(),
-        summary.preview.isEmpty() ? QStringLiteral("(empty)") : summary.preview.toHtmlEscaped()
-    );
+void SessionController::requestThreadLists() {
+    requestThreadList(false);
+    requestThreadList(true);
 }
 
-void SessionController::requestThreadList() {
-    if (m_threadListRequestInFlight) {
+void SessionController::requestThreadList(const bool archived) {
+    const bool inFlight = archived ? m_archivedThreadListRequestInFlight : m_activeThreadListRequestInFlight;
+    if (inFlight) {
         return;
     }
 
-    m_threadListRequestInFlight = true;
+    if (archived) {
+        m_archivedThreadListRequestInFlight = true;
+    } else {
+        m_activeThreadListRequestInFlight = true;
+    }
     m_mainWindow->setStatusMessage(QStringLiteral("Loading threads..."));
 
     const JsonRpcId requestId = m_client->sendThreadListRequest(
-        missing<bool>(),
+        Nullable<bool>::fromValue(archived),
         missing<QString>(),
         missing<QString>(),
         missing<qint64>(),
@@ -356,8 +489,19 @@ void SessionController::requestThreadList() {
         missing<QList<ThreadSourceKind>>()
     );
     if (!requestId.isValid()) {
-        m_threadListRequestInFlight = false;
+        if (archived) {
+            m_archivedThreadListRequestInFlight = false;
+        } else {
+            m_activeThreadListRequestInFlight = false;
+        }
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/list request."));
+        return;
+    }
+
+    if (archived) {
+        m_archivedThreadListRequestKey = requestId.toKey();
+    } else {
+        m_activeThreadListRequestKey = requestId.toKey();
     }
 }
 

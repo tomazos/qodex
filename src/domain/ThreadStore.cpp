@@ -25,7 +25,28 @@ std::optional<ThreadSummary> ThreadStore::threadSummaryById(const QString &threa
 }
 
 void ThreadStore::replaceThreadSummaries(QList<ThreadSummary> summaries) {
-    m_threadSummaries = std::move(summaries);
+    replaceThreadSummaries(std::move(summaries), false);
+}
+
+void ThreadStore::replaceThreadSummaries(QList<ThreadSummary> summaries, const bool archived) {
+    for (ThreadSummary &summary : summaries) {
+        summary.archived = archived;
+    }
+
+    QList<ThreadSummary> merged;
+    merged.reserve(m_threadSummaries.size() + summaries.size());
+
+    for (const ThreadSummary &existing : m_threadSummaries) {
+        if (existing.archived != archived) {
+            merged.append(existing);
+        }
+    }
+
+    for (ThreadSummary &summary : summaries) {
+        merged.append(std::move(summary));
+    }
+
+    m_threadSummaries = std::move(merged);
     sortThreadSummaries();
     emit threadListChanged();
 
@@ -45,6 +66,20 @@ void ThreadStore::upsertThreadSummary(ThreadSummary summary) {
 
     sortThreadSummaries();
     emit threadListChanged();
+}
+
+bool ThreadStore::setThreadArchived(const QString &threadId, const bool archived) {
+    const qsizetype index = indexOfThread(threadId);
+    if (index < 0) {
+        return false;
+    }
+    if (m_threadSummaries[index].archived == archived) {
+        return true;
+    }
+    m_threadSummaries[index].archived = archived;
+    sortThreadSummaries();
+    emit threadListChanged();
+    return true;
 }
 
 bool ThreadStore::updateThreadTitle(const QString &threadId, const QString &title) {

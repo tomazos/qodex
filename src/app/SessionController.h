@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QProcess>
+#include <QHash>
+#include <QStringList>
 
 #include "CodexProtocol.h"
 #include "app/AppConfig.h"
@@ -43,8 +45,17 @@ private slots:
     void onThreadListFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onRefreshRequested();
     void onThreadSelected(const QString &threadId);
+    void onArchiveThreadsRequested(const QStringList &threadIds);
+    void onUnarchiveThreadsRequested(const QStringList &threadIds);
     void onTransportErrorOccurred(const QString &message);
     void onTransportProcessExited(int exitCode, QProcess::ExitStatus exitStatus);
+    void onThreadArchiveSucceeded(const qodex::codex::JsonRpcId &id, qodex::codex::EmptyObject response);
+    void onThreadArchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
+    void onThreadUnarchiveSucceeded(
+        const qodex::codex::JsonRpcId &id,
+        const qodex::codex::ThreadUnarchiveResponse &response
+    );
+    void onThreadUnarchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadStartedNotificationReceived(const qodex::codex::ThreadStartedNotificationParams &params);
     void onThreadNameUpdatedNotificationReceived(const qodex::codex::ThreadNameUpdatedNotificationParams &params);
     void onThreadStatusChangedNotificationReceived(const qodex::codex::ThreadStatusChangedNotificationParams &params);
@@ -53,17 +64,16 @@ private slots:
     void refreshSelectedThreadUi();
 
 private:
-    [[nodiscard]] domain::ThreadSummary projectThreadSummary(const qodex::codex::Thread &thread) const;
+    [[nodiscard]] domain::ThreadSummary projectThreadSummary(const qodex::codex::Thread &thread, bool archived) const;
     [[nodiscard]] QString threadStatusText(const qodex::codex::ThreadStatus &status) const;
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
-    [[nodiscard]] QString formatThreadSummaryText(const domain::ThreadSummary &summary) const;
-
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
     }
 
-    void requestThreadList();
+    void requestThreadLists();
+    void requestThreadList(bool archived);
 
     AppConfig m_config;
     codex::AppServerTransport *m_transport = nullptr;
@@ -71,7 +81,12 @@ private:
     domain::ThreadStore *m_threadStore = nullptr;
     ui::MainWindow *m_mainWindow = nullptr;
     bool m_startRequested = false;
-    bool m_threadListRequestInFlight = false;
+    bool m_activeThreadListRequestInFlight = false;
+    bool m_archivedThreadListRequestInFlight = false;
+    QString m_activeThreadListRequestKey;
+    QString m_archivedThreadListRequestKey;
+    QHash<QString, QString> m_pendingArchiveRequests;
+    QHash<QString, QString> m_pendingUnarchiveRequests;
 };
 
 }  // namespace qodex::app
