@@ -318,6 +318,8 @@ qt_add_executable(qodex
     src/codex/CodexClientBase.cpp
     src/codex/CodexClientBase.h
     src/codex/JsonRpcMessage.h
+    src/codex/TrafficLogger.cpp
+    src/codex/TrafficLogger.h
     src/domain/CodexTypes.h
     src/domain/ThreadStore.cpp
     src/domain/ThreadStore.h
@@ -367,6 +369,29 @@ if(BUILD_TESTING)
     target_link_libraries(AppServerTransportTest PRIVATE Qt6::Core Qt6::Test)
 
     add_test(NAME AppServerTransportTest COMMAND AppServerTransportTest)
+
+    qt_add_executable(TrafficLoggerTest
+        resources/qodex.qrc
+        tests/codex/TrafficLoggerTest.cpp
+        src/codex/AppServerTransport.cpp
+        src/codex/AppServerTransport.h
+        src/codex/JsonRpcMessage.h
+        src/codex/TrafficLogger.cpp
+        src/codex/TrafficLogger.h
+        src/storage/DatabaseManager.cpp
+        src/storage/DatabaseManager.h
+        src/storage/Migration.h
+        src/storage/MigrationRunner.cpp
+        src/storage/MigrationRunner.h
+    )
+
+    target_include_directories(TrafficLoggerTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(TrafficLoggerTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME TrafficLoggerTest COMMAND TrafficLoggerTest)
 
     qt_add_executable(CodexClientGeneratedTest
         tests/codex/CodexClientGeneratedTest.cpp

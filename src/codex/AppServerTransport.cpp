@@ -119,6 +119,12 @@ JsonRpcId AppServerTransport::sendRequest(
         }
     );
     writeMessage(object);
+    emit requestSent(JsonRpcRequestMessage{
+        .id = id,
+        .method = method,
+        .params = params,
+        .raw = object,
+    });
     return id;
 }
 
@@ -136,6 +142,11 @@ bool AppServerTransport::sendNotification(const QString &method, const QJsonValu
         object.insert(QStringLiteral("params"), params);
     }
     writeMessage(object);
+    emit notificationSent(JsonRpcNotificationMessage{
+        .method = method,
+        .params = params,
+        .raw = object,
+    });
     return true;
 }
 
@@ -151,6 +162,11 @@ bool AppServerTransport::sendResponse(const JsonRpcId &id, const QJsonValue &res
         {QStringLiteral("result"), result},
     };
     writeMessage(object);
+    emit responseSent(JsonRpcResponseMessage{
+        .id = id,
+        .result = result,
+        .raw = object,
+    });
     return true;
 }
 
@@ -179,6 +195,15 @@ bool AppServerTransport::sendError(
         {QStringLiteral("error"), error},
     };
     writeMessage(object);
+    emit errorResponseSent(JsonRpcErrorResponseMessage{
+        .id = id,
+        .error = JsonRpcErrorObject{
+            .code = code,
+            .message = message,
+            .data = data,
+        },
+        .raw = object,
+    });
     return true;
 }
 

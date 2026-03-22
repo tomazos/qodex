@@ -18,6 +18,7 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
       m_databaseManager(databaseManager),
       m_config(AppConfig::loadDefault(m_paths)),
       m_transport(),
+      m_trafficLogger(databaseManager, &m_transport),
       m_client(&m_transport),
       m_threadStore(),
       m_threadListModel(&m_threadStore),

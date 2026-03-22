@@ -56,6 +56,10 @@ public:
 
 signals:
     void started();
+    void notificationSent(const qodex::codex::JsonRpcNotificationMessage &message);
+    void requestSent(const qodex::codex::JsonRpcRequestMessage &message);
+    void responseSent(const qodex::codex::JsonRpcResponseMessage &message);
+    void errorResponseSent(const qodex::codex::JsonRpcErrorResponseMessage &message);
     void notificationReceived(const qodex::codex::JsonRpcNotificationMessage &message);
     void requestReceived(const qodex::codex::JsonRpcRequestMessage &message);
     void responseReceived(const qodex::codex::JsonRpcResponseMessage &message);

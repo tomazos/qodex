@@ -12,6 +12,7 @@
 #include "ui/MainWindow.h"
 #include "ui/ThreadListModel.h"
 #include "codex/AppServerTransport.h"
+#include "codex/TrafficLogger.h"
 #include "storage/DatabaseManager.h"
 
 #include "CodexClient.h"
@@ -62,6 +63,7 @@ private:
     qodex::storage::DatabaseManager *m_databaseManager = nullptr;
     AppConfig m_config;
     qodex::codex::AppServerTransport m_transport;
+    qodex::codex::TrafficLogger m_trafficLogger;
     qodex::codex::CodexClient m_client;
     qodex::domain::ThreadStore m_threadStore;
     qodex::ui::ThreadListModel m_threadListModel;

@@ -12,6 +12,28 @@
 
 namespace qodex::storage {
 
+namespace {
+
+QVariant nullableText(const QString &value) {
+    return value.isEmpty() ? QVariant(QMetaType(QMetaType::QString)) : QVariant(value);
+}
+
+QVariant nullableBool(const std::optional<bool> value) {
+    if (!value.has_value()) {
+        return QVariant(QMetaType(QMetaType::Bool));
+    }
+    return QVariant(*value);
+}
+
+QVariant nullableInteger(const std::optional<qint64> value) {
+    if (!value.has_value()) {
+        return QVariant(QMetaType(QMetaType::LongLong));
+    }
+    return QVariant::fromValue(*value);
+}
+
+}  // namespace
+
 DatabaseManager::DatabaseManager(const QString &databasePath)
     : m_databasePath(databasePath),
       m_connectionName(
@@ -270,6 +292,31 @@ bool DatabaseManager::saveSetting(const QString &key, const QString &valueJson, 
             "ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json;"
         ),
         {key, valueJson},
+        errorMessage
+    );
+}
+
+bool DatabaseManager::appendApiLog(const ApiLogRecord &record, QString *errorMessage) {
+    return executeStatement(
+        QStringLiteral(
+            "INSERT INTO api_log("
+            "session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
+            "thread_id, success, latency_ms, payload_json, summary_text"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+        ),
+        {
+            nullableText(record.sessionId),
+            record.direction,
+            record.messageKind,
+            nullableText(record.method),
+            nullableText(record.jsonrpcId),
+            nullableText(record.correlationId),
+            nullableText(record.threadId),
+            nullableBool(record.success),
+            nullableInteger(record.latencyMs),
+            record.payloadJson,
+            record.summaryText,
+        },
         errorMessage
     );
 }
