@@ -33,6 +33,7 @@ using qodex::codex::SessionSource;
 using qodex::codex::SubAgentSource;
 using qodex::codex::Thread;
 using qodex::codex::ThreadArchivedNotificationParams;
+using qodex::codex::ThreadForkResponse;
 using qodex::codex::ThreadListResponse;
 using qodex::codex::ThreadNameUpdatedNotificationParams;
 using qodex::codex::ThreadSortKey;
@@ -72,6 +73,8 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::threadNameSetFailed, this, &SessionController::onThreadNameSetFailed);
     connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
     connect(m_client, &CodexClient::threadArchiveFailed, this, &SessionController::onThreadArchiveFailed);
+    connect(m_client, &CodexClient::threadForkSucceeded, this, &SessionController::onThreadForkSucceeded);
+    connect(m_client, &CodexClient::threadForkFailed, this, &SessionController::onThreadForkFailed);
     connect(m_client, &CodexClient::threadUnarchiveSucceeded, this, &SessionController::onThreadUnarchiveSucceeded);
     connect(m_client, &CodexClient::threadUnarchiveFailed, this, &SessionController::onThreadUnarchiveFailed);
     connect(
@@ -157,6 +160,12 @@ void SessionController::attachWindow(qodex::ui::MainWindow *window) {
             &qodex::ui::ThreadListPane::renameThreadRequested,
             this,
             &SessionController::onRenameThreadRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::forkThreadRequested,
+            this,
+            &SessionController::onForkThreadRequested
         );
         connect(
             pane,
@@ -378,6 +387,37 @@ void SessionController::onRenameThreadRequested(const QString &threadId) {
     m_mainWindow->setStatusMessage(QStringLiteral("Renaming thread..."));
 }
 
+void SessionController::onForkThreadRequested(const QString &threadId) {
+    const auto summary = m_threadStore->threadSummaryById(threadId);
+    if (!summary.has_value()) {
+        return;
+    }
+
+    const JsonRpcId requestId = m_client->sendThreadForkRequest(
+        missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
+        missing<qodex::codex::ApprovalsReviewer>(),
+        missing<QString>(),
+        missing<QMap<QString, QJsonValue>>(),
+        missing<QString>(),
+        missing<QString>(),
+        std::nullopt,
+        missing<QString>(),
+        missing<QString>(),
+        missing<QString>(),
+        std::nullopt,
+        missing<qodex::codex::SandboxMode>(),
+        missing<qodex::codex::ServiceTier>(),
+        threadId
+    );
+    if (!requestId.isValid()) {
+        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/fork request."));
+        return;
+    }
+
+    m_pendingForkRequests.insert(requestId.toKey(), threadId);
+    m_mainWindow->setStatusMessage(QStringLiteral("Forking thread..."));
+}
+
 void SessionController::onArchiveThreadsRequested(const QStringList &threadIds) {
     QStringList queuedThreadIds;
     queuedThreadIds.reserve(threadIds.size());
@@ -494,6 +534,33 @@ void SessionController::onThreadArchiveFailed(const JsonRpcId &id, const JsonRpc
     if (!threadId.isEmpty()) {
         m_mainWindow->setStatusMessage(
             QStringLiteral("Failed to archive thread %1: %2").arg(threadId, error.message)
+        );
+    }
+}
+
+void SessionController::onThreadForkSucceeded(const JsonRpcId &id, const ThreadForkResponse &response) {
+    const QString sourceThreadId = m_pendingForkRequests.take(id.toKey());
+    if (sourceThreadId.isEmpty()) {
+        return;
+    }
+
+    if (!response.thread) {
+        requestThreadList(false);
+        m_mainWindow->setStatusMessage(QStringLiteral("Thread forked."));
+        return;
+    }
+
+    const qodex::domain::ThreadSummary summary = projectThreadSummary(*response.thread, false);
+    m_threadStore->upsertThreadSummary(summary);
+    m_threadStore->setSelectedThreadId(summary.id);
+    m_mainWindow->setStatusMessage(QStringLiteral("Thread forked."));
+}
+
+void SessionController::onThreadForkFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const QString threadId = m_pendingForkRequests.take(id.toKey());
+    if (!threadId.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Failed to fork thread %1: %2").arg(threadId, error.message)
         );
     }
 }
