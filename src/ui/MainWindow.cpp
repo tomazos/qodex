@@ -104,8 +104,7 @@ void MainWindow::setStatusMessage(const QString &message) {
 void MainWindow::showThreadTranscript(
     const QString &threadId,
     const QString &title,
-    const QString &transcriptHtml,
-    const QUrl &baseUrl
+    const QString &transcriptHtml
 ) {
     if (threadId.isEmpty()) {
         return;
@@ -139,7 +138,7 @@ void MainWindow::showThreadTranscript(
     }
 
     dock->setTitle(title);
-    pane->setTranscriptHtml(transcriptHtml, baseUrl);
+    pane->setTranscriptHtml(transcriptHtml);
     dock->show();
     dock->raise();
 }

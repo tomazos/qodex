@@ -73,7 +73,10 @@ void ThreadTranscriptFormatterTest::formatsUserAndAgentMessagesAsHtml() {
     thread.id = QStringLiteral("thread-1");
     thread.turns = {turn};
 
-    const QString transcript = qodex::ui::formatThreadTranscriptHtml(thread);
+    const QString transcript = qodex::ui::formatThreadTranscriptHtml(
+        thread,
+        QUrl::fromLocalFile(QStringLiteral("/tmp/"))
+    );
     QVERIFY(transcript.contains(QStringLiteral("<article class=\"message user\">")));
     QVERIFY(transcript.contains(QStringLiteral("<article class=\"message agent\">")));
     QVERIFY(transcript.contains(QStringLiteral("Hello")));
@@ -116,7 +119,10 @@ void ThreadTranscriptFormatterTest::includesImageAndLocalImageMarkup() {
     thread.id = QStringLiteral("thread-images");
     thread.turns = {turn};
 
-    const QString transcript = qodex::ui::formatThreadTranscriptHtml(thread);
+    const QString transcript = qodex::ui::formatThreadTranscriptHtml(
+        thread,
+        QUrl::fromLocalFile(QStringLiteral("/tmp/"))
+    );
     QVERIFY(transcript.contains(QStringLiteral("https://example.com/image.png")));
     QVERIFY(transcript.contains(QStringLiteral("file:///tmp/local-image.png")));
     QVERIFY(transcript.contains(QStringLiteral("<figure class=\"input-image\">")));
@@ -126,7 +132,10 @@ void ThreadTranscriptFormatterTest::fallsBackWhenNoTranscriptItemsExist() {
     Thread thread;
     thread.id = QStringLiteral("thread-2");
 
-    const QString transcript = qodex::ui::formatThreadTranscriptHtml(thread);
+    const QString transcript = qodex::ui::formatThreadTranscriptHtml(
+        thread,
+        QUrl::fromLocalFile(QStringLiteral("/tmp/"))
+    );
     QVERIFY(transcript.contains(QStringLiteral("No user or agent messages are available for this thread.")));
     QVERIFY(transcript.contains(QStringLiteral("empty-state")));
 }

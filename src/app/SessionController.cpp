@@ -644,8 +644,7 @@ void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const Threa
     m_mainWindow->showThreadTranscript(
         summary.id,
         summary.title,
-        qodex::ui::formatThreadTranscriptHtml(*response.thread),
-        baseUrl
+        qodex::ui::formatThreadTranscriptHtml(*response.thread, baseUrl)
     );
     m_mainWindow->setStatusMessage(QStringLiteral("Thread resumed."));
 }

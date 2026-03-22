@@ -3,7 +3,6 @@
 #include <QTextDocument>
 #include <QTextDocumentFragment>
 #include <QUrl>
-
 #include <QStringList>
 
 #include "CodexProtocol.h"
@@ -164,12 +163,14 @@ void appendBlock(QStringList &blocks, const QString &speaker, const QString &htm
                       .arg(roleClass, speaker.toHtmlEscaped(), trimmed));
 }
 
-QString documentShell(const QString &bodyHtml) {
+QString documentShell(const QString &bodyHtml, const QUrl &baseUrl) {
+    const QString baseHref = baseUrl.isValid() ? escapeAttribute(baseUrl.toString()) : QString();
     return QStringLiteral(R"(<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="%4">
   <link rel="stylesheet" href="%1">
   <style>
     :root {
@@ -316,16 +317,16 @@ QString documentShell(const QString &bodyHtml) {
 </head>
 <body>
   <main class="transcript">
-    %4
+    %5
   </main>
 </body>
 </html>)")
-        .arg(katexCssUrl(), katexScriptUrl(), katexAutoRenderUrl(), bodyHtml);
+        .arg(katexCssUrl(), katexScriptUrl(), katexAutoRenderUrl(), baseHref, bodyHtml);
 }
 
 }  // namespace
 
-QString formatThreadTranscriptHtml(const Thread &thread) {
+QString formatThreadTranscriptHtml(const Thread &thread, const QUrl &baseUrl) {
     QStringList blocks;
 
     for (const Ref<Turn> &turn : thread.turns) {
@@ -364,11 +365,12 @@ QString formatThreadTranscriptHtml(const Thread &thread) {
 
     if (blocks.isEmpty()) {
         return documentShell(
-            QStringLiteral("<section class=\"empty-state\">No user or agent messages are available for this thread.</section>")
+            QStringLiteral("<section class=\"empty-state\">No user or agent messages are available for this thread.</section>"),
+            baseUrl
         );
     }
 
-    return documentShell(blocks.join(QStringLiteral("\n")));
+    return documentShell(blocks.join(QStringLiteral("\n")), baseUrl);
 }
 
 }  // namespace qodex::ui

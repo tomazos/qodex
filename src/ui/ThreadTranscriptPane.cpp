@@ -1,6 +1,9 @@
 #include "ui/ThreadTranscriptPane.h"
 
 #include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
+#include <QTemporaryFile>
 #include <QVBoxLayout>
 #include <QWebEnginePage>
 #include <QWebEngineSettings>
@@ -40,12 +43,24 @@ ThreadTranscriptPane::ThreadTranscriptPane(QWidget *parent)
     layout->addWidget(m_view, 1);
 }
 
-void ThreadTranscriptPane::setTranscriptHtml(const QString &html, const QUrl &baseUrl) {
-    if (m_view == nullptr) {
+void ThreadTranscriptPane::setTranscriptHtml(const QString &html) {
+    if (m_view == nullptr || html.isEmpty()) {
         return;
     }
 
-    m_view->setHtml(html, baseUrl);
+    delete m_tempFile;
+    m_tempFile = new QTemporaryFile(
+        QDir::tempPath() + QDir::separator() + QStringLiteral("qodex-transcript-XXXXXX.html"),
+        this
+    );
+    m_tempFile->setAutoRemove(true);
+    if (!m_tempFile->open()) {
+        return;
+    }
+
+    m_tempFile->write(html.toUtf8());
+    m_tempFile->flush();
+    m_view->load(QUrl::fromLocalFile(QFileInfo(*m_tempFile).absoluteFilePath()));
 }
 
 }  // namespace qodex::ui
