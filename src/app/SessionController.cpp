@@ -16,6 +16,7 @@
 #include "codex/AppServerTransport.h"
 #include "domain/ThreadStore.h"
 #include "ui/MainWindow.h"
+#include "ui/ThreadTranscriptFormatter.h"
 #include "ui/ThreadListPane.h"
 
 namespace qodex::app {
@@ -36,6 +37,7 @@ using qodex::codex::ThreadArchivedNotificationParams;
 using qodex::codex::ThreadForkResponse;
 using qodex::codex::ThreadListResponse;
 using qodex::codex::ThreadNameUpdatedNotificationParams;
+using qodex::codex::ThreadResumeResponse;
 using qodex::codex::ThreadSortKey;
 using qodex::codex::ThreadSourceKind;
 using qodex::codex::ThreadStartedNotificationParams;
@@ -73,6 +75,8 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::threadNameSetFailed, this, &SessionController::onThreadNameSetFailed);
     connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
     connect(m_client, &CodexClient::threadArchiveFailed, this, &SessionController::onThreadArchiveFailed);
+    connect(m_client, &CodexClient::threadResumeSucceeded, this, &SessionController::onThreadResumeSucceeded);
+    connect(m_client, &CodexClient::threadResumeFailed, this, &SessionController::onThreadResumeFailed);
     connect(m_client, &CodexClient::threadForkSucceeded, this, &SessionController::onThreadForkSucceeded);
     connect(m_client, &CodexClient::threadForkFailed, this, &SessionController::onThreadForkFailed);
     connect(m_client, &CodexClient::threadUnarchiveSucceeded, this, &SessionController::onThreadUnarchiveSucceeded);
@@ -160,6 +164,12 @@ void SessionController::attachWindow(qodex::ui::MainWindow *window) {
             &qodex::ui::ThreadListPane::renameThreadRequested,
             this,
             &SessionController::onRenameThreadRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::resumeThreadRequested,
+            this,
+            &SessionController::onResumeThreadRequested
         );
         connect(
             pane,
@@ -418,6 +428,38 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
     m_mainWindow->setStatusMessage(QStringLiteral("Forking thread..."));
 }
 
+void SessionController::onResumeThreadRequested(const QString &threadId) {
+    const auto summary = m_threadStore->threadSummaryById(threadId);
+    if (!summary.has_value()) {
+        return;
+    }
+
+    const JsonRpcId requestId = m_client->sendThreadResumeRequest(
+        missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
+        missing<qodex::codex::ApprovalsReviewer>(),
+        missing<QString>(),
+        missing<QMap<QString, QJsonValue>>(),
+        missing<QString>(),
+        missing<QString>(),
+        missing<QList<Ref<qodex::codex::ResponseItem>>>(),
+        missing<QString>(),
+        missing<QString>(),
+        missing<QString>(),
+        std::nullopt,
+        missing<qodex::codex::Personality>(),
+        missing<qodex::codex::SandboxMode>(),
+        missing<qodex::codex::ServiceTier>(),
+        threadId
+    );
+    if (!requestId.isValid()) {
+        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/resume request."));
+        return;
+    }
+
+    m_pendingResumeRequests.insert(requestId.toKey(), threadId);
+    m_mainWindow->setStatusMessage(QStringLiteral("Resuming thread..."));
+}
+
 void SessionController::onArchiveThreadsRequested(const QStringList &threadIds) {
     QStringList queuedThreadIds;
     queuedThreadIds.reserve(threadIds.size());
@@ -534,6 +576,35 @@ void SessionController::onThreadArchiveFailed(const JsonRpcId &id, const JsonRpc
     if (!threadId.isEmpty()) {
         m_mainWindow->setStatusMessage(
             QStringLiteral("Failed to archive thread %1: %2").arg(threadId, error.message)
+        );
+    }
+}
+
+void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const ThreadResumeResponse &response) {
+    const QString requestedThreadId = m_pendingResumeRequests.take(id.toKey());
+    if (requestedThreadId.isEmpty() || !response.thread) {
+        return;
+    }
+
+    const bool archived = m_threadStore->threadSummaryById(requestedThreadId).value_or(
+                              qodex::domain::ThreadSummary{}
+                          ).archived;
+    const qodex::domain::ThreadSummary summary = projectThreadSummary(*response.thread, archived);
+    m_threadStore->upsertThreadSummary(summary);
+    m_threadStore->setSelectedThreadId(summary.id);
+    m_mainWindow->showThreadTranscript(
+        summary.id,
+        summary.title,
+        qodex::ui::formatThreadTranscript(*response.thread)
+    );
+    m_mainWindow->setStatusMessage(QStringLiteral("Thread resumed."));
+}
+
+void SessionController::onThreadResumeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const QString threadId = m_pendingResumeRequests.take(id.toKey());
+    if (!threadId.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Failed to resume thread %1: %2").arg(threadId, error.message)
         );
     }
 }

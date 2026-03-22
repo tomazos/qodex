@@ -340,6 +340,10 @@ qt_add_executable(qodex
     src/ui/ThreadListModel.h
     src/ui/ThreadListPane.cpp
     src/ui/ThreadListPane.h
+    src/ui/ThreadTranscriptFormatter.cpp
+    src/ui/ThreadTranscriptFormatter.h
+    src/ui/ThreadTranscriptPane.cpp
+    src/ui/ThreadTranscriptPane.h
 )
 
 target_include_directories(qodex PRIVATE
@@ -521,6 +525,23 @@ if(BUILD_TESTING)
     target_link_libraries(ApiLogModelTest PRIVATE Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test SQLite::SQLite3)
 
     add_test(NAME ApiLogModelTest COMMAND ApiLogModelTest)
+
+    qt_add_executable(ThreadTranscriptFormatterTest
+        tests/ui/ThreadTranscriptFormatterTest.cpp
+        src/ui/ThreadTranscriptFormatter.cpp
+        src/ui/ThreadTranscriptFormatter.h
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+    )
+
+    target_include_directories(ThreadTranscriptFormatterTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
+    )
+
+    target_link_libraries(ThreadTranscriptFormatterTest PRIVATE Qt6::Core Qt6::Test)
+
+    add_test(NAME ThreadTranscriptFormatterTest COMMAND ThreadTranscriptFormatterTest)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)

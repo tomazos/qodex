@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QCloseEvent>
+#include <QHash>
 #include <QList>
+#include <QPointer>
 #include <kddockwidgets/MainWindow.h>
 
 namespace KDDockWidgets::QtWidgets {
@@ -17,6 +19,7 @@ class ApiLogModel;
 class ApiLogPane;
 class ThreadListModel;
 class ThreadListPane;
+class ThreadTranscriptPane;
 class MainWindow;
 }
 
@@ -40,6 +43,7 @@ public:
     [[nodiscard]] QString windowKey() const;
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
+    void showThreadTranscript(const QString &threadId, const QString &title, const QString &transcript);
     void rebuildViewMenu(const QList<QAction *> &actions);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
@@ -57,6 +61,8 @@ private:
     ThreadListPane *m_threadListPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_apiLogDock = nullptr;
     ApiLogPane *m_apiLogPane = nullptr;
+    QHash<QString, QPointer<KDDockWidgets::QtWidgets::DockWidget>> m_threadTranscriptDocks;
+    QHash<QString, QPointer<ThreadTranscriptPane>> m_threadTranscriptPanes;
     QMenu *m_viewMenu = nullptr;
     QMenu *m_windowMenu = nullptr;
 };
