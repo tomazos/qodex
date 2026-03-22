@@ -19,7 +19,7 @@ ApiLogModel::ApiLogModel(qodex::storage::DatabaseManager *databaseManager, QObje
 }
 
 QModelIndex ApiLogModel::index(const int row, const int column, const QModelIndex &parent) const {
-    if (parent.isValid() || row < 0 || column < 0 || column >= ColumnCount || row >= m_rows.size()) {
+    if (parent.isValid() || row < 0 || column < 0 || column >= ColumnCount || row >= m_totalRowCount) {
         return {};
     }
 
@@ -35,7 +35,7 @@ int ApiLogModel::rowCount(const QModelIndex &parent) const {
     if (parent.isValid()) {
         return 0;
     }
-    return m_rows.size();
+    return m_totalRowCount;
 }
 
 int ApiLogModel::columnCount(const QModelIndex &parent) const {
@@ -46,12 +46,17 @@ int ApiLogModel::columnCount(const QModelIndex &parent) const {
 }
 
 QVariant ApiLogModel::data(const QModelIndex &index, const int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size() || index.column() < 0
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_totalRowCount || index.column() < 0
         || index.column() >= ColumnCount) {
         return {};
     }
 
-    const qodex::storage::ApiLogListRecord &row = m_rows.at(index.row());
+    const int cacheRow = index.row() - m_cacheOffset;
+    if (cacheRow < 0 || cacheRow >= m_rows.size()) {
+        return {};
+    }
+
+    const qodex::storage::ApiLogListRecord &row = m_rows.at(cacheRow);
     const Column column = static_cast<Column>(index.column());
 
     switch (role) {
@@ -128,37 +133,12 @@ Qt::ItemFlags ApiLogModel::flags(const QModelIndex &index) const {
 }
 
 bool ApiLogModel::canFetchMore(const QModelIndex &parent) const {
-    if (parent.isValid()) {
-        return false;
-    }
-    return m_rows.size() < m_totalRowCount;
+    Q_UNUSED(parent);
+    return false;
 }
 
 void ApiLogModel::fetchMore(const QModelIndex &parent) {
-    if (parent.isValid() || !canFetchMore(parent) || m_databaseManager == nullptr) {
-        return;
-    }
-
-    const int remaining = m_totalRowCount - int(m_rows.size());
-    QString errorMessage;
-    const QList<qodex::storage::ApiLogListRecord> page = m_databaseManager->loadApiLogPage(
-        int(m_rows.size()),
-        std::min(kFetchBlockSize, remaining),
-        sortFieldForColumn(m_sortColumn),
-        m_sortOrder,
-        &errorMessage
-    );
-    if (!errorMessage.isEmpty() || page.isEmpty()) {
-        return;
-    }
-
-    const int firstRow = m_rows.size();
-    const int lastRow = firstRow + page.size() - 1;
-    beginInsertRows(QModelIndex{}, firstRow, lastRow);
-    for (const qodex::storage::ApiLogListRecord &row : page) {
-        m_rows.append(row);
-    }
-    endInsertRows();
+    Q_UNUSED(parent);
 }
 
 void ApiLogModel::sort(const int column, const Qt::SortOrder order) {
@@ -171,6 +151,27 @@ void ApiLogModel::sort(const int column, const Qt::SortOrder order) {
     refresh();
 }
 
+void ApiLogModel::ensureRowsCached(int firstRow, int lastRow) {
+    if (m_databaseManager == nullptr || !m_databaseManager->isOpen() || m_totalRowCount <= 0) {
+        return;
+    }
+
+    firstRow = std::clamp(firstRow, 0, m_totalRowCount - 1);
+    lastRow = std::clamp(lastRow, firstRow, m_totalRowCount - 1);
+    m_preferredFirstRow = firstRow;
+    m_preferredLastRow = lastRow;
+
+    if (!m_rows.isEmpty()) {
+        const int cacheStart = m_cacheOffset;
+        const int cacheEnd = m_cacheOffset + m_rows.size() - 1;
+        if (firstRow >= cacheStart + kCacheRetainMargin && lastRow <= cacheEnd - kCacheRetainMargin) {
+            return;
+        }
+    }
+
+    reloadCacheWindow(firstRow, lastRow);
+}
+
 void ApiLogModel::refresh() {
     if (m_databaseManager == nullptr || !m_databaseManager->isOpen()) {
         if (m_totalRowCount == 0 && m_rows.isEmpty()) {
@@ -179,13 +180,34 @@ void ApiLogModel::refresh() {
 
         beginResetModel();
         m_totalRowCount = 0;
+        m_cacheOffset = 0;
         m_rows.clear();
         endResetModel();
         return;
     }
 
-    const int targetRowCount = std::max(kFetchBlockSize, int(m_rows.size()));
-    resetRows(targetRowCount);
+    QString errorMessage;
+    const int totalRowCount = m_databaseManager->apiLogRowCount(&errorMessage);
+    if (!errorMessage.isEmpty()) {
+        return;
+    }
+
+    m_preferredFirstRow = std::clamp(m_preferredFirstRow, 0, std::max(0, totalRowCount - 1));
+    m_preferredLastRow = std::clamp(m_preferredLastRow, m_preferredFirstRow, std::max(0, totalRowCount - 1));
+
+    if (totalRowCount != m_totalRowCount) {
+        beginResetModel();
+        m_totalRowCount = totalRowCount;
+        m_cacheOffset = 0;
+        m_rows.clear();
+        endResetModel();
+    } else if (m_totalRowCount == 0) {
+        return;
+    }
+
+    if (m_totalRowCount > 0) {
+        reloadCacheWindow(m_preferredFirstRow, m_preferredLastRow);
+    }
 }
 
 void ApiLogModel::scheduleRefresh() {
@@ -271,21 +293,23 @@ QString ApiLogModel::displayValueForColumn(const qodex::storage::ApiLogListRecor
     return {};
 }
 
-void ApiLogModel::resetRows(const int targetRowCount) {
-    if (m_databaseManager == nullptr) {
+void ApiLogModel::reloadCacheWindow(int firstRow, int lastRow) {
+    if (m_databaseManager == nullptr || m_totalRowCount <= 0) {
         return;
     }
+
+    firstRow = std::clamp(firstRow, 0, m_totalRowCount - 1);
+    lastRow = std::clamp(lastRow, firstRow, m_totalRowCount - 1);
+
+    const int desiredCount = std::min(kCacheWindowSize, m_totalRowCount);
+    const int rangeCenter = firstRow + ((lastRow - firstRow) / 2);
+    const int maxOffset = std::max(0, m_totalRowCount - desiredCount);
+    const int desiredOffset = std::clamp(rangeCenter - (desiredCount / 2), 0, maxOffset);
 
     QString errorMessage;
-    const int totalRowCount = m_databaseManager->apiLogRowCount(&errorMessage);
-    if (!errorMessage.isEmpty()) {
-        return;
-    }
-
-    const int desiredRowCount = std::min(std::max(0, targetRowCount), totalRowCount);
     const QList<qodex::storage::ApiLogListRecord> rows = m_databaseManager->loadApiLogPage(
-        0,
-        desiredRowCount,
+        desiredOffset,
+        desiredCount,
         sortFieldForColumn(m_sortColumn),
         m_sortOrder,
         &errorMessage
@@ -294,10 +318,35 @@ void ApiLogModel::resetRows(const int targetRowCount) {
         return;
     }
 
-    beginResetModel();
-    m_totalRowCount = totalRowCount;
-    m_rows = rows;
-    endResetModel();
+    replaceCacheWindow(desiredOffset, rows);
+}
+
+void ApiLogModel::replaceCacheWindow(const int newOffset, QList<qodex::storage::ApiLogListRecord> rows) {
+    const int oldOffset = m_cacheOffset;
+    const int oldSize = m_rows.size();
+
+    m_cacheOffset = newOffset;
+    m_rows = std::move(rows);
+
+    if (m_totalRowCount <= 0) {
+        return;
+    }
+
+    const auto emitRangeChanged = [this](const int firstRow, const int lastRow) {
+        if (firstRow < 0 || lastRow < firstRow || firstRow >= m_totalRowCount) {
+            return;
+        }
+
+        const int boundedLastRow = std::min(lastRow, m_totalRowCount - 1);
+        emit dataChanged(
+            index(firstRow, 0),
+            index(boundedLastRow, ColumnCount - 1),
+            {Qt::DisplayRole, Qt::ToolTipRole, Qt::FontRole, Qt::TextAlignmentRole}
+        );
+    };
+
+    emitRangeChanged(oldOffset, oldOffset + oldSize - 1);
+    emitRangeChanged(newOffset, newOffset + m_rows.size() - 1);
 }
 
 }  // namespace qodex::ui

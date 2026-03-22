@@ -40,6 +40,7 @@ public:
     [[nodiscard]] bool canFetchMore(const QModelIndex &parent) const override;
     void fetchMore(const QModelIndex &parent) override;
     void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
+    void ensureRowsCached(int firstRow, int lastRow);
 
 public slots:
     void refresh();
@@ -49,13 +50,18 @@ private:
     [[nodiscard]] static QFont monospaceFont();
     [[nodiscard]] static qodex::storage::ApiLogSortField sortFieldForColumn(Column column);
     [[nodiscard]] QString displayValueForColumn(const qodex::storage::ApiLogListRecord &row, Column column) const;
-    void resetRows(int targetRowCount);
+    void reloadCacheWindow(int firstRow, int lastRow);
+    void replaceCacheWindow(int newOffset, QList<qodex::storage::ApiLogListRecord> rows);
 
-    static constexpr int kFetchBlockSize = 250;
+    static constexpr int kCacheWindowSize = 800;
+    static constexpr int kCacheRetainMargin = 160;
 
     qodex::storage::DatabaseManager *m_databaseManager = nullptr;
     QList<qodex::storage::ApiLogListRecord> m_rows;
+    int m_cacheOffset = 0;
     int m_totalRowCount = 0;
+    int m_preferredFirstRow = 0;
+    int m_preferredLastRow = 39;
     Column m_sortColumn = TimeColumn;
     Qt::SortOrder m_sortOrder = Qt::DescendingOrder;
     QTimer m_refreshTimer;

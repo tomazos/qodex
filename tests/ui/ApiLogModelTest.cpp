@@ -15,7 +15,7 @@ class ApiLogModelTest final : public QObject {
 
 private slots:
     void exposesExpectedColumns();
-    void fetchesRowsInBlocksAndSorts();
+    void usesSlidingCacheAndSorts();
 };
 
 void ApiLogModelTest::exposesExpectedColumns() {
@@ -38,7 +38,7 @@ void ApiLogModelTest::exposesExpectedColumns() {
     QCOMPARE(model.headerData(ApiLogModel::SummaryColumn, Qt::Horizontal).toString(), QStringLiteral("Summary"));
 }
 
-void ApiLogModelTest::fetchesRowsInBlocksAndSorts() {
+void ApiLogModelTest::usesSlidingCacheAndSorts() {
     QTemporaryDir temporaryDir;
     QVERIFY(temporaryDir.isValid());
 
@@ -46,7 +46,7 @@ void ApiLogModelTest::fetchesRowsInBlocksAndSorts() {
     DatabaseManager databaseManager(temporaryDir.filePath(QStringLiteral("qodex.sqlite3")));
     QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
 
-    for (int index = 0; index < 260; ++index) {
+    for (int index = 0; index < 1500; ++index) {
         QVERIFY2(
             databaseManager.appendApiLog(
                 ApiLogRecord{
@@ -70,21 +70,29 @@ void ApiLogModelTest::fetchesRowsInBlocksAndSorts() {
 
     ApiLogModel model(&databaseManager);
 
-    QCOMPARE(model.rowCount(), 250);
-    QVERIFY(model.canFetchMore(QModelIndex{}));
-    QCOMPARE(model.index(0, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString(), QStringLiteral("summary-259"));
-    QCOMPARE(model.index(0, ApiLogModel::LatencyColumn).data(Qt::DisplayRole).toString(), QStringLiteral("259"));
+    QCOMPARE(model.rowCount(), 1500);
+    QVERIFY(!model.canFetchMore(QModelIndex{}));
+    QCOMPARE(
+        model.index(0, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString(),
+        QStringLiteral("summary-1499")
+    );
+    QCOMPARE(model.index(0, ApiLogModel::LatencyColumn).data(Qt::DisplayRole).toString(), QStringLiteral("1499"));
+    QVERIFY(model.index(1200, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString().isEmpty());
 
     const QFont timeFont = qvariant_cast<QFont>(model.index(0, ApiLogModel::TimeColumn).data(Qt::FontRole));
     const QFont idFont = qvariant_cast<QFont>(model.index(0, ApiLogModel::JsonRpcIdColumn).data(Qt::FontRole));
     QVERIFY(timeFont.fixedPitch());
     QVERIFY(idFont.fixedPitch());
 
-    model.fetchMore(QModelIndex{});
-    QCOMPARE(model.rowCount(), 260);
-    QVERIFY(!model.canFetchMore(QModelIndex{}));
+    model.ensureRowsCached(1200, 1230);
+    QCOMPARE(
+        model.index(1200, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString(),
+        QStringLiteral("summary-299")
+    );
+    QVERIFY(model.index(0, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString().isEmpty());
 
     model.sort(ApiLogModel::MethodColumn, Qt::AscendingOrder);
+    model.ensureRowsCached(0, 20);
     QCOMPARE(model.index(0, ApiLogModel::MethodColumn).data(Qt::DisplayRole).toString(), QStringLiteral("method-0"));
     QCOMPARE(model.index(0, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString(), QStringLiteral("summary-0"));
 }

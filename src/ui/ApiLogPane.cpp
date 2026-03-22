@@ -5,6 +5,7 @@
 #include <QIODevice>
 #include <QMenu>
 #include <QScrollBar>
+#include <QTimer>
 #include <QTableView>
 #include <QVBoxLayout>
 
@@ -48,14 +49,15 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
 
     connect(m_tableView, &QWidget::customContextMenuRequested, this, &ApiLogPane::showContextMenu);
     connect(m_tableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, &ApiLogPane::showHeaderContextMenu);
-    connect(m_tableView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { maybeFetchMore(); });
+    connect(m_tableView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { ensureVisibleRowsLoaded(); });
     connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
         if (!m_restoredViewState) {
             applyDefaultColumnState();
             resizeDefaultColumns();
         }
-        maybeFetchMore();
+        QTimer::singleShot(0, this, &ApiLogPane::ensureVisibleRowsLoaded);
     });
+    QTimer::singleShot(0, this, &ApiLogPane::ensureVisibleRowsLoaded);
 }
 
 QByteArray ApiLogPane::saveViewState() const {
@@ -101,14 +103,22 @@ bool ApiLogPane::restoreViewState(const QByteArray &state) {
     return true;
 }
 
-void ApiLogPane::maybeFetchMore() {
-    if (m_model == nullptr || m_tableView == nullptr || !m_model->canFetchMore(QModelIndex{})) {
+void ApiLogPane::ensureVisibleRowsLoaded() {
+    if (m_model == nullptr || m_tableView == nullptr || m_model->rowCount() <= 0) {
         return;
     }
 
-    if (m_tableView->verticalScrollBar()->value() >= m_tableView->verticalScrollBar()->maximum() - 4) {
-        m_model->fetchMore(QModelIndex{});
+    int firstVisibleRow = m_tableView->rowAt(0);
+    if (firstVisibleRow < 0) {
+        firstVisibleRow = 0;
     }
+
+    int lastVisibleRow = m_tableView->rowAt(m_tableView->viewport()->height() - 1);
+    if (lastVisibleRow < 0) {
+        lastVisibleRow = std::min(firstVisibleRow + 30, m_model->rowCount() - 1);
+    }
+
+    m_model->ensureRowsCached(firstVisibleRow, lastVisibleRow);
 }
 
 void ApiLogPane::applyDefaultColumnState() {

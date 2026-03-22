@@ -18,7 +18,7 @@ public:
     bool restoreViewState(const QByteArray &state);
 
 private:
-    void maybeFetchMore();
+    void ensureVisibleRowsLoaded();
     void applyDefaultColumnState();
     void resizeDefaultColumns();
     void showContextMenu(const QPoint &position);
