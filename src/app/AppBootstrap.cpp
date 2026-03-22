@@ -52,7 +52,9 @@ qodex::ui::MainWindow &AppBootstrap::mainWindow() {
 void AppBootstrap::showAllWindows() {
     for (qodex::ui::MainWindow *window : windows()) {
         if (window != nullptr) {
+            window->setProperty("_q_showWithoutActivating", true);
             window->show();
+            window->setProperty("_q_showWithoutActivating", false);
         }
     }
 }

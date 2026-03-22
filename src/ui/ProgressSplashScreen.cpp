@@ -60,8 +60,6 @@ void ProgressSplashScreen::showCentered() {
     adjustSize();
     centerOnScreen();
     show();
-    raise();
-    activateWindow();
     QApplication::processEvents();
 }
 
