@@ -8,6 +8,6 @@ struct Thread;
 
 namespace qodex::ui {
 
-[[nodiscard]] QString formatThreadTranscript(const qodex::codex::Thread &thread);
+[[nodiscard]] QString formatThreadTranscriptHtml(const qodex::codex::Thread &thread);
 
 }  // namespace qodex::ui

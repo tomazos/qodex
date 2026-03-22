@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QList>
 #include <QPointer>
+#include <QUrl>
 #include <kddockwidgets/MainWindow.h>
 
 namespace KDDockWidgets::QtWidgets {
@@ -43,7 +44,7 @@ public:
     [[nodiscard]] QString windowKey() const;
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
-    void showThreadTranscript(const QString &threadId, const QString &title, const QString &transcript);
+    void showThreadTranscript(const QString &threadId, const QString &title, const QString &transcriptHtml, const QUrl &baseUrl);
     void closeThreadTranscript(const QString &threadId);
     void rebuildViewMenu(const QList<QAction *> &actions);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);

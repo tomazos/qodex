@@ -1,8 +1,9 @@
 #pragma once
 
+#include <QUrl>
 #include <QWidget>
 
-class QPlainTextEdit;
+class QWebEngineView;
 
 namespace qodex::ui {
 
@@ -12,10 +13,10 @@ class ThreadTranscriptPane final : public QWidget {
 public:
     explicit ThreadTranscriptPane(QWidget *parent = nullptr);
 
-    void setTranscriptText(const QString &text);
+    void setTranscriptHtml(const QString &html, const QUrl &baseUrl);
 
 private:
-    QPlainTextEdit *m_textEdit = nullptr;
+    QWebEngineView *m_view = nullptr;
 };
 
 }  // namespace qodex::ui

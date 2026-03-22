@@ -4,6 +4,7 @@
 
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QLabel>
 #include <QLineEdit>
 #include <QProcess>
@@ -637,10 +638,14 @@ void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const Threa
     const qodex::domain::ThreadSummary summary = projectThreadSummary(*response.thread, archived);
     m_threadStore->upsertThreadSummary(summary);
     m_threadStore->setSelectedThreadId(summary.id);
+    const QUrl baseUrl = summary.cwd.isEmpty()
+        ? QUrl(QStringLiteral("about:blank"))
+        : QUrl::fromLocalFile(QDir(summary.cwd).absolutePath() + QDir::separator());
     m_mainWindow->showThreadTranscript(
         summary.id,
         summary.title,
-        qodex::ui::formatThreadTranscript(*response.thread)
+        qodex::ui::formatThreadTranscriptHtml(*response.thread),
+        baseUrl
     );
     m_mainWindow->setStatusMessage(QStringLiteral("Thread resumed."));
 }

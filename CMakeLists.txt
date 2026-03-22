@@ -10,7 +10,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Network Sql WebEngineWidgets Widgets Test)
 find_package(SQLite3 REQUIRED)
 find_package(KDDockWidgets QUIET)
 if(NOT KDDockWidgets_FOUND)
@@ -351,7 +351,7 @@ target_include_directories(qodex PRIVATE
     "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::WebEngineWidgets Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
 target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
 add_dependencies(qodex qodex_protocol_artifacts)
@@ -539,7 +539,7 @@ if(BUILD_TESTING)
         "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
     )
 
-    target_link_libraries(ThreadTranscriptFormatterTest PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(ThreadTranscriptFormatterTest PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
 
     add_test(NAME ThreadTranscriptFormatterTest COMMAND ThreadTranscriptFormatterTest)
 endif()

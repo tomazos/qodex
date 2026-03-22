@@ -101,7 +101,12 @@ void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
 }
 
-void MainWindow::showThreadTranscript(const QString &threadId, const QString &title, const QString &transcript) {
+void MainWindow::showThreadTranscript(
+    const QString &threadId,
+    const QString &title,
+    const QString &transcriptHtml,
+    const QUrl &baseUrl
+) {
     if (threadId.isEmpty()) {
         return;
     }
@@ -134,7 +139,7 @@ void MainWindow::showThreadTranscript(const QString &threadId, const QString &ti
     }
 
     dock->setTitle(title);
-    pane->setTranscriptText(transcript);
+    pane->setTranscriptHtml(transcriptHtml, baseUrl);
     dock->show();
     dock->raise();
 }
