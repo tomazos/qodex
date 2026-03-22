@@ -105,4 +105,9 @@ QString MainWindow::windowMenuTitleFor(const MainWindow *window, const int index
     return QStringLiteral("Window %1").arg(index + 1);
 }
 
+void MainWindow::closeEvent(QCloseEvent *event) {
+    emit aboutToClose(this);
+    KDDockWidgets::QtWidgets::MainWindow::closeEvent(event);
+}
+
 }  // namespace qodex::ui

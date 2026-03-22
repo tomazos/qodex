@@ -29,8 +29,9 @@ private:
     [[nodiscard]] static QString threadListViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] qodex::ui::MainWindow *windowByKey(const QString &windowKey);
     void restorePersistentState();
-    void savePersistentState();
+    void savePersistentState(const qodex::ui::MainWindow *excludingWindow = nullptr);
     void restoreWindowViewState(qodex::ui::MainWindow *window);
+    void onWindowAboutToClose(qodex::ui::MainWindow *window);
     qodex::ui::MainWindow *createWindow(
         const QString &windowKey,
         const QString &windowTitle,

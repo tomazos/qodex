@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QCloseEvent>
 #include <kddockwidgets/MainWindow.h>
 
 namespace KDDockWidgets::QtWidgets {
@@ -35,9 +36,11 @@ public:
 
 signals:
     void createNewWindowRequested();
+    void aboutToClose(qodex::ui::MainWindow *window);
 
 private:
     QString windowMenuTitleFor(const MainWindow *window, int index) const;
+    void closeEvent(QCloseEvent *event) override;
 
     QString m_windowKey;
     KDDockWidgets::QtWidgets::DockWidget *m_threadListDock = nullptr;

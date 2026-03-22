@@ -2,7 +2,6 @@
 
 #include <algorithm>
 
-#include <QCoreApplication>
 #include <QRegularExpression>
 #include <kddockwidgets/LayoutSaver.h>
 
@@ -26,7 +25,9 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
-    QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, [&] { savePersistentState(); });
+    QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *window) {
+        onWindowAboutToClose(window);
+    });
     restorePersistentState();
     rebuildWindowMenus();
 }
@@ -137,7 +138,7 @@ void AppBootstrap::restorePersistentState() {
     }
 }
 
-void AppBootstrap::savePersistentState() {
+void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWindow) {
     if (m_databaseManager == nullptr || !m_databaseManager->isOpen()) {
         return;
     }
@@ -149,6 +150,12 @@ void AppBootstrap::savePersistentState() {
 
     const auto collectWindowState = [&](qodex::ui::MainWindow *window, const bool includeLayout) {
         if (window == nullptr) {
+            return;
+        }
+        if (window == excludingWindow) {
+            return;
+        }
+        if (window != &m_mainWindow && !window->isVisible()) {
             return;
         }
 
@@ -198,6 +205,15 @@ void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
     }
 }
 
+void AppBootstrap::onWindowAboutToClose(qodex::ui::MainWindow *window) {
+    if (window == &m_mainWindow) {
+        savePersistentState(nullptr);
+        return;
+    }
+
+    savePersistentState(window);
+}
+
 qodex::ui::MainWindow *AppBootstrap::createWindow(
     const QString &windowKey,
     const QString &windowTitle,
@@ -206,6 +222,9 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
+    QObject::connect(window.get(), &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *closingWindow) {
+        onWindowAboutToClose(closingWindow);
+    });
     m_sessionController.attachWindow(window.get());
     qodex::ui::MainWindow *windowPtr = window.get();
     if (showImmediately) {
