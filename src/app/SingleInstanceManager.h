@@ -12,7 +12,7 @@ class SingleInstanceManager final : public QObject {
     Q_OBJECT
 
 public:
-    explicit SingleInstanceManager(const QString &serverName = {}, QObject *parent = nullptr);
+    explicit SingleInstanceManager(const QString &scopeKey = {}, QObject *parent = nullptr);
     ~SingleInstanceManager() override;
 
     [[nodiscard]] bool startPrimaryOrActivateExisting(int timeoutMs = 1000);
@@ -29,7 +29,7 @@ private:
     void recordActivationRequest();
     void onNewConnection();
 
-    QString m_serverName;
+    QString m_scopeKey;
     QLockFile *m_lockFile = nullptr;
     QLocalServer *m_server = nullptr;
     bool m_isPrimary = false;

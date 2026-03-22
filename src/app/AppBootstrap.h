@@ -17,7 +17,7 @@ namespace qodex::app {
 
 class AppBootstrap final {
 public:
-    AppBootstrap();
+    explicit AppBootstrap(const AppPaths &paths);
 
     [[nodiscard]] qodex::ui::MainWindow &mainWindow();
     void activate();

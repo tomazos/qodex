@@ -11,9 +11,9 @@
 
 namespace qodex::app {
 
-SingleInstanceManager::SingleInstanceManager(const QString &serverName, QObject *parent)
+SingleInstanceManager::SingleInstanceManager(const QString &scopeKey, QObject *parent)
     : QObject(parent),
-      m_serverName(serverName),
+      m_scopeKey(scopeKey),
       m_lockFile(new QLockFile(resolvedLockFilePath())),
       m_server(new QLocalServer(this)) {
     Q_ASSERT(m_lockFile != nullptr);
@@ -69,9 +69,9 @@ bool SingleInstanceManager::takePendingActivation() {
 }
 
 QString SingleInstanceManager::resolvedServerName() const {
-    const QString keySource = m_serverName.isEmpty()
+    const QString keySource = m_scopeKey.isEmpty()
         ? QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-        : m_serverName;
+        : m_scopeKey;
     const QString organization = QCoreApplication::organizationName().isEmpty()
         ? QStringLiteral("qodex")
         : QCoreApplication::organizationName();

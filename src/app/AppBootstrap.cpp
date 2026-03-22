@@ -2,8 +2,8 @@
 
 namespace qodex::app {
 
-AppBootstrap::AppBootstrap()
-    : m_paths(AppPaths::discover()),
+AppBootstrap::AppBootstrap(const AppPaths &paths)
+    : m_paths(paths),
       m_config(AppConfig::loadDefault(m_paths)),
       m_transport(),
       m_client(&m_transport),
