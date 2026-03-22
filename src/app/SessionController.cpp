@@ -34,6 +34,7 @@ using qodex::codex::SessionSource;
 using qodex::codex::SubAgentSource;
 using qodex::codex::Thread;
 using qodex::codex::ThreadArchivedNotificationParams;
+using qodex::codex::ThreadClosedNotificationParams;
 using qodex::codex::ThreadForkResponse;
 using qodex::codex::ThreadListResponse;
 using qodex::codex::ThreadNameUpdatedNotificationParams;
@@ -44,6 +45,8 @@ using qodex::codex::ThreadStartedNotificationParams;
 using qodex::codex::ThreadStatus;
 using qodex::codex::ThreadStatusChangedNotificationParams;
 using qodex::codex::ThreadUnarchiveResponse;
+using qodex::codex::ThreadUnsubscribeResponse;
+using qodex::codex::ThreadUnsubscribeStatus;
 using qodex::codex::ThreadUnarchivedNotificationParams;
 
 SessionController::SessionController(
@@ -77,6 +80,8 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::threadArchiveFailed, this, &SessionController::onThreadArchiveFailed);
     connect(m_client, &CodexClient::threadResumeSucceeded, this, &SessionController::onThreadResumeSucceeded);
     connect(m_client, &CodexClient::threadResumeFailed, this, &SessionController::onThreadResumeFailed);
+    connect(m_client, &CodexClient::threadUnsubscribeSucceeded, this, &SessionController::onThreadUnsubscribeSucceeded);
+    connect(m_client, &CodexClient::threadUnsubscribeFailed, this, &SessionController::onThreadUnsubscribeFailed);
     connect(m_client, &CodexClient::threadForkSucceeded, this, &SessionController::onThreadForkSucceeded);
     connect(m_client, &CodexClient::threadForkFailed, this, &SessionController::onThreadForkFailed);
     connect(m_client, &CodexClient::threadUnarchiveSucceeded, this, &SessionController::onThreadUnarchiveSucceeded);
@@ -86,6 +91,12 @@ SessionController::SessionController(
         &CodexClient::threadStartedNotificationReceived,
         this,
         &SessionController::onThreadStartedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::threadClosedNotificationReceived,
+        this,
+        &SessionController::onThreadClosedNotificationReceived
     );
     connect(
         m_client,
@@ -170,6 +181,12 @@ void SessionController::attachWindow(qodex::ui::MainWindow *window) {
             &qodex::ui::ThreadListPane::resumeThreadRequested,
             this,
             &SessionController::onResumeThreadRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::closeThreadsRequested,
+            this,
+            &SessionController::onCloseThreadsRequested
         );
         connect(
             pane,
@@ -460,6 +477,34 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
     m_mainWindow->setStatusMessage(QStringLiteral("Resuming thread..."));
 }
 
+void SessionController::onCloseThreadsRequested(const QStringList &threadIds) {
+    QStringList queuedThreadIds;
+    queuedThreadIds.reserve(threadIds.size());
+
+    for (const QString &threadId : threadIds) {
+        const auto summary = m_threadStore->threadSummaryById(threadId);
+        if (!summary.has_value() || summary->statusText == QStringLiteral("Not Loaded")) {
+            continue;
+        }
+
+        const JsonRpcId requestId = m_client->sendThreadUnsubscribeRequest(threadId);
+        if (!requestId.isValid()) {
+            m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/unsubscribe request."));
+            continue;
+        }
+
+        m_pendingUnsubscribeRequests.insert(requestId.toKey(), threadId);
+        queuedThreadIds.append(threadId);
+    }
+
+    if (!queuedThreadIds.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            queuedThreadIds.size() == 1 ? QStringLiteral("Closing thread...")
+                                        : QStringLiteral("Closing %1 threads...").arg(queuedThreadIds.size())
+        );
+    }
+}
+
 void SessionController::onArchiveThreadsRequested(const QStringList &threadIds) {
     QStringList queuedThreadIds;
     queuedThreadIds.reserve(threadIds.size());
@@ -609,6 +654,40 @@ void SessionController::onThreadResumeFailed(const JsonRpcId &id, const JsonRpcE
     }
 }
 
+void SessionController::onThreadUnsubscribeSucceeded(const JsonRpcId &id, const ThreadUnsubscribeResponse &response) {
+    const QString threadId = m_pendingUnsubscribeRequests.take(id.toKey());
+    if (threadId.isEmpty()) {
+        return;
+    }
+
+    if (response.status == ThreadUnsubscribeStatus::Unsubscribed
+        || response.status == ThreadUnsubscribeStatus::NotLoaded) {
+        m_threadStore->updateThreadStatusText(threadId, QStringLiteral("Not Loaded"));
+        for (qodex::ui::MainWindow *window : std::as_const(m_windows)) {
+            if (window != nullptr) {
+                window->closeThreadTranscript(threadId);
+            }
+        }
+        m_mainWindow->setStatusMessage(
+            response.status == ThreadUnsubscribeStatus::Unsubscribed ? QStringLiteral("Closed thread.")
+                                                                     : QStringLiteral("Thread was already closed.")
+        );
+    } else {
+        m_mainWindow->setStatusMessage(QStringLiteral("Thread was not subscribed."));
+    }
+
+    requestThreadLists();
+}
+
+void SessionController::onThreadUnsubscribeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const QString threadId = m_pendingUnsubscribeRequests.take(id.toKey());
+    if (!threadId.isEmpty()) {
+        m_mainWindow->setStatusMessage(
+            QStringLiteral("Failed to close thread %1: %2").arg(threadId, error.message)
+        );
+    }
+}
+
 void SessionController::onThreadForkSucceeded(const JsonRpcId &id, const ThreadForkResponse &response) {
     const QString sourceThreadId = m_pendingForkRequests.take(id.toKey());
     if (sourceThreadId.isEmpty()) {
@@ -663,6 +742,18 @@ void SessionController::onThreadStartedNotificationReceived(const ThreadStartedN
         return;
     }
     m_threadStore->upsertThreadSummary(projectThreadSummary(*params.thread, false));
+}
+
+void SessionController::onThreadClosedNotificationReceived(const ThreadClosedNotificationParams &params) {
+    if (!m_threadStore->updateThreadStatusText(params.threadId, QStringLiteral("Not Loaded"))) {
+        return;
+    }
+
+    for (qodex::ui::MainWindow *window : std::as_const(m_windows)) {
+        if (window != nullptr) {
+            window->closeThreadTranscript(params.threadId);
+        }
+    }
 }
 
 void SessionController::onThreadNameUpdatedNotificationReceived(const ThreadNameUpdatedNotificationParams &params) {

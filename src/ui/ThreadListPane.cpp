@@ -294,9 +294,11 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     QAction *refreshAction = menu.addAction(QStringLiteral("Refresh Thread List"));
     QAction *renameAction = nullptr;
     QAction *resumeAction = nullptr;
+    QAction *closeAction = nullptr;
     QAction *forkAction = nullptr;
     QAction *archiveAction = nullptr;
     QAction *unarchiveAction = nullptr;
+    QStringList closeThreadIds;
 
     if (!clickedThreadId.isEmpty()) {
         menu.addSeparator();
@@ -305,6 +307,27 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
         renameAction->setEnabled(selectedThreadIds.size() == 1);
         resumeAction = menu.addAction(QStringLiteral("Resume Thread"));
         resumeAction->setEnabled(selectedThreadIds.size() == 1);
+        for (const QString &threadId : selectedThreadIds) {
+            const QModelIndex threadIndex = m_model->match(
+                m_model->index(0, ThreadListModel::ThreadColumn),
+                ThreadListModel::IdRole,
+                threadId,
+                1,
+                Qt::MatchExactly | Qt::MatchRecursive
+            ).value(0);
+            if (!threadIndex.isValid()) {
+                continue;
+            }
+            if (threadIndex.data(ThreadListModel::StatusRole).toString() != QStringLiteral("Not Loaded")) {
+                closeThreadIds.append(threadId);
+            }
+        }
+        if (!closeThreadIds.isEmpty()) {
+            closeAction = menu.addAction(
+                closeThreadIds.size() == 1 ? QStringLiteral("Close Thread")
+                                           : QStringLiteral("Close %1 Threads").arg(closeThreadIds.size())
+            );
+        }
         forkAction = menu.addAction(QStringLiteral("Fork Thread"));
         forkAction->setEnabled(selectedThreadIds.size() == 1);
         if (!archiveThreadIds.isEmpty() || !unarchiveThreadIds.isEmpty()) {
@@ -339,6 +362,10 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     }
     if (selectedAction == resumeAction && selectedThreadIds.size() == 1) {
         emit resumeThreadRequested(selectedThreadIds.constFirst());
+        return;
+    }
+    if (selectedAction == closeAction && !closeThreadIds.isEmpty()) {
+        emit closeThreadsRequested(closeThreadIds);
         return;
     }
     if (selectedAction == forkAction && selectedThreadIds.size() == 1) {

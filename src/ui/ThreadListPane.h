@@ -24,6 +24,7 @@ signals:
     void threadSelected(const QString &threadId);
     void renameThreadRequested(const QString &threadId);
     void resumeThreadRequested(const QString &threadId);
+    void closeThreadsRequested(const QStringList &threadIds);
     void forkThreadRequested(const QString &threadId);
     void archiveThreadsRequested(const QStringList &threadIds);
     void unarchiveThreadsRequested(const QStringList &threadIds);

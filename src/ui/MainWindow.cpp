@@ -139,6 +139,12 @@ void MainWindow::showThreadTranscript(const QString &threadId, const QString &ti
     dock->raise();
 }
 
+void MainWindow::closeThreadTranscript(const QString &threadId) {
+    if (KDDockWidgets::QtWidgets::DockWidget *dock = m_threadTranscriptDocks.value(threadId, nullptr)) {
+        dock->close();
+    }
+}
+
 void MainWindow::rebuildViewMenu(const QList<QAction *> &actions) {
     if (m_viewMenu == nullptr) {
         return;

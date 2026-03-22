@@ -55,6 +55,7 @@ private slots:
     void onThreadSelected(const QString &threadId);
     void onRenameThreadRequested(const QString &threadId);
     void onResumeThreadRequested(const QString &threadId);
+    void onCloseThreadsRequested(const QStringList &threadIds);
     void onForkThreadRequested(const QString &threadId);
     void onArchiveThreadsRequested(const QStringList &threadIds);
     void onUnarchiveThreadsRequested(const QStringList &threadIds);
@@ -66,6 +67,11 @@ private slots:
     void onThreadArchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadResumeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response);
     void onThreadResumeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
+    void onThreadUnsubscribeSucceeded(
+        const qodex::codex::JsonRpcId &id,
+        const qodex::codex::ThreadUnsubscribeResponse &response
+    );
+    void onThreadUnsubscribeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadForkSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadForkResponse &response);
     void onThreadForkFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadUnarchiveSucceeded(
@@ -74,6 +80,7 @@ private slots:
     );
     void onThreadUnarchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadStartedNotificationReceived(const qodex::codex::ThreadStartedNotificationParams &params);
+    void onThreadClosedNotificationReceived(const qodex::codex::ThreadClosedNotificationParams &params);
     void onThreadNameUpdatedNotificationReceived(const qodex::codex::ThreadNameUpdatedNotificationParams &params);
     void onThreadStatusChangedNotificationReceived(const qodex::codex::ThreadStatusChangedNotificationParams &params);
     void onThreadArchivedNotificationReceived(const qodex::codex::ThreadArchivedNotificationParams &params);
@@ -109,6 +116,7 @@ private:
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;
     QHash<QString, QString> m_pendingResumeRequests;
+    QHash<QString, QString> m_pendingUnsubscribeRequests;
     QHash<QString, QString> m_pendingForkRequests;
     QHash<QString, QString> m_pendingUnarchiveRequests;
 };

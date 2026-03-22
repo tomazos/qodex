@@ -44,6 +44,7 @@ public:
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
     void showThreadTranscript(const QString &threadId, const QString &title, const QString &transcript);
+    void closeThreadTranscript(const QString &threadId);
     void rebuildViewMenu(const QList<QAction *> &actions);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
