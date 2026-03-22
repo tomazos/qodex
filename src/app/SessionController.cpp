@@ -181,11 +181,15 @@ void SessionController::start() {
     m_startRequested = true;
 
     if (m_config.codexProgram.isEmpty()) {
-        m_mainWindow->setStatusMessage(QStringLiteral("codex executable not found on PATH."));
+        const QString message = QStringLiteral("codex executable not found on PATH.");
+        m_mainWindow->setStatusMessage(message);
+        finishStartup(message);
         return;
     }
 
-    m_mainWindow->setStatusMessage(QStringLiteral("Starting codex app-server..."));
+    const QString message = QStringLiteral("Starting codex app-server...");
+    m_mainWindow->setStatusMessage(message);
+    emit startupProgressChanged(message, 70);
     m_transport->start(m_config.codexProgram, m_config.codexArguments);
 }
 
@@ -196,13 +200,17 @@ void SessionController::onTransportStarted() {
     auto capabilities = Ref<InitializeCapabilities>::create();
     capabilities->experimentalApi = true;
 
-    m_mainWindow->setStatusMessage(QStringLiteral("Connected. Initializing Codex session..."));
+    const QString message = QStringLiteral("Connected. Initializing Codex session...");
+    m_mainWindow->setStatusMessage(message);
+    emit startupProgressChanged(message, 82);
     const JsonRpcId requestId = m_client->sendInitializeRequest(
         Nullable<Ref<InitializeCapabilities>>::fromValue(capabilities),
         clientInfo
     );
     if (!requestId.isValid()) {
-        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send initialize request."));
+        const QString failureMessage = QStringLiteral("Failed to send initialize request.");
+        m_mainWindow->setStatusMessage(failureMessage);
+        finishStartup(failureMessage);
     }
 }
 
@@ -211,18 +219,21 @@ void SessionController::onInitializeSucceeded(const JsonRpcId &id, const Initial
     Q_UNUSED(response);
 
     if (!m_client->sendInitializedNotification()) {
-        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send initialized notification."));
+        const QString message = QStringLiteral("Failed to send initialized notification.");
+        m_mainWindow->setStatusMessage(message);
+        finishStartup(message);
         return;
     }
 
+    emit startupProgressChanged(QStringLiteral("Loading thread list..."), 92);
     requestThreadLists();
 }
 
 void SessionController::onInitializeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
     Q_UNUSED(id);
-    m_mainWindow->setStatusMessage(
-        QStringLiteral("Initialize failed: %1").arg(error.message)
-    );
+    const QString message = QStringLiteral("Initialize failed: %1").arg(error.message);
+    m_mainWindow->setStatusMessage(message);
+    finishStartup(message);
 }
 
 void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadListResponse &response) {
@@ -260,12 +271,13 @@ void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadL
             [](const qodex::domain::ThreadSummary &summary) { return summary.archived; }
         ));
         const qsizetype activeCount = allThreads.size() - archivedCount;
-        m_mainWindow->setStatusMessage(
+        const QString message =
             QStringLiteral("Loaded %1 threads (%2 active, %3 archived).")
                 .arg(allThreads.size())
                 .arg(activeCount)
-                .arg(archivedCount)
-        );
+                .arg(archivedCount);
+        m_mainWindow->setStatusMessage(message);
+        finishStartup(message);
     }
 }
 
@@ -281,9 +293,11 @@ void SessionController::onThreadListFailed(const JsonRpcId &id, const JsonRpcErr
         return;
     }
 
-    m_mainWindow->setStatusMessage(
-        QStringLiteral("thread/list failed: %1").arg(error.message)
-    );
+    const QString message = QStringLiteral("thread/list failed: %1").arg(error.message);
+    m_mainWindow->setStatusMessage(message);
+    if (!m_activeThreadListRequestInFlight && !m_archivedThreadListRequestInFlight) {
+        finishStartup(message);
+    }
 }
 
 void SessionController::onRefreshRequested() {
@@ -422,15 +436,20 @@ void SessionController::onUnarchiveThreadsRequested(const QStringList &threadIds
 
 void SessionController::onTransportErrorOccurred(const QString &message) {
     m_mainWindow->setStatusMessage(message);
+    if (!m_startupFinished && !m_transport->isRunning()) {
+        finishStartup(message);
+    }
 }
 
 void SessionController::onTransportProcessExited(const int exitCode, const QProcess::ExitStatus exitStatus) {
     const QString statusText = exitStatus == QProcess::NormalExit
         ? QStringLiteral("exited")
         : QStringLiteral("crashed");
-    m_mainWindow->setStatusMessage(
-        QStringLiteral("codex app-server %1 (code %2).").arg(statusText).arg(exitCode)
-    );
+    const QString message = QStringLiteral("codex app-server %1 (code %2).").arg(statusText).arg(exitCode);
+    m_mainWindow->setStatusMessage(message);
+    if (!m_startupFinished) {
+        finishStartup(message);
+    }
 }
 
 void SessionController::onThreadNameSetSucceeded(const JsonRpcId &id, EmptyObject response) {
@@ -661,6 +680,16 @@ QString SessionController::threadSourceText(const SessionSource &source) const {
     }
 
     return QStringLiteral("Sub-agent");
+}
+
+void SessionController::finishStartup(const QString &message) {
+    if (m_startupFinished) {
+        return;
+    }
+
+    m_startupFinished = true;
+    emit startupProgressChanged(message, 100);
+    emit startupFinished();
 }
 
 void SessionController::requestThreadLists() {

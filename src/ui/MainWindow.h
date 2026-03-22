@@ -36,6 +36,7 @@ public:
 
 signals:
     void createNewWindowRequested();
+    void quitRequested();
     void aboutToClose(qodex::ui::MainWindow *window);
 
 private:

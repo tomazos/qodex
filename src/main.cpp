@@ -8,12 +8,14 @@
 #include "app/AppPaths.h"
 #include "app/SingleInstanceManager.h"
 #include "storage/DatabaseManager.h"
+#include "ui/ProgressSplashScreen.h"
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     app.setOrganizationName(QStringLiteral("Tomazos.com"));
     app.setApplicationName(QStringLiteral("Qodex"));
     app.setApplicationVersion(QStringLiteral(QODEX_APP_VERSION));
+    app.setQuitOnLastWindowClosed(false);
 
     QCommandLineParser commandLineParser;
     commandLineParser.setApplicationDescription(QStringLiteral("Qodex"));
@@ -31,16 +33,23 @@ int main(int argc, char *argv[]) {
 
     const qodex::app::AppPaths appPaths = qodex::app::AppPaths::discover(commandLineParser.value(dataOption));
 
+    qodex::ui::ProgressSplashScreen startupSplash(QStringLiteral("Starting Qodex"));
+    startupSplash.setStatus(QStringLiteral("Checking for a running Qodex instance..."), 10);
+    startupSplash.showCentered();
+
     KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtWidgets);
 
     qodex::app::SingleInstanceManager singleInstanceManager(appPaths.databasePath);
     if (!singleInstanceManager.startPrimaryOrActivateExisting()) {
+        startupSplash.close();
         return 0;
     }
 
+    startupSplash.setStatus(QStringLiteral("Opening Qodex database..."), 30);
     qodex::storage::DatabaseManager databaseManager(appPaths.databasePath);
     QString databaseError;
     if (!databaseManager.open(&databaseError)) {
+        startupSplash.close();
         QMessageBox::critical(
             nullptr,
             QStringLiteral("Qodex"),
@@ -49,7 +58,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    startupSplash.setStatus(QStringLiteral("Restoring workspace..."), 50);
     qodex::app::AppBootstrap bootstrap(appPaths, &databaseManager);
+    QObject::connect(
+        &bootstrap,
+        &qodex::app::AppBootstrap::startupProgressChanged,
+        &app,
+        [&startupSplash](const QString &message, const int progress) {
+            startupSplash.setStatus(message, progress);
+        }
+    );
+    QObject::connect(&bootstrap, &qodex::app::AppBootstrap::startupFinished, &app, [&startupSplash] {
+        startupSplash.close();
+    });
     QObject::connect(
         &singleInstanceManager,
         &qodex::app::SingleInstanceManager::activationRequested,
@@ -59,6 +80,7 @@ int main(int argc, char *argv[]) {
     if (singleInstanceManager.takePendingActivation()) {
         bootstrap.activate();
     }
+    startupSplash.setStatus(QStringLiteral("Showing workspace..."), 60);
     bootstrap.mainWindow().show();
     bootstrap.start();
 

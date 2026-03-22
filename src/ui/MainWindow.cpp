@@ -1,6 +1,5 @@
 #include "ui/MainWindow.h"
 
-#include <QApplication>
 #include <QActionGroup>
 #include <QMenu>
 #include <QMenuBar>
@@ -32,7 +31,7 @@ MainWindow::MainWindow(
     statusBar()->showMessage(QStringLiteral("Ready"));
 
     auto *fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
-    fileMenu->addAction(QStringLiteral("&Quit Qodex"), QKeySequence::Quit, qApp, &QApplication::quit);
+    fileMenu->addAction(QStringLiteral("&Quit Qodex"), QKeySequence::Quit, this, &MainWindow::quitRequested);
 
     auto *viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
     if (threadListModel != nullptr) {

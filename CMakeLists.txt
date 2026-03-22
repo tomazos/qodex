@@ -328,6 +328,8 @@ qt_add_executable(qodex
     src/storage/MigrationRunner.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    src/ui/ProgressSplashScreen.cpp
+    src/ui/ProgressSplashScreen.h
     src/ui/ThreadListModel.cpp
     src/ui/ThreadListModel.h
     src/ui/ThreadListPane.cpp

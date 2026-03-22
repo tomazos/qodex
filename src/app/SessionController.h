@@ -41,6 +41,10 @@ public:
     void attachWindow(ui::MainWindow *window);
     void start();
 
+signals:
+    void startupProgressChanged(const QString &message, int progress);
+    void startupFinished();
+
 private slots:
     void onTransportStarted();
     void onInitializeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::InitializeResponse &response);
@@ -80,6 +84,7 @@ private:
         return qodex::codex::Nullable<T>::missing();
     }
 
+    void finishStartup(const QString &message);
     void requestThreadLists();
     void requestThreadList(bool archived);
 
@@ -90,6 +95,7 @@ private:
     ui::MainWindow *m_mainWindow = nullptr;
     QList<ui::MainWindow *> m_windows;
     bool m_startRequested = false;
+    bool m_startupFinished = false;
     bool m_activeThreadListRequestInFlight = false;
     bool m_archivedThreadListRequestInFlight = false;
     QString m_activeThreadListRequestKey;

@@ -2,7 +2,10 @@
 
 #include <algorithm>
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QRegularExpression>
+#include <QTimer>
 #include <kddockwidgets/LayoutSaver.h>
 
 #include "ui/ThreadListPane.h"
@@ -10,7 +13,8 @@
 namespace qodex::app {
 
 AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManager *databaseManager)
-    : m_paths(paths),
+    : QObject(nullptr),
+      m_paths(paths),
       m_databaseManager(databaseManager),
       m_config(AppConfig::loadDefault(m_paths)),
       m_transport(),
@@ -24,10 +28,19 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
       ),
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
+    m_mainWindow.installEventFilter(this);
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
+    QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::quitRequested, this, &AppBootstrap::beginShutdown);
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *window) {
         onWindowAboutToClose(window);
     });
+    QObject::connect(
+        &m_sessionController,
+        &SessionController::startupProgressChanged,
+        this,
+        &AppBootstrap::startupProgressChanged
+    );
+    QObject::connect(&m_sessionController, &SessionController::startupFinished, this, &AppBootstrap::startupFinished);
     restorePersistentState();
     rebuildWindowMenus();
 }
@@ -45,6 +58,24 @@ void AppBootstrap::activate() {
 
 void AppBootstrap::start() {
     m_sessionController.start();
+}
+
+bool AppBootstrap::eventFilter(QObject *watched, QEvent *event) {
+    if (!m_shutdownInProgress && event != nullptr && event->type() == QEvent::Close) {
+        for (qodex::ui::MainWindow *window : windows()) {
+            if (window != watched) {
+                continue;
+            }
+            if (visibleWindowCount() <= 1) {
+                event->ignore();
+                beginShutdown();
+                return true;
+            }
+            break;
+        }
+    }
+
+    return QObject::eventFilter(watched, event);
 }
 
 QString AppBootstrap::titleForWindowKey(const QString &windowKey) {
@@ -76,6 +107,63 @@ qodex::ui::MainWindow *AppBootstrap::windowByKey(const QString &windowKey) {
         }
     }
     return nullptr;
+}
+
+QList<qodex::ui::MainWindow *> AppBootstrap::windows() {
+    QList<qodex::ui::MainWindow *> allWindows;
+    allWindows.append(&m_mainWindow);
+    for (const std::unique_ptr<qodex::ui::MainWindow> &window : m_additionalWindows) {
+        if (window != nullptr) {
+            allWindows.append(window.get());
+        }
+    }
+    return allWindows;
+}
+
+int AppBootstrap::visibleWindowCount() {
+    int count = 0;
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr && window->isVisible()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void AppBootstrap::beginShutdown() {
+    if (m_shutdownInProgress) {
+        return;
+    }
+    m_shutdownInProgress = true;
+
+    m_shutdownSplash = std::make_unique<qodex::ui::ProgressSplashScreen>(QStringLiteral("Closing Qodex"));
+    m_shutdownSplash->setStatus(QStringLiteral("Preparing to close Qodex..."), 10);
+    m_shutdownSplash->showCentered();
+
+    m_shutdownSplash->setStatus(QStringLiteral("Saving workspace state..."), 25);
+    savePersistentState(nullptr);
+
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr) {
+            window->hide();
+        }
+    }
+
+    m_shutdownSplash->setStatus(QStringLiteral("Stopping Codex app-server..."), 70);
+    QTimer::singleShot(0, this, &AppBootstrap::continueShutdown);
+}
+
+void AppBootstrap::continueShutdown() {
+    if (m_transport.isRunning()) {
+        m_transport.stop();
+    }
+
+    if (m_shutdownSplash) {
+        m_shutdownSplash->setStatus(QStringLiteral("Closing Qodex..."), 100);
+        m_shutdownSplash->close();
+    }
+
+    QCoreApplication::quit();
 }
 
 void AppBootstrap::restorePersistentState() {
@@ -221,7 +309,9 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
 ) {
     auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
+    window->installEventFilter(this);
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
+    QObject::connect(window.get(), &qodex::ui::MainWindow::quitRequested, this, &AppBootstrap::beginShutdown);
     QObject::connect(window.get(), &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *closingWindow) {
         onWindowAboutToClose(closingWindow);
     });
