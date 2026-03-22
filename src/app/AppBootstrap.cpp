@@ -49,6 +49,22 @@ qodex::ui::MainWindow &AppBootstrap::mainWindow() {
     return m_mainWindow;
 }
 
+void AppBootstrap::showAllWindows() {
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr) {
+            window->show();
+        }
+    }
+}
+
+void AppBootstrap::hideAllWindows() {
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr) {
+            window->hide();
+        }
+    }
+}
+
 void AppBootstrap::activate() {
     m_mainWindow.setWindowState(m_mainWindow.windowState() & ~Qt::WindowMinimized);
     m_mainWindow.show();
@@ -150,6 +166,8 @@ void AppBootstrap::beginShutdown() {
     }
 
     m_shutdownSplash->setStatus(QStringLiteral("Stopping Codex app-server..."), 70);
+    m_shutdownSplash->raise();
+    m_shutdownSplash->activateWindow();
     QTimer::singleShot(0, this, &AppBootstrap::continueShutdown);
 }
 
@@ -160,6 +178,8 @@ void AppBootstrap::continueShutdown() {
 
     if (m_shutdownSplash) {
         m_shutdownSplash->setStatus(QStringLiteral("Closing Qodex..."), 100);
+        m_shutdownSplash->raise();
+        m_shutdownSplash->activateWindow();
         m_shutdownSplash->close();
     }
 

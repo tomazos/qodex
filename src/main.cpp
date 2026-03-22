@@ -66,9 +66,14 @@ int main(int argc, char *argv[]) {
         &app,
         [&startupSplash](const QString &message, const int progress) {
             startupSplash.setStatus(message, progress);
+            startupSplash.raise();
+            startupSplash.activateWindow();
         }
     );
-    QObject::connect(&bootstrap, &qodex::app::AppBootstrap::startupFinished, &app, [&startupSplash] {
+    QObject::connect(&bootstrap, &qodex::app::AppBootstrap::startupFinished, &app, [&startupSplash, &bootstrap] {
+        startupSplash.raise();
+        startupSplash.activateWindow();
+        bootstrap.showAllWindows();
         startupSplash.close();
     });
     QObject::connect(
@@ -81,7 +86,9 @@ int main(int argc, char *argv[]) {
         bootstrap.activate();
     }
     startupSplash.setStatus(QStringLiteral("Showing workspace..."), 60);
-    bootstrap.mainWindow().show();
+    bootstrap.hideAllWindows();
+    startupSplash.raise();
+    startupSplash.activateWindow();
     bootstrap.start();
 
     return app.exec();

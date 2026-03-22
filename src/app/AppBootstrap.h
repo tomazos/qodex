@@ -26,6 +26,8 @@ public:
     AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManager *databaseManager);
 
     [[nodiscard]] qodex::ui::MainWindow &mainWindow();
+    void showAllWindows();
+    void hideAllWindows();
     void activate();
     void start();
 
