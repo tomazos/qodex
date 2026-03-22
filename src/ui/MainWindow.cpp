@@ -50,7 +50,15 @@ MainWindow::MainWindow(
         m_apiLogDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ApiLog"));
         m_apiLogDock->setTitle(QStringLiteral("API Log"));
         m_apiLogDock->setWidget(m_apiLogPane);
-        addDockWidget(m_apiLogDock, KDDockWidgets::Location_OnBottom, m_threadListDock);
+        if (m_threadListDock != nullptr) {
+            m_threadListDock->addDockWidgetAsTab(
+                m_apiLogDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else {
+            addDockWidgetAsTab(m_apiLogDock);
+            m_apiLogDock->close();
+        }
         viewMenu->addAction(m_apiLogDock->toggleAction());
     }
 
