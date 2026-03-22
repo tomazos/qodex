@@ -356,8 +356,7 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     const QString &windowTitle,
     const bool showImmediately
 ) {
-    auto window =
-        std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel, &m_apiLogModel);
+    auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, nullptr, nullptr);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     window->installEventFilter(this);
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
