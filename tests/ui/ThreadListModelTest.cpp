@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QDateTime>
 
 #include "domain/ThreadStore.h"
 #include "ui/ThreadListModel.h"
@@ -12,6 +13,7 @@ class ThreadListModelTest final : public QObject {
 
 private slots:
     void exposesExpectedColumns();
+    void formatsTimestampColumnsAsMonospace();
     void groupsThreadsByCwd();
     void placesArchivedGroupAtEnd();
     void sortsRowsByClickedColumnWithinGroup();
@@ -35,6 +37,48 @@ void ThreadListModelTest::exposesExpectedColumns() {
     QCOMPARE(model.headerData(ThreadListModel::ThreadColumn, Qt::Horizontal).toString(), QStringLiteral("Thread"));
     QCOMPARE(model.headerData(ThreadListModel::CreatedColumn, Qt::Horizontal).toString(), QStringLiteral("Created"));
     QCOMPARE(model.headerData(ThreadListModel::ModifiedColumn, Qt::Horizontal).toString(), QStringLiteral("Modified"));
+    QCOMPARE(model.headerData(ThreadListModel::StatusColumn, Qt::Horizontal).toString(), QStringLiteral("Status"));
+    QCOMPARE(model.headerData(ThreadListModel::SourceColumn, Qt::Horizontal).toString(), QStringLiteral("Source"));
+    QCOMPARE(model.headerData(ThreadListModel::ModelProviderColumn, Qt::Horizontal).toString(), QStringLiteral("Model Provider"));
+    QCOMPARE(model.headerData(ThreadListModel::PreviewColumn, Qt::Horizontal).toString(), QStringLiteral("Preview"));
+    QCOMPARE(model.headerData(ThreadListModel::CwdColumn, Qt::Horizontal).toString(), QStringLiteral("Cwd"));
+    QCOMPARE(model.headerData(ThreadListModel::IdColumn, Qt::Horizontal).toString(), QStringLiteral("Id"));
+}
+
+void ThreadListModelTest::formatsTimestampColumnsAsMonospace() {
+    ThreadStore store;
+    store.replaceThreadSummaries({
+        ThreadSummary{
+            .id = QStringLiteral("a"),
+            .title = QStringLiteral("Alpha"),
+            .cwd = QStringLiteral("/tmp"),
+            .createdAt = 100,
+            .updatedAt = 200,
+        },
+    });
+
+    ThreadListModel model(&store);
+    const QModelIndex groupIndex = model.index(0, ThreadListModel::ThreadColumn);
+    const QModelIndex threadCreatedIndex = model.index(0, ThreadListModel::CreatedColumn, groupIndex);
+    const QModelIndex threadModifiedIndex = model.index(0, ThreadListModel::ModifiedColumn, groupIndex);
+    const QModelIndex threadIdIndex = model.index(0, ThreadListModel::IdColumn, groupIndex);
+
+    QCOMPARE(
+        threadCreatedIndex.data(Qt::DisplayRole).toString(),
+        QDateTime::fromSecsSinceEpoch(100).toString(QStringLiteral("yyyy-MM-dd HH:mm"))
+    );
+    QCOMPARE(
+        threadModifiedIndex.data(Qt::DisplayRole).toString(),
+        QDateTime::fromSecsSinceEpoch(200).toString(QStringLiteral("yyyy-MM-dd HH:mm"))
+    );
+    QCOMPARE(threadIdIndex.data(Qt::DisplayRole).toString(), QStringLiteral("a"));
+
+    const QFont createdFont = qvariant_cast<QFont>(threadCreatedIndex.data(Qt::FontRole));
+    const QFont modifiedFont = qvariant_cast<QFont>(threadModifiedIndex.data(Qt::FontRole));
+    const QFont idFont = qvariant_cast<QFont>(threadIdIndex.data(Qt::FontRole));
+    QVERIFY(createdFont.fixedPitch());
+    QVERIFY(modifiedFont.fixedPitch());
+    QVERIFY(idFont.fixedPitch());
 }
 
 void ThreadListModelTest::groupsThreadsByCwd() {

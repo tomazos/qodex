@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="images/brain-icon-16x16.png">../images/brain-icon-16x16.png</file>
+        <file alias="images/brain-icon-20x20.png">../images/brain-icon-20x20.png</file>
+        <file alias="images/brain-icon-22x22.png">../images/brain-icon-22x22.png</file>
+        <file alias="images/brain-icon-24x24.png">../images/brain-icon-24x24.png</file>
+        <file alias="images/brain-icon-32x32.png">../images/brain-icon-32x32.png</file>
+        <file alias="images/brain-icon-48x48.png">../images/brain-icon-48x48.png</file>
+        <file alias="images/brain-icon-64x64.png">../images/brain-icon-64x64.png</file>
+        <file alias="images/brain-icon-128x128.png">../images/brain-icon-128x128.png</file>
+        <file alias="images/brain-icon-256x256.png">../images/brain-icon-256x256.png</file>
+        <file alias="images/brain-icon-512x512.png">../images/brain-icon-512x512.png</file>
+    </qresource>
+</RCC>

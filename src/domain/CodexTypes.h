@@ -10,7 +10,17 @@ struct ThreadSummary {
     QString preview;
     QString cwd;
     QString statusText;
+    QString sourceText;
+    QString modelProvider;
+    QString cliVersion;
+    QString path;
+    QString agentNickname;
+    QString agentRole;
+    QString gitOrigin;
+    QString gitBranch;
+    QString gitSha;
     bool archived = false;
+    bool ephemeral = false;
     qint64 createdAt = 0;
     qint64 updatedAt = 0;
 };

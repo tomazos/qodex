@@ -1,14 +1,11 @@
 #include "ui/ThreadListPane.h"
 
-#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QItemSelectionModel>
-#include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
-#include <QSignalBlocker>
 #include <QModelIndex>
-#include <QPushButton>
+#include <QSignalBlocker>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -58,14 +55,6 @@ ThreadListPane::ThreadListPane(ThreadListModel *model, QWidget *parent)
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    auto *headerLayout = new QHBoxLayout();
-    auto *label = new QLabel(QStringLiteral("Threads"), this);
-    m_refreshButton = new QPushButton(QStringLiteral("Refresh"), this);
-
-    headerLayout->addWidget(label);
-    headerLayout->addStretch(1);
-    headerLayout->addWidget(m_refreshButton);
-
     m_treeView = new ThreadTreeView(this);
     m_treeView->setModel(m_model);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -74,28 +63,48 @@ ThreadListPane::ThreadListPane(ThreadListModel *model, QWidget *parent)
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setWordWrap(false);
     m_treeView->setAllColumnsShowFocus(true);
+    m_treeView->setIconSize(QSize(16, 16));
     m_treeView->setRootIsDecorated(true);
     m_treeView->setItemsExpandable(true);
     m_treeView->setUniformRowHeights(true);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_treeView->header()->setStretchLastSection(false);
-    m_treeView->header()->setSectionsClickable(true);
-    m_treeView->header()->setSortIndicatorShown(true);
-    m_treeView->header()->setSectionResizeMode(ThreadListModel::ThreadColumn, QHeaderView::Stretch);
-    m_treeView->header()->setSectionResizeMode(ThreadListModel::CreatedColumn, QHeaderView::ResizeToContents);
-    m_treeView->header()->setSectionResizeMode(ThreadListModel::ModifiedColumn, QHeaderView::ResizeToContents);
+    auto *header = m_treeView->header();
+    header->setStretchLastSection(false);
+    header->setSectionsClickable(true);
+    header->setSortIndicatorShown(true);
+    header->setContextMenuPolicy(Qt::CustomContextMenu);
+    header->setSectionsMovable(true);
+    header->setFirstSectionMovable(false);
+    for (int column = ThreadListModel::ThreadColumn; column < ThreadListModel::ColumnCount; ++column) {
+        header->setSectionResizeMode(column, QHeaderView::Interactive);
+    }
+    for (int column = ThreadListModel::StatusColumn; column < ThreadListModel::ColumnCount; ++column) {
+        if (column == ThreadListModel::IdColumn) {
+            continue;
+        }
+        header->setSectionHidden(column, true);
+    }
+    m_treeView->resizeColumnToContents(ThreadListModel::ThreadColumn);
+    if (header->sectionSize(ThreadListModel::ThreadColumn) < 220) {
+        header->resizeSection(ThreadListModel::ThreadColumn, 220);
+    }
+    resizeSnugColumns();
     m_treeView->sortByColumn(ThreadListModel::ModifiedColumn, Qt::DescendingOrder);
 
-    layout->addLayout(headerLayout);
     layout->addWidget(m_treeView, 1);
 
-    connect(m_refreshButton, &QPushButton::clicked, this, &ThreadListPane::refreshRequested);
     connect(
         m_treeView,
         &QWidget::customContextMenuRequested,
         this,
         &ThreadListPane::showContextMenu
+    );
+    connect(
+        m_treeView->header(),
+        &QWidget::customContextMenuRequested,
+        this,
+        &ThreadListPane::showHeaderContextMenu
     );
     connect(
         m_treeView->selectionModel(),
@@ -112,10 +121,29 @@ ThreadListPane::ThreadListPane(ThreadListModel *model, QWidget *parent)
     connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
         if (m_treeView != nullptr) {
             m_treeView->expandAll();
+            resizeSnugColumns();
         }
     });
 
     m_treeView->expandAll();
+    resizeSnugColumns();
+}
+
+void ThreadListPane::resizeSnugColumns() {
+    if (m_treeView == nullptr || m_treeView->header() == nullptr) {
+        return;
+    }
+
+    auto *header = m_treeView->header();
+    for (const int column : {
+             ThreadListModel::CreatedColumn,
+             ThreadListModel::ModifiedColumn,
+             ThreadListModel::IdColumn,
+         }) {
+        if (!header->isSectionHidden(column)) {
+            m_treeView->resizeColumnToContents(column);
+        }
+    }
 }
 
 void ThreadListPane::setCurrentThreadId(const QString &threadId) {
@@ -178,13 +206,14 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     }
 
     QModelIndex index = m_treeView->indexAt(position);
+    QString clickedThreadId;
+    QStringList selectedThreadIds;
+    QStringList archiveThreadIds;
+    QStringList unarchiveThreadIds;
     if (index.isValid()) {
         index = index.siblingAtColumn(ThreadListModel::ThreadColumn);
-        const QString clickedThreadId = index.data(ThreadListModel::IdRole).toString();
-        if (clickedThreadId.isEmpty()) {
-            return;
-        }
-
+        clickedThreadId = index.data(ThreadListModel::IdRole).toString();
+        if (!clickedThreadId.isEmpty()) {
         const QStringList snapshot =
             m_treeView->property(kContextSelectionSnapshotProperty).toStringList();
         m_treeView->setProperty(kContextSelectionSnapshotProperty, {});
@@ -203,7 +232,7 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
             m_treeView->selectionModel()->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
         }
 
-        QStringList selectedThreadIds = clickedWasInSnapshot
+        selectedThreadIds = clickedWasInSnapshot
             ? snapshot
             : QStringList{};
         if (!clickedWasInSnapshot) {
@@ -217,8 +246,6 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
             }
         }
 
-        QStringList archiveThreadIds;
-        QStringList unarchiveThreadIds;
         archiveThreadIds.reserve(selectedThreadIds.size());
         unarchiveThreadIds.reserve(selectedThreadIds.size());
 
@@ -241,14 +268,23 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
                 archiveThreadIds.append(threadId);
             }
         }
-
-        if (archiveThreadIds.isEmpty() && unarchiveThreadIds.isEmpty()) {
-            return;
         }
+    }
 
-        QMenu menu(this);
-        QAction *archiveAction = nullptr;
-        QAction *unarchiveAction = nullptr;
+    QMenu menu(this);
+    QAction *refreshAction = menu.addAction(QStringLiteral("Refresh Thread List"));
+    QAction *renameAction = nullptr;
+    QAction *archiveAction = nullptr;
+    QAction *unarchiveAction = nullptr;
+
+    if (!clickedThreadId.isEmpty()) {
+        menu.addSeparator();
+
+        renameAction = menu.addAction(QStringLiteral("Rename..."));
+        renameAction->setEnabled(selectedThreadIds.size() == 1);
+        if (!archiveThreadIds.isEmpty() || !unarchiveThreadIds.isEmpty()) {
+            menu.addSeparator();
+        }
 
         if (!archiveThreadIds.isEmpty()) {
             archiveAction = menu.addAction(
@@ -262,15 +298,65 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
                                                : QStringLiteral("Unarchive %1 Threads").arg(unarchiveThreadIds.size())
             );
         }
+    }
 
-        QAction *selectedAction = menu.exec(m_treeView->viewport()->mapToGlobal(position));
-        if (selectedAction == archiveAction) {
-            emit archiveThreadsRequested(archiveThreadIds);
-            return;
+    QAction *selectedAction = menu.exec(m_treeView->viewport()->mapToGlobal(position));
+    if (selectedAction == nullptr) {
+        return;
+    }
+    if (selectedAction == refreshAction) {
+        emit refreshRequested();
+        return;
+    }
+    if (selectedAction == renameAction && selectedThreadIds.size() == 1) {
+        emit renameThreadRequested(selectedThreadIds.constFirst());
+        return;
+    }
+    if (selectedAction == archiveAction) {
+        emit archiveThreadsRequested(archiveThreadIds);
+        return;
+    }
+    if (selectedAction == unarchiveAction) {
+        emit unarchiveThreadsRequested(unarchiveThreadIds);
+    }
+}
+
+void ThreadListPane::showHeaderContextMenu(const QPoint &position) {
+    if (m_treeView == nullptr || m_model == nullptr || m_treeView->header() == nullptr) {
+        return;
+    }
+
+    auto *header = m_treeView->header();
+    QMenu menu(this);
+    QAction *refreshAction = menu.addAction(QStringLiteral("Refresh Thread List"));
+    menu.addSeparator();
+
+    for (int column = 0; column < m_model->columnCount(); ++column) {
+        const QString title = m_model->headerData(column, Qt::Horizontal, Qt::DisplayRole).toString();
+        if (title.isEmpty()) {
+            continue;
         }
-        if (selectedAction == unarchiveAction) {
-            emit unarchiveThreadsRequested(unarchiveThreadIds);
+
+        QAction *action = menu.addAction(title);
+        action->setCheckable(true);
+        action->setChecked(!header->isSectionHidden(column));
+
+        if (column == ThreadListModel::ThreadColumn) {
+            action->setEnabled(false);
+            continue;
         }
+
+        connect(action, &QAction::toggled, this, [this, header, column](const bool visible) {
+            header->setSectionHidden(column, !visible);
+            if (visible && m_treeView != nullptr) {
+                m_treeView->resizeColumnToContents(column);
+            }
+        });
+    }
+
+    QAction *selectedAction = menu.exec(header->viewport()->mapToGlobal(position));
+    if (selectedAction == refreshAction) {
+        emit refreshRequested();
     }
 }
 

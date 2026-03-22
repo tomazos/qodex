@@ -3,7 +3,6 @@
 #include <QStringList>
 #include <QWidget>
 
-class QPushButton;
 class QTreeView;
 
 namespace qodex::ui {
@@ -21,16 +20,18 @@ public:
 signals:
     void refreshRequested();
     void threadSelected(const QString &threadId);
+    void renameThreadRequested(const QString &threadId);
     void archiveThreadsRequested(const QStringList &threadIds);
     void unarchiveThreadsRequested(const QStringList &threadIds);
 
 private:
+    void resizeSnugColumns();
     void emitSelectionForIndex(const QModelIndex &index);
     void showContextMenu(const QPoint &position);
+    void showHeaderContextMenu(const QPoint &position);
 
     ThreadListModel *m_model = nullptr;
     QTreeView *m_treeView = nullptr;
-    QPushButton *m_refreshButton = nullptr;
 };
 
 }  // namespace qodex::ui

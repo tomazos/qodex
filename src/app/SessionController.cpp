@@ -2,7 +2,13 @@
 
 #include <algorithm>
 
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QLabel>
+#include <QLineEdit>
 #include <QProcess>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 #include "CodexClient.h"
 #include "CodexProtocol.h"
@@ -18,10 +24,13 @@ using qodex::codex::ClientInfo;
 using qodex::codex::CodexClient;
 using qodex::codex::EmptyObject;
 using qodex::codex::InitializeResponse;
+using qodex::codex::InitializeCapabilities;
 using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
 using qodex::codex::Nullable;
 using qodex::codex::Ref;
+using qodex::codex::SessionSource;
+using qodex::codex::SubAgentSource;
 using qodex::codex::Thread;
 using qodex::codex::ThreadArchivedNotificationParams;
 using qodex::codex::ThreadListResponse;
@@ -59,6 +68,8 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::initializeFailed, this, &SessionController::onInitializeFailed);
     connect(m_client, &CodexClient::threadListSucceeded, this, &SessionController::onThreadListSucceeded);
     connect(m_client, &CodexClient::threadListFailed, this, &SessionController::onThreadListFailed);
+    connect(m_client, &CodexClient::threadNameSetSucceeded, this, &SessionController::onThreadNameSetSucceeded);
+    connect(m_client, &CodexClient::threadNameSetFailed, this, &SessionController::onThreadNameSetFailed);
     connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
     connect(m_client, &CodexClient::threadArchiveFailed, this, &SessionController::onThreadArchiveFailed);
     connect(m_client, &CodexClient::threadUnarchiveSucceeded, this, &SessionController::onThreadUnarchiveSucceeded);
@@ -106,30 +117,7 @@ SessionController::SessionController(
         &SessionController::onTransportProcessExited
     );
 
-    connect(
-        m_mainWindow->threadListPane(),
-        &qodex::ui::ThreadListPane::refreshRequested,
-        this,
-        &SessionController::onRefreshRequested
-    );
-    connect(
-        m_mainWindow->threadListPane(),
-        &qodex::ui::ThreadListPane::threadSelected,
-        this,
-        &SessionController::onThreadSelected
-    );
-    connect(
-        m_mainWindow->threadListPane(),
-        &qodex::ui::ThreadListPane::archiveThreadsRequested,
-        this,
-        &SessionController::onArchiveThreadsRequested
-    );
-    connect(
-        m_mainWindow->threadListPane(),
-        &qodex::ui::ThreadListPane::unarchiveThreadsRequested,
-        this,
-        &SessionController::onUnarchiveThreadsRequested
-    );
+    attachWindow(m_mainWindow);
     connect(
         m_threadStore,
         &qodex::domain::ThreadStore::threadListChanged,
@@ -142,6 +130,48 @@ SessionController::SessionController(
         this,
         &SessionController::refreshSelectedThreadUi
     );
+}
+
+void SessionController::attachWindow(qodex::ui::MainWindow *window) {
+    if (window == nullptr || m_windows.contains(window)) {
+        return;
+    }
+
+    m_windows.append(window);
+
+    if (qodex::ui::ThreadListPane *pane = window->threadListPane()) {
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::refreshRequested,
+            this,
+            &SessionController::onRefreshRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::threadSelected,
+            this,
+            &SessionController::onThreadSelected
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::renameThreadRequested,
+            this,
+            &SessionController::onRenameThreadRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::archiveThreadsRequested,
+            this,
+            &SessionController::onArchiveThreadsRequested
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::unarchiveThreadsRequested,
+            this,
+            &SessionController::onUnarchiveThreadsRequested
+        );
+        pane->setCurrentThreadId(m_threadStore->selectedThreadId());
+    }
 }
 
 void SessionController::start() {
@@ -163,10 +193,12 @@ void SessionController::onTransportStarted() {
     auto clientInfo = Ref<ClientInfo>::create();
     clientInfo->name = m_config.clientName;
     clientInfo->version = m_config.clientVersion;
+    auto capabilities = Ref<InitializeCapabilities>::create();
+    capabilities->experimentalApi = true;
 
     m_mainWindow->setStatusMessage(QStringLiteral("Connected. Initializing Codex session..."));
     const JsonRpcId requestId = m_client->sendInitializeRequest(
-        Nullable<Ref<qodex::codex::InitializeCapabilities>>::missing(),
+        Nullable<Ref<InitializeCapabilities>>::fromValue(capabilities),
         clientInfo
     );
     if (!requestId.isValid()) {
@@ -262,6 +294,76 @@ void SessionController::onThreadSelected(const QString &threadId) {
     m_threadStore->setSelectedThreadId(threadId);
 }
 
+void SessionController::onRenameThreadRequested(const QString &threadId) {
+    const auto summary = m_threadStore->threadSummaryById(threadId);
+    if (!summary.has_value()) {
+        return;
+    }
+
+    const QString currentTitle = summary->title;
+    QDialog dialog(
+        m_mainWindow,
+        Qt::Dialog
+            | Qt::FramelessWindowHint
+            | Qt::CustomizeWindowHint
+    );
+    dialog.setWindowModality(Qt::WindowModal);
+    dialog.setObjectName(QStringLiteral("renameThreadDialog"));
+    dialog.setStyleSheet(
+        QStringLiteral(
+            "#renameThreadDialog {"
+            "  background: palette(window);"
+            "  border: 1px solid palette(mid);"
+            "  border-radius: 8px;"
+            "}"
+        )
+    );
+
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(12, 12, 12, 12);
+
+    auto *label = new QLabel(QStringLiteral("Thread name:"), &dialog);
+    auto *lineEdit = new QLineEdit(currentTitle, &dialog);
+    lineEdit->selectAll();
+
+    auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+    QPushButton *renameButton = buttonBox->addButton(QStringLiteral("Rename"), QDialogButtonBox::AcceptRole);
+    renameButton->setDefault(true);
+
+    layout->addWidget(label);
+    layout->addWidget(lineEdit);
+    layout->addWidget(buttonBox);
+
+    QObject::connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    layout->setSizeConstraint(QLayout::SetFixedSize);
+    dialog.adjustSize();
+    if (m_mainWindow != nullptr) {
+        const QPoint center = m_mainWindow->geometry().center();
+        dialog.move(center.x() - dialog.width() / 2, center.y() - dialog.height() / 2);
+    }
+    lineEdit->setFocus();
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QString newName = lineEdit->text();
+    if (newName == currentTitle) {
+        return;
+    }
+
+    const JsonRpcId requestId = m_client->sendThreadNameSetRequest(newName, threadId);
+    if (!requestId.isValid()) {
+        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/name/set request."));
+        return;
+    }
+
+    m_pendingRenameRequests.insert(requestId.toKey(), {threadId, newName});
+    m_mainWindow->setStatusMessage(QStringLiteral("Renaming thread..."));
+}
+
 void SessionController::onArchiveThreadsRequested(const QStringList &threadIds) {
     QStringList queuedThreadIds;
     queuedThreadIds.reserve(threadIds.size());
@@ -328,6 +430,29 @@ void SessionController::onTransportProcessExited(const int exitCode, const QProc
         : QStringLiteral("crashed");
     m_mainWindow->setStatusMessage(
         QStringLiteral("codex app-server %1 (code %2).").arg(statusText).arg(exitCode)
+    );
+}
+
+void SessionController::onThreadNameSetSucceeded(const JsonRpcId &id, EmptyObject response) {
+    Q_UNUSED(response);
+
+    const auto request = m_pendingRenameRequests.take(id.toKey());
+    if (request.first.isEmpty()) {
+        return;
+    }
+
+    m_threadStore->updateThreadTitle(request.first, request.second);
+    m_mainWindow->setStatusMessage(QStringLiteral("Thread renamed."));
+}
+
+void SessionController::onThreadNameSetFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const auto request = m_pendingRenameRequests.take(id.toKey());
+    if (request.first.isEmpty()) {
+        return;
+    }
+
+    m_mainWindow->setStatusMessage(
+        QStringLiteral("Failed to rename thread %1: %2").arg(request.first, error.message)
     );
 }
 
@@ -419,17 +544,48 @@ void SessionController::onThreadUnarchivedNotificationReceived(const ThreadUnarc
 }
 
 void SessionController::refreshSelectedThreadUi() {
-    m_mainWindow->threadListPane()->setCurrentThreadId(m_threadStore->selectedThreadId());
+    for (qodex::ui::MainWindow *window : std::as_const(m_windows)) {
+        if (window == nullptr || window->threadListPane() == nullptr) {
+            continue;
+        }
+        window->threadListPane()->setCurrentThreadId(m_threadStore->selectedThreadId());
+    }
 }
 
 qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {
+    QString gitOrigin;
+    QString gitBranch;
+    QString gitSha;
+    if (thread.gitInfo.hasValue() && thread.gitInfo.value()) {
+        const Ref<qodex::codex::GitInfo> &gitInfo = thread.gitInfo.value();
+        if (gitInfo->originUrl.hasValue()) {
+            gitOrigin = gitInfo->originUrl.value();
+        }
+        if (gitInfo->branch.hasValue()) {
+            gitBranch = gitInfo->branch.value();
+        }
+        if (gitInfo->sha.hasValue()) {
+            gitSha = gitInfo->sha.value();
+        }
+    }
+
     return qodex::domain::ThreadSummary{
         .id = thread.id,
         .title = threadDisplayTitle(thread),
         .preview = thread.preview.trimmed(),
         .cwd = thread.cwd,
         .statusText = thread.status ? threadStatusText(*thread.status) : QStringLiteral("Unknown"),
+        .sourceText = thread.source ? threadSourceText(*thread.source) : QStringLiteral("Unknown"),
+        .modelProvider = thread.modelProvider,
+        .cliVersion = thread.cliVersion,
+        .path = thread.path.hasValue() ? thread.path.value() : QString{},
+        .agentNickname = thread.agentNickname.hasValue() ? thread.agentNickname.value() : QString{},
+        .agentRole = thread.agentRole.hasValue() ? thread.agentRole.value() : QString{},
+        .gitOrigin = gitOrigin,
+        .gitBranch = gitBranch,
+        .gitSha = gitSha,
         .archived = archived,
+        .ephemeral = thread.ephemeral,
         .createdAt = thread.createdAt,
         .updatedAt = thread.updatedAt,
     };
@@ -458,6 +614,53 @@ QString SessionController::threadDisplayTitle(const Thread &thread) const {
         return thread.preview.trimmed();
     }
     return thread.id;
+}
+
+QString SessionController::threadSourceText(const SessionSource &source) const {
+    switch (source.kind) {
+    case SessionSource::Kind::Cli:
+        return QStringLiteral("CLI");
+    case SessionSource::Kind::Vscode:
+        return QStringLiteral("VSCode");
+    case SessionSource::Kind::Exec:
+        return QStringLiteral("Exec");
+    case SessionSource::Kind::AppServer:
+        return QStringLiteral("App Server");
+    case SessionSource::Kind::Unknown:
+        return QStringLiteral("Unknown");
+    case SessionSource::Kind::Custom:
+        if (const QString *custom = std::get_if<QString>(&source.payload)) {
+            return custom->trimmed().isEmpty() ? QStringLiteral("Custom") : *custom;
+        }
+        return QStringLiteral("Custom");
+    case SessionSource::Kind::SubAgent:
+        break;
+    }
+
+    if (const Ref<SubAgentSource> *subAgent = std::get_if<Ref<SubAgentSource>>(&source.payload)) {
+        if (!*subAgent) {
+            return QStringLiteral("Sub-agent");
+        }
+
+        switch ((*subAgent)->kind) {
+        case SubAgentSource::Kind::Review:
+            return QStringLiteral("Sub-agent: Review");
+        case SubAgentSource::Kind::Compact:
+            return QStringLiteral("Sub-agent: Compact");
+        case SubAgentSource::Kind::MemoryConsolidation:
+            return QStringLiteral("Sub-agent: Memory");
+        case SubAgentSource::Kind::ThreadSpawn:
+            return QStringLiteral("Sub-agent: Spawn");
+        case SubAgentSource::Kind::Other:
+            if (const QString *other = std::get_if<QString>(&(*subAgent)->payload)) {
+                return other->trimmed().isEmpty() ? QStringLiteral("Sub-agent: Other")
+                                                  : QStringLiteral("Sub-agent: %1").arg(*other);
+            }
+            return QStringLiteral("Sub-agent: Other");
+        }
+    }
+
+    return QStringLiteral("Sub-agent");
 }
 
 void SessionController::requestThreadLists() {

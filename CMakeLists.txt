@@ -300,6 +300,7 @@ if(NOT TARGET qodex_protocol_artifacts)
 endif()
 
 qt_add_executable(qodex
+    resources/qodex.qrc
     src/main.cpp
     src/app/AppBootstrap.cpp
     src/app/AppBootstrap.h
@@ -309,6 +310,8 @@ qt_add_executable(qodex
     src/app/AppPaths.h
     src/app/SessionController.cpp
     src/app/SessionController.h
+    src/app/SingleInstanceManager.cpp
+    src/app/SingleInstanceManager.h
     src/codex/AppServerTransport.cpp
     src/codex/AppServerTransport.h
     src/codex/CodexClientBase.cpp
@@ -327,18 +330,18 @@ qt_add_executable(qodex
 
 target_include_directories(qodex PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
-    "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/nonexperimental"
+    "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Widgets KDAB::kddockwidgets)
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Widgets KDAB::kddockwidgets)
 target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
 add_dependencies(qodex qodex_protocol_artifacts)
 target_sources(qodex PRIVATE
-    "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_CPP}"
-    "${QODEX_NONEXPERIMENTAL_CODEX_PROTOCOL_H}"
-    "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_CPP}"
-    "${QODEX_NONEXPERIMENTAL_CODEX_CLIENT_H}"
+    "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+    "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+    "${QODEX_EXPERIMENTAL_CODEX_CLIENT_CPP}"
+    "${QODEX_EXPERIMENTAL_CODEX_CLIENT_H}"
 )
 
 if(BUILD_TESTING)
@@ -396,7 +399,22 @@ if(BUILD_TESTING)
 
     add_test(NAME ThreadStoreTest COMMAND ThreadStoreTest)
 
+    qt_add_executable(SingleInstanceManagerTest
+        tests/app/SingleInstanceManagerTest.cpp
+        src/app/SingleInstanceManager.cpp
+        src/app/SingleInstanceManager.h
+    )
+
+    target_include_directories(SingleInstanceManagerTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(SingleInstanceManagerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+    add_test(NAME SingleInstanceManagerTest COMMAND SingleInstanceManagerTest)
+
     qt_add_executable(ThreadListModelTest
+        resources/qodex.qrc
         tests/ui/ThreadListModelTest.cpp
         src/domain/CodexTypes.h
         src/domain/ThreadStore.cpp
@@ -409,7 +427,7 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/src"
     )
 
-    target_link_libraries(ThreadListModelTest PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(ThreadListModelTest PRIVATE Qt6::Core Qt6::Test Qt6::Widgets)
 
     add_test(NAME ThreadListModelTest COMMAND ThreadListModelTest)
 endif()

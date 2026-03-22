@@ -3,7 +3,10 @@
 #include <QObject>
 #include <QProcess>
 #include <QHash>
+#include <QList>
 #include <QStringList>
+
+#include <utility>
 
 #include "CodexProtocol.h"
 #include "app/AppConfig.h"
@@ -35,6 +38,7 @@ public:
         QObject *parent = nullptr
     );
 
+    void attachWindow(ui::MainWindow *window);
     void start();
 
 private slots:
@@ -45,10 +49,13 @@ private slots:
     void onThreadListFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onRefreshRequested();
     void onThreadSelected(const QString &threadId);
+    void onRenameThreadRequested(const QString &threadId);
     void onArchiveThreadsRequested(const QStringList &threadIds);
     void onUnarchiveThreadsRequested(const QStringList &threadIds);
     void onTransportErrorOccurred(const QString &message);
     void onTransportProcessExited(int exitCode, QProcess::ExitStatus exitStatus);
+    void onThreadNameSetSucceeded(const qodex::codex::JsonRpcId &id, qodex::codex::EmptyObject response);
+    void onThreadNameSetFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadArchiveSucceeded(const qodex::codex::JsonRpcId &id, qodex::codex::EmptyObject response);
     void onThreadArchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadUnarchiveSucceeded(
@@ -67,6 +74,7 @@ private:
     [[nodiscard]] domain::ThreadSummary projectThreadSummary(const qodex::codex::Thread &thread, bool archived) const;
     [[nodiscard]] QString threadStatusText(const qodex::codex::ThreadStatus &status) const;
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
+    [[nodiscard]] QString threadSourceText(const qodex::codex::SessionSource &source) const;
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
@@ -80,11 +88,13 @@ private:
     codex::CodexClient *m_client = nullptr;
     domain::ThreadStore *m_threadStore = nullptr;
     ui::MainWindow *m_mainWindow = nullptr;
+    QList<ui::MainWindow *> m_windows;
     bool m_startRequested = false;
     bool m_activeThreadListRequestInFlight = false;
     bool m_archivedThreadListRequestInFlight = false;
     QString m_activeThreadListRequestKey;
     QString m_archivedThreadListRequestKey;
+    QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;
     QHash<QString, QString> m_pendingUnarchiveRequests;
 };

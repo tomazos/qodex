@@ -3,13 +3,79 @@
 #include <algorithm>
 #include <utility>
 
+#include <QApplication>
 #include <QDateTime>
+#include <QFont>
 #include <QHash>
+#include <QIcon>
 #include <QLocale>
+#include <QStyle>
 
 #include "domain/ThreadStore.h"
 
 namespace qodex::ui {
+
+namespace {
+
+QIcon themeIconWithFallback(
+    const std::initializer_list<const char *> &themeNames,
+    const QStyle::StandardPixmap fallback
+) {
+    for (const char *themeName : themeNames) {
+        const QIcon icon = QIcon::fromTheme(QLatin1String(themeName));
+        if (!icon.isNull()) {
+            return icon;
+        }
+    }
+
+    if (auto *application = qobject_cast<QApplication *>(QCoreApplication::instance())) {
+        return application->style()->standardIcon(fallback);
+    }
+
+    return {};
+}
+
+QIcon folderNodeIcon() {
+    static const QIcon icon =
+        themeIconWithFallback({"folder", "inode-directory", "folder-open"}, QStyle::SP_DirIcon);
+    return icon;
+}
+
+QIcon archivedNodeIcon() {
+    static const QIcon icon =
+        themeIconWithFallback({"user-trash", "trash-empty", "edit-delete"}, QStyle::SP_TrashIcon);
+    return icon;
+}
+
+QIcon brainNodeIcon() {
+    static const QIcon icon = [] {
+        QIcon builtIcon;
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-16x16.png"), QSize(16, 16));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-20x20.png"), QSize(20, 20));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-22x22.png"), QSize(22, 22));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-24x24.png"), QSize(24, 24));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-32x32.png"), QSize(32, 32));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-48x48.png"), QSize(48, 48));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-64x64.png"), QSize(64, 64));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-128x128.png"), QSize(128, 128));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-256x256.png"), QSize(256, 256));
+        builtIcon.addFile(QStringLiteral(":/images/brain-icon-512x512.png"), QSize(512, 512));
+        return builtIcon;
+    }();
+    return icon;
+}
+
+QFont timestampColumnFont() {
+    static const QFont font = [] {
+        QFont builtFont(QStringLiteral("monospace"));
+        builtFont.setStyleHint(QFont::TypeWriter);
+        builtFont.setFixedPitch(true);
+        return builtFont;
+    }();
+    return font;
+}
+
+}  // namespace
 
 ThreadListModel::ThreadListModel(domain::ThreadStore *threadStore, QObject *parent)
     : QAbstractItemModel(parent),
@@ -114,6 +180,34 @@ QVariant ThreadListModel::headerData(const int section, const Qt::Orientation or
         return QStringLiteral("Created");
     case ModifiedColumn:
         return QStringLiteral("Modified");
+    case StatusColumn:
+        return QStringLiteral("Status");
+    case SourceColumn:
+        return QStringLiteral("Source");
+    case ModelProviderColumn:
+        return QStringLiteral("Model Provider");
+    case PreviewColumn:
+        return QStringLiteral("Preview");
+    case CwdColumn:
+        return QStringLiteral("Cwd");
+    case IdColumn:
+        return QStringLiteral("Id");
+    case CliVersionColumn:
+        return QStringLiteral("CLI Version");
+    case PathColumn:
+        return QStringLiteral("Path");
+    case EphemeralColumn:
+        return QStringLiteral("Ephemeral");
+    case AgentNicknameColumn:
+        return QStringLiteral("Agent Nickname");
+    case AgentRoleColumn:
+        return QStringLiteral("Agent Role");
+    case GitOriginColumn:
+        return QStringLiteral("Git Origin");
+    case GitBranchColumn:
+        return QStringLiteral("Git Branch");
+    case GitShaColumn:
+        return QStringLiteral("Git SHA");
     default:
         return {};
     }
@@ -160,7 +254,7 @@ QString ThreadListModel::formatTimestamp(const qint64 secondsSinceEpoch) {
     if (secondsSinceEpoch <= 0) {
         return QStringLiteral("—");
     }
-    return QLocale().toString(QDateTime::fromSecsSinceEpoch(secondsSinceEpoch), QLocale::ShortFormat);
+    return QDateTime::fromSecsSinceEpoch(secondsSinceEpoch).toString(QStringLiteral("yyyy-MM-dd HH:mm"));
 }
 
 QString ThreadListModel::displayCwd(const QString &cwd) {
@@ -178,6 +272,14 @@ QVariant ThreadListModel::groupData(const GroupNode &group, const int column, co
             return group.label;
         }
         return {};
+    case Qt::DecorationRole:
+        if (column != ThreadColumn) {
+            return {};
+        }
+        if (group.kind == Node::Kind::ArchivedRoot) {
+            return archivedNodeIcon();
+        }
+        return folderNodeIcon();
     case CwdRole:
         return group.cwd;
     case ArchivedRole:
@@ -189,6 +291,11 @@ QVariant ThreadListModel::groupData(const GroupNode &group, const int column, co
             return QVariant::fromValue(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
         }
         return QVariant::fromValue(Qt::Alignment(Qt::AlignLeft | Qt::AlignVCenter));
+    case Qt::FontRole:
+        if (column == CreatedColumn || column == ModifiedColumn || column == IdColumn) {
+            return timestampColumnFont();
+        }
+        return {};
     default:
         return {};
     }
@@ -206,9 +313,42 @@ QVariant ThreadListModel::threadData(const ThreadNode &thread, const int column,
             return formatTimestamp(summary.createdAt);
         case ModifiedColumn:
             return formatTimestamp(summary.updatedAt);
+        case StatusColumn:
+            return summary.statusText;
+        case SourceColumn:
+            return summary.sourceText;
+        case ModelProviderColumn:
+            return summary.modelProvider;
+        case PreviewColumn:
+            return summary.preview;
+        case CwdColumn:
+            return summary.cwd;
+        case IdColumn:
+            return summary.id;
+        case CliVersionColumn:
+            return summary.cliVersion;
+        case PathColumn:
+            return summary.path;
+        case EphemeralColumn:
+            return summary.ephemeral ? QStringLiteral("Yes") : QStringLiteral("No");
+        case AgentNicknameColumn:
+            return summary.agentNickname;
+        case AgentRoleColumn:
+            return summary.agentRole;
+        case GitOriginColumn:
+            return summary.gitOrigin;
+        case GitBranchColumn:
+            return summary.gitBranch;
+        case GitShaColumn:
+            return summary.gitSha;
         default:
             return {};
         }
+    case Qt::DecorationRole:
+        if (column == ThreadColumn) {
+            return brainNodeIcon();
+        }
+        return {};
     case IdRole:
         return summary.id;
     case TitleRole:
@@ -230,6 +370,11 @@ QVariant ThreadListModel::threadData(const ThreadNode &thread, const int column,
             return QVariant::fromValue(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
         }
         return QVariant::fromValue(Qt::Alignment(Qt::AlignLeft | Qt::AlignVCenter));
+    case Qt::FontRole:
+        if (column == CreatedColumn || column == ModifiedColumn || column == IdColumn) {
+            return timestampColumnFont();
+        }
+        return {};
     case Qt::ToolTipRole:
         return QStringLiteral("%1\nCreated: %2\nModified: %3\n%4\n%5").arg(
             summary.title,
@@ -362,6 +507,116 @@ void ThreadListModel::sortRows() {
                                                          : leftThread->summary.updatedAt > rightThread->summary.updatedAt;
             }
             break;
+        case StatusColumn: {
+            const int byStatus =
+                compare(QString::localeAwareCompare(leftThread->summary.statusText, rightThread->summary.statusText));
+            if (byStatus != 0) {
+                return byStatus < 0;
+            }
+            break;
+        }
+        case SourceColumn: {
+            const int bySource =
+                compare(QString::localeAwareCompare(leftThread->summary.sourceText, rightThread->summary.sourceText));
+            if (bySource != 0) {
+                return bySource < 0;
+            }
+            break;
+        }
+        case ModelProviderColumn: {
+            const int byProvider = compare(
+                QString::localeAwareCompare(leftThread->summary.modelProvider, rightThread->summary.modelProvider)
+            );
+            if (byProvider != 0) {
+                return byProvider < 0;
+            }
+            break;
+        }
+        case PreviewColumn: {
+            const int byPreview =
+                compare(QString::localeAwareCompare(leftThread->summary.preview, rightThread->summary.preview));
+            if (byPreview != 0) {
+                return byPreview < 0;
+            }
+            break;
+        }
+        case CwdColumn: {
+            const int byCwd = compare(QString::localeAwareCompare(leftThread->summary.cwd, rightThread->summary.cwd));
+            if (byCwd != 0) {
+                return byCwd < 0;
+            }
+            break;
+        }
+        case IdColumn: {
+            const int byId = compare(QString::localeAwareCompare(leftThread->summary.id, rightThread->summary.id));
+            if (byId != 0) {
+                return byId < 0;
+            }
+            break;
+        }
+        case CliVersionColumn: {
+            const int byCliVersion =
+                compare(QString::localeAwareCompare(leftThread->summary.cliVersion, rightThread->summary.cliVersion));
+            if (byCliVersion != 0) {
+                return byCliVersion < 0;
+            }
+            break;
+        }
+        case PathColumn: {
+            const int byPath =
+                compare(QString::localeAwareCompare(leftThread->summary.path, rightThread->summary.path));
+            if (byPath != 0) {
+                return byPath < 0;
+            }
+            break;
+        }
+        case EphemeralColumn:
+            if (leftThread->summary.ephemeral != rightThread->summary.ephemeral) {
+                return m_sortOrder == Qt::AscendingOrder ? !leftThread->summary.ephemeral && rightThread->summary.ephemeral
+                                                         : leftThread->summary.ephemeral && !rightThread->summary.ephemeral;
+            }
+            break;
+        case AgentNicknameColumn: {
+            const int byNickname = compare(
+                QString::localeAwareCompare(leftThread->summary.agentNickname, rightThread->summary.agentNickname)
+            );
+            if (byNickname != 0) {
+                return byNickname < 0;
+            }
+            break;
+        }
+        case AgentRoleColumn: {
+            const int byRole =
+                compare(QString::localeAwareCompare(leftThread->summary.agentRole, rightThread->summary.agentRole));
+            if (byRole != 0) {
+                return byRole < 0;
+            }
+            break;
+        }
+        case GitOriginColumn: {
+            const int byOrigin =
+                compare(QString::localeAwareCompare(leftThread->summary.gitOrigin, rightThread->summary.gitOrigin));
+            if (byOrigin != 0) {
+                return byOrigin < 0;
+            }
+            break;
+        }
+        case GitBranchColumn: {
+            const int byBranch =
+                compare(QString::localeAwareCompare(leftThread->summary.gitBranch, rightThread->summary.gitBranch));
+            if (byBranch != 0) {
+                return byBranch < 0;
+            }
+            break;
+        }
+        case GitShaColumn: {
+            const int bySha =
+                compare(QString::localeAwareCompare(leftThread->summary.gitSha, rightThread->summary.gitSha));
+            if (bySha != 0) {
+                return bySha < 0;
+            }
+            break;
+        }
         default:
             break;
         }

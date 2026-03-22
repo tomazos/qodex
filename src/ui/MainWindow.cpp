@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include <QApplication>
+#include <QActionGroup>
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
@@ -28,13 +30,20 @@ MainWindow::MainWindow(
 
     statusBar()->showMessage(QStringLiteral("Ready"));
 
+    auto *fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
+    fileMenu->addAction(QStringLiteral("&Quit Qodex"), QKeySequence::Quit, qApp, &QApplication::quit);
+
     auto *viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
-    m_threadListPane = new ThreadListPane(threadListModel);
-    m_threadListDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ThreadList"));
-    m_threadListDock->setTitle(QStringLiteral("Threads"));
-    m_threadListDock->setWidget(m_threadListPane);
-    addDockWidget(m_threadListDock, KDDockWidgets::Location_OnLeft);
-    viewMenu->addAction(m_threadListDock->toggleAction());
+    if (threadListModel != nullptr) {
+        m_threadListPane = new ThreadListPane(threadListModel);
+        m_threadListDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ThreadList"));
+        m_threadListDock->setTitle(QStringLiteral("Threads"));
+        m_threadListDock->setWidget(m_threadListPane);
+        addDockWidgetAsTab(m_threadListDock);
+        viewMenu->addAction(m_threadListDock->toggleAction());
+    }
+
+    m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
 }
 
 MainWindow::~MainWindow() {
@@ -47,6 +56,48 @@ ThreadListPane *MainWindow::threadListPane() const {
 
 void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
+}
+
+void MainWindow::rebuildWindowMenu(const QList<MainWindow *> &windows) {
+    if (m_windowMenu == nullptr) {
+        return;
+    }
+
+    m_windowMenu->clear();
+    m_windowMenu->addAction(QStringLiteral("Create &New Window"), this, &MainWindow::createNewWindowRequested);
+    m_windowMenu->addSeparator();
+
+    auto *windowGroup = new QActionGroup(m_windowMenu);
+    windowGroup->setExclusive(true);
+
+    for (int index = 0; index < windows.size(); ++index) {
+        MainWindow *window = windows.at(index);
+        if (window == nullptr) {
+            continue;
+        }
+
+        QAction *action = m_windowMenu->addAction(windowMenuTitleFor(window, index));
+        action->setCheckable(true);
+        action->setChecked(window == this);
+        windowGroup->addAction(action);
+
+        connect(action, &QAction::triggered, this, [window] {
+            if (window == nullptr) {
+                return;
+            }
+            window->show();
+            window->raise();
+            window->activateWindow();
+        });
+    }
+}
+
+QString MainWindow::windowMenuTitleFor(const MainWindow *window, const int index) const {
+    const QString title = window != nullptr ? window->windowTitle() : QString{};
+    if (!title.isEmpty()) {
+        return QStringLiteral("%1 %2").arg(index + 1).arg(title);
+    }
+    return QStringLiteral("Window %1").arg(index + 1);
 }
 
 }  // namespace qodex::ui
