@@ -36,14 +36,13 @@ MainWindow::MainWindow(
     auto *fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
     fileMenu->addAction(QStringLiteral("&Quit Qodex"), QKeySequence::Quit, this, &MainWindow::quitRequested);
 
-    auto *viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
+    m_viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
     if (threadListModel != nullptr) {
         m_threadListPane = new ThreadListPane(threadListModel);
         m_threadListDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ThreadList"));
         m_threadListDock->setTitle(QStringLiteral("Threads"));
         m_threadListDock->setWidget(m_threadListPane);
         addDockWidgetAsTab(m_threadListDock);
-        viewMenu->addAction(m_threadListDock->toggleAction());
     }
     if (apiLogModel != nullptr) {
         m_apiLogPane = new ApiLogPane(apiLogModel);
@@ -59,7 +58,6 @@ MainWindow::MainWindow(
             addDockWidgetAsTab(m_apiLogDock);
             m_apiLogDock->close();
         }
-        viewMenu->addAction(m_apiLogDock->toggleAction());
     }
 
     m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
@@ -82,8 +80,32 @@ QString MainWindow::windowKey() const {
     return m_windowKey;
 }
 
+QList<QAction *> MainWindow::viewActions() const {
+    QList<QAction *> actions;
+    if (m_threadListDock != nullptr) {
+        actions.append(m_threadListDock->toggleAction());
+    }
+    if (m_apiLogDock != nullptr) {
+        actions.append(m_apiLogDock->toggleAction());
+    }
+    return actions;
+}
+
 void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
+}
+
+void MainWindow::rebuildViewMenu(const QList<QAction *> &actions) {
+    if (m_viewMenu == nullptr) {
+        return;
+    }
+
+    m_viewMenu->clear();
+    for (QAction *action : actions) {
+        if (action != nullptr) {
+            m_viewMenu->addAction(action);
+        }
+    }
 }
 
 void MainWindow::rebuildWindowMenu(const QList<MainWindow *> &windows) {

@@ -59,6 +59,7 @@ private:
         bool showImmediately
     );
     void createNewWindow();
+    void rebuildViewMenus();
     void rebuildWindowMenus();
 
     AppPaths m_paths;

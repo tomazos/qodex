@@ -47,6 +47,7 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
     );
     QObject::connect(&m_sessionController, &SessionController::startupFinished, this, &AppBootstrap::startupFinished);
     restorePersistentState();
+    rebuildViewMenus();
     rebuildWindowMenus();
 }
 
@@ -380,7 +381,17 @@ void AppBootstrap::createNewWindow() {
         true
     );
     ++m_nextWindowNumber;
+    rebuildViewMenus();
     rebuildWindowMenus();
+}
+
+void AppBootstrap::rebuildViewMenus() {
+    const QList<QAction *> actions = m_mainWindow.viewActions();
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr) {
+            window->rebuildViewMenu(actions);
+        }
+    }
 }
 
 void AppBootstrap::rebuildWindowMenus() {

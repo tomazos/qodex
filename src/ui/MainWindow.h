@@ -1,12 +1,15 @@
 #pragma once
 
-#include <QList>
 #include <QCloseEvent>
+#include <QList>
 #include <kddockwidgets/MainWindow.h>
 
 namespace KDDockWidgets::QtWidgets {
 class DockWidget;
 }
+
+class QAction;
+class QMenu;
 
 namespace qodex::ui {
 
@@ -35,7 +38,9 @@ public:
     [[nodiscard]] ThreadListPane *threadListPane() const;
     [[nodiscard]] ApiLogPane *apiLogPane() const;
     [[nodiscard]] QString windowKey() const;
+    [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
+    void rebuildViewMenu(const QList<QAction *> &actions);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
 signals:
@@ -52,6 +57,7 @@ private:
     ThreadListPane *m_threadListPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_apiLogDock = nullptr;
     ApiLogPane *m_apiLogPane = nullptr;
+    QMenu *m_viewMenu = nullptr;
     QMenu *m_windowMenu = nullptr;
 };
 
