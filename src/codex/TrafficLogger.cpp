@@ -241,7 +241,10 @@ void TrafficLogger::writeRecord(const qodex::storage::ApiLogRecord &record) {
     QString errorMessage;
     if (!m_databaseManager->appendApiLog(record, &errorMessage)) {
         qWarning("Failed to append API log: %s", qPrintable(errorMessage));
+        return;
     }
+
+    emit apiLogRecorded();
 }
 
 void TrafficLogger::logTransportError(const QString &message) {

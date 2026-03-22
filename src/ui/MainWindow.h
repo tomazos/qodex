@@ -10,6 +10,8 @@ class DockWidget;
 
 namespace qodex::ui {
 
+class ApiLogModel;
+class ApiLogPane;
 class ThreadListModel;
 class ThreadListPane;
 class MainWindow;
@@ -25,11 +27,13 @@ public:
         const QString &uniqueName,
         const QString &windowTitle,
         ThreadListModel *threadListModel = nullptr,
+        ApiLogModel *apiLogModel = nullptr,
         QWidget *parent = nullptr
     );
     ~MainWindow() override;
 
     [[nodiscard]] ThreadListPane *threadListPane() const;
+    [[nodiscard]] ApiLogPane *apiLogPane() const;
     [[nodiscard]] QString windowKey() const;
     void setStatusMessage(const QString &message);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
@@ -46,6 +50,8 @@ private:
     QString m_windowKey;
     KDDockWidgets::QtWidgets::DockWidget *m_threadListDock = nullptr;
     ThreadListPane *m_threadListPane = nullptr;
+    KDDockWidgets::QtWidgets::DockWidget *m_apiLogDock = nullptr;
+    ApiLogPane *m_apiLogPane = nullptr;
     QMenu *m_windowMenu = nullptr;
 };
 

@@ -10,6 +10,7 @@
 #include "domain/ThreadStore.h"
 #include "ui/ProgressSplashScreen.h"
 #include "ui/MainWindow.h"
+#include "ui/ApiLogModel.h"
 #include "ui/ThreadListModel.h"
 #include "codex/AppServerTransport.h"
 #include "codex/TrafficLogger.h"
@@ -42,6 +43,7 @@ protected:
 private:
     [[nodiscard]] static QString titleForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString threadListViewKeyForWindowKey(const QString &windowKey);
+    [[nodiscard]] static QString apiLogViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] qodex::ui::MainWindow *windowByKey(const QString &windowKey);
     [[nodiscard]] QList<qodex::ui::MainWindow *> windows();
     [[nodiscard]] int visibleWindowCount();
@@ -67,6 +69,7 @@ private:
     qodex::codex::CodexClient m_client;
     qodex::domain::ThreadStore m_threadStore;
     qodex::ui::ThreadListModel m_threadListModel;
+    qodex::ui::ApiLogModel m_apiLogModel;
     qodex::ui::MainWindow m_mainWindow;
     std::vector<std::unique_ptr<qodex::ui::MainWindow>> m_additionalWindows;
     SessionController m_sessionController;

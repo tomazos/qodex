@@ -4,6 +4,7 @@
 #include <QList>
 #include <QString>
 #include <QVariant>
+#include <Qt>
 
 #include <optional>
 
@@ -36,6 +37,37 @@ struct ApiLogRecord {
     QString summaryText;
 };
 
+enum class ApiLogSortField {
+    TimestampUtc,
+    Direction,
+    MessageKind,
+    Method,
+    Success,
+    LatencyMs,
+    SummaryText,
+    ThreadId,
+    JsonRpcId,
+    CorrelationId,
+    SessionId,
+    PayloadPreview,
+};
+
+struct ApiLogListRecord {
+    qint64 id = 0;
+    QString timestampUtc;
+    QString sessionId;
+    QString direction;
+    QString messageKind;
+    QString method;
+    QString jsonrpcId;
+    QString correlationId;
+    QString threadId;
+    std::optional<bool> success;
+    std::optional<qint64> latencyMs;
+    QString summaryText;
+    QString payloadPreview;
+};
+
 class DatabaseManager final {
 public:
     explicit DatabaseManager(const QString &databasePath);
@@ -49,6 +81,14 @@ public:
     [[nodiscard]] QList<WindowStateRecord> loadWindowStates(QString *errorMessage) const;
     [[nodiscard]] std::optional<QByteArray> loadViewState(const QString &viewKey, QString *errorMessage) const;
     [[nodiscard]] std::optional<QString> loadSetting(const QString &key, QString *errorMessage) const;
+    [[nodiscard]] int apiLogRowCount(QString *errorMessage) const;
+    [[nodiscard]] QList<ApiLogListRecord> loadApiLogPage(
+        int offset,
+        int limit,
+        ApiLogSortField sortField,
+        Qt::SortOrder sortOrder,
+        QString *errorMessage
+    ) const;
 
     [[nodiscard]] bool replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage);
     [[nodiscard]] bool replaceViewStates(const QList<ViewStateRecord> &viewStates, QString *errorMessage);

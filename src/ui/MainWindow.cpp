@@ -6,6 +6,8 @@
 #include <QStatusBar>
 #include <kddockwidgets/DockWidget.h>
 
+#include "ui/ApiLogModel.h"
+#include "ui/ApiLogPane.h"
 #include "ui/ThreadListModel.h"
 #include "ui/ThreadListPane.h"
 
@@ -15,6 +17,7 @@ MainWindow::MainWindow(
     const QString &uniqueName,
     const QString &windowTitle,
     ThreadListModel *threadListModel,
+    ApiLogModel *apiLogModel,
     QWidget *parent
 )
     : KDDockWidgets::QtWidgets::MainWindow(
@@ -42,16 +45,29 @@ MainWindow::MainWindow(
         addDockWidgetAsTab(m_threadListDock);
         viewMenu->addAction(m_threadListDock->toggleAction());
     }
+    if (apiLogModel != nullptr) {
+        m_apiLogPane = new ApiLogPane(apiLogModel);
+        m_apiLogDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ApiLog"));
+        m_apiLogDock->setTitle(QStringLiteral("API Log"));
+        m_apiLogDock->setWidget(m_apiLogPane);
+        addDockWidget(m_apiLogDock, KDDockWidgets::Location_OnBottom, m_threadListDock);
+        viewMenu->addAction(m_apiLogDock->toggleAction());
+    }
 
     m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
 }
 
 MainWindow::~MainWindow() {
+    delete m_apiLogDock;
     delete m_threadListDock;
 }
 
 ThreadListPane *MainWindow::threadListPane() const {
     return m_threadListPane;
+}
+
+ApiLogPane *MainWindow::apiLogPane() const {
+    return m_apiLogPane;
 }
 
 QString MainWindow::windowKey() const {

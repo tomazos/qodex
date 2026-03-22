@@ -1,5 +1,7 @@
 #include "storage/DatabaseManager.h"
 
+#include <algorithm>
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
@@ -30,6 +32,43 @@ QVariant nullableInteger(const std::optional<qint64> value) {
         return QVariant(QMetaType(QMetaType::LongLong));
     }
     return QVariant::fromValue(*value);
+}
+
+QString apiLogSortExpression(const ApiLogSortField sortField) {
+    switch (sortField) {
+    case ApiLogSortField::TimestampUtc:
+        return QStringLiteral("ts_utc");
+    case ApiLogSortField::Direction:
+        return QStringLiteral("direction");
+    case ApiLogSortField::MessageKind:
+        return QStringLiteral("message_kind");
+    case ApiLogSortField::Method:
+        return QStringLiteral("coalesce(method, '')");
+    case ApiLogSortField::Success:
+        return QStringLiteral("coalesce(success, -1)");
+    case ApiLogSortField::LatencyMs:
+        return QStringLiteral("coalesce(latency_ms, -1)");
+    case ApiLogSortField::SummaryText:
+        return QStringLiteral("summary_text");
+    case ApiLogSortField::ThreadId:
+        return QStringLiteral("coalesce(thread_id, '')");
+    case ApiLogSortField::JsonRpcId:
+        return QStringLiteral("coalesce(jsonrpc_id, '')");
+    case ApiLogSortField::CorrelationId:
+        return QStringLiteral("coalesce(correlation_id, '')");
+    case ApiLogSortField::SessionId:
+        return QStringLiteral("coalesce(session_id, '')");
+    case ApiLogSortField::PayloadPreview:
+        return QStringLiteral("payload_json");
+    }
+
+    return QStringLiteral("ts_utc");
+}
+
+QString apiLogOrderByClause(const ApiLogSortField sortField, const Qt::SortOrder sortOrder) {
+    const QString direction = sortOrder == Qt::DescendingOrder ? QStringLiteral("DESC") : QStringLiteral("ASC");
+    const QString primary = apiLogSortExpression(sortField);
+    return QStringLiteral("%1 %2, id %2").arg(primary, direction);
 }
 
 }  // namespace
@@ -176,6 +215,100 @@ std::optional<QString> DatabaseManager::loadSetting(const QString &key, QString 
         return std::nullopt;
     }
     return query.value(0).toString();
+}
+
+int DatabaseManager::apiLogRowCount(QString *errorMessage) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return 0;
+    }
+
+    QSqlQuery query(*m_database);
+    if (!query.exec(QStringLiteral("SELECT COUNT(*) FROM api_log;"))) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return 0;
+    }
+    if (!query.next()) {
+        return 0;
+    }
+    return query.value(0).toInt();
+}
+
+QList<ApiLogListRecord> DatabaseManager::loadApiLogPage(
+    const int offset,
+    const int limit,
+    const ApiLogSortField sortField,
+    const Qt::SortOrder sortOrder,
+    QString *errorMessage
+) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return {};
+    }
+
+    const int boundedOffset = std::max(0, offset);
+    const int boundedLimit = std::max(0, limit);
+    QList<ApiLogListRecord> rows;
+    if (boundedLimit <= 0) {
+        return rows;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "SELECT id, ts_utc, session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
+        "thread_id, success, latency_ms, summary_text, "
+        "CASE "
+        "    WHEN length(payload_json) > 160 THEN substr(payload_json, 1, 157) || '...' "
+        "    ELSE payload_json "
+        "END AS payload_preview "
+        "FROM api_log "
+        "ORDER BY %1 "
+        "LIMIT ? OFFSET ?;"
+    ).arg(apiLogOrderByClause(sortField, sortOrder)));
+    query.addBindValue(boundedLimit);
+    query.addBindValue(boundedOffset);
+
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return {};
+    }
+
+    rows.reserve(boundedLimit);
+    while (query.next()) {
+        rows.append(ApiLogListRecord{
+            .id = query.value(0).toLongLong(),
+            .timestampUtc = query.value(1).toString(),
+            .sessionId = query.value(2).toString(),
+            .direction = query.value(3).toString(),
+            .messageKind = query.value(4).toString(),
+            .method = query.value(5).toString(),
+            .jsonrpcId = query.value(6).toString(),
+            .correlationId = query.value(7).toString(),
+            .threadId = query.value(8).toString(),
+            .success = query.value(9).isNull() ? std::nullopt
+                                               : std::optional<bool>(query.value(9).toInt() != 0),
+            .latencyMs = query.value(10).isNull() ? std::nullopt
+                                                  : std::optional<qint64>(query.value(10).toLongLong()),
+            .summaryText = query.value(11).toString(),
+            .payloadPreview = query.value(12).toString(),
+        });
+    }
+
+    return rows;
 }
 
 bool DatabaseManager::replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage) {

@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <kddockwidgets/LayoutSaver.h>
 
+#include "ui/ApiLogPane.h"
 #include "ui/ThreadListPane.h"
 
 namespace qodex::app {
@@ -22,10 +23,12 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
       m_client(&m_transport),
       m_threadStore(),
       m_threadListModel(&m_threadStore),
+      m_apiLogModel(m_databaseManager),
       m_mainWindow(
           QStringLiteral("qodex.MainWindow.Primary"),
           QStringLiteral("Qodex"),
-          &m_threadListModel
+          &m_threadListModel,
+          &m_apiLogModel
       ),
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
@@ -35,6 +38,7 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *window) {
         onWindowAboutToClose(window);
     });
+    QObject::connect(&m_trafficLogger, &qodex::codex::TrafficLogger::apiLogRecorded, &m_apiLogModel, &qodex::ui::ApiLogModel::scheduleRefresh);
     QObject::connect(
         &m_sessionController,
         &SessionController::startupProgressChanged,
@@ -113,6 +117,10 @@ QString AppBootstrap::titleForWindowKey(const QString &windowKey) {
 
 QString AppBootstrap::threadListViewKeyForWindowKey(const QString &windowKey) {
     return QStringLiteral("%1/thread-list-header").arg(windowKey);
+}
+
+QString AppBootstrap::apiLogViewKeyForWindowKey(const QString &windowKey) {
+    return QStringLiteral("%1/api-log-header").arg(windowKey);
 }
 
 qodex::ui::MainWindow *AppBootstrap::windowByKey(const QString &windowKey) {
@@ -282,6 +290,12 @@ void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWin
                 pane->saveHeaderState(),
             });
         }
+        if (qodex::ui::ApiLogPane *pane = window->apiLogPane()) {
+            viewStates.append(qodex::storage::ViewStateRecord{
+                apiLogViewKeyForWindowKey(window->windowKey()),
+                pane->saveViewState(),
+            });
+        }
     };
 
     collectWindowState(&m_mainWindow, true);
@@ -301,18 +315,30 @@ void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWin
 }
 
 void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
-    if (m_databaseManager == nullptr || window == nullptr || window->threadListPane() == nullptr) {
+    if (m_databaseManager == nullptr || window == nullptr) {
         return;
     }
 
     QString errorMessage;
-    const auto headerState = m_databaseManager->loadViewState(threadListViewKeyForWindowKey(window->windowKey()), &errorMessage);
-    if (!errorMessage.isEmpty()) {
-        qWarning("Failed to load thread list view state: %s", qPrintable(errorMessage));
-        return;
+    if (window->threadListPane() != nullptr) {
+        const auto headerState =
+            m_databaseManager->loadViewState(threadListViewKeyForWindowKey(window->windowKey()), &errorMessage);
+        if (!errorMessage.isEmpty()) {
+            qWarning("Failed to load thread list view state: %s", qPrintable(errorMessage));
+            errorMessage.clear();
+        } else if (headerState.has_value()) {
+            window->threadListPane()->restoreHeaderState(*headerState);
+        }
     }
-    if (headerState.has_value()) {
-        window->threadListPane()->restoreHeaderState(*headerState);
+
+    if (window->apiLogPane() != nullptr) {
+        const auto headerState =
+            m_databaseManager->loadViewState(apiLogViewKeyForWindowKey(window->windowKey()), &errorMessage);
+        if (!errorMessage.isEmpty()) {
+            qWarning("Failed to load API log view state: %s", qPrintable(errorMessage));
+        } else if (headerState.has_value()) {
+            window->apiLogPane()->restoreViewState(*headerState);
+        }
     }
 }
 
@@ -330,7 +356,8 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     const QString &windowTitle,
     const bool showImmediately
 ) {
-    auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel);
+    auto window =
+        std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel, &m_apiLogModel);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     window->installEventFilter(this);
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });

@@ -22,6 +22,9 @@ public:
 
     [[nodiscard]] QString sessionId() const;
 
+signals:
+    void apiLogRecorded();
+
 private:
     struct PendingRequestContext {
         QString method;

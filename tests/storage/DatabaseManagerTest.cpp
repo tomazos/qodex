@@ -9,6 +9,7 @@
 #include "storage/DatabaseManager.h"
 
 using qodex::storage::ApiLogRecord;
+using qodex::storage::ApiLogSortField;
 using qodex::storage::DatabaseManager;
 using qodex::storage::ViewStateRecord;
 using qodex::storage::WindowStateRecord;
@@ -20,6 +21,7 @@ private slots:
     void persistsWindowAndViewState();
     void persistsSettings();
     void appendsApiLogRows();
+    void loadsApiLogPages();
 };
 
 void DatabaseManagerTest::persistsWindowAndViewState() {
@@ -169,6 +171,105 @@ void DatabaseManagerTest::appendsApiLogRows() {
         database.close();
     }
     QSqlDatabase::removeDatabase(connectionName);
+}
+
+void DatabaseManagerTest::loadsApiLogPages() {
+    QTemporaryDir temporaryDir;
+    QVERIFY(temporaryDir.isValid());
+
+    const QString databasePath = temporaryDir.filePath(QStringLiteral("qodex.sqlite3"));
+    QString errorMessage;
+
+    DatabaseManager databaseManager(databasePath);
+    QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
+
+    QVERIFY2(
+        databaseManager.appendApiLog(
+            ApiLogRecord{
+                .sessionId = QStringLiteral("session-a"),
+                .direction = QStringLiteral("outbound"),
+                .messageKind = QStringLiteral("request"),
+                .method = QStringLiteral("initialize"),
+                .jsonrpcId = QStringLiteral("client-1"),
+                .correlationId = QStringLiteral("client-1"),
+                .threadId = QStringLiteral("thread-a"),
+                .success = std::nullopt,
+                .latencyMs = std::nullopt,
+                .payloadJson = QStringLiteral("{\"payload\":\"alpha\"}"),
+                .summaryText = QStringLiteral("alpha"),
+            },
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+    QVERIFY2(
+        databaseManager.appendApiLog(
+            ApiLogRecord{
+                .sessionId = QStringLiteral("session-b"),
+                .direction = QStringLiteral("inbound"),
+                .messageKind = QStringLiteral("response"),
+                .method = QStringLiteral("thread/list"),
+                .jsonrpcId = QStringLiteral("client-2"),
+                .correlationId = QStringLiteral("client-2"),
+                .threadId = QStringLiteral("thread-b"),
+                .success = true,
+                .latencyMs = 9,
+                .payloadJson = QStringLiteral("{\"payload\":\"beta\"}"),
+                .summaryText = QStringLiteral("beta"),
+            },
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+    QVERIFY2(
+        databaseManager.appendApiLog(
+            ApiLogRecord{
+                .sessionId = QStringLiteral("session-c"),
+                .direction = QStringLiteral("transport"),
+                .messageKind = QStringLiteral("transport_error"),
+                .method = QStringLiteral(),
+                .jsonrpcId = QStringLiteral(),
+                .correlationId = QStringLiteral(),
+                .threadId = QStringLiteral(),
+                .success = false,
+                .latencyMs = 3,
+                .payloadJson = QStringLiteral("{\"payload\":\"%1\"}").arg(QString(220, QLatin1Char('x'))),
+                .summaryText = QStringLiteral("gamma"),
+            },
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    QCOMPARE(databaseManager.apiLogRowCount(&errorMessage), 3);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+
+    const QList<qodex::storage::ApiLogListRecord> newestFirst = databaseManager.loadApiLogPage(
+        0,
+        2,
+        ApiLogSortField::TimestampUtc,
+        Qt::DescendingOrder,
+        &errorMessage
+    );
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QCOMPARE(newestFirst.size(), 2);
+    QCOMPARE(newestFirst.at(0).summaryText, QStringLiteral("gamma"));
+    QCOMPARE(newestFirst.at(1).summaryText, QStringLiteral("beta"));
+
+    const QList<qodex::storage::ApiLogListRecord> methodAscending = databaseManager.loadApiLogPage(
+        0,
+        3,
+        ApiLogSortField::Method,
+        Qt::AscendingOrder,
+        &errorMessage
+    );
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QCOMPARE(methodAscending.size(), 3);
+    QCOMPARE(methodAscending.at(0).summaryText, QStringLiteral("gamma"));
+    QCOMPARE(methodAscending.at(1).summaryText, QStringLiteral("alpha"));
+    QCOMPARE(methodAscending.at(2).summaryText, QStringLiteral("beta"));
+    QVERIFY(methodAscending.at(0).payloadPreview.endsWith(QStringLiteral("...")));
+    QVERIFY(methodAscending.at(0).payloadPreview.size() <= 160);
 }
 
 QTEST_GUILESS_MAIN(DatabaseManagerTest)

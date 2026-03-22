@@ -328,6 +328,10 @@ qt_add_executable(qodex
     src/storage/Migration.h
     src/storage/MigrationRunner.cpp
     src/storage/MigrationRunner.h
+    src/ui/ApiLogModel.cpp
+    src/ui/ApiLogModel.h
+    src/ui/ApiLogPane.cpp
+    src/ui/ApiLogPane.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
     src/ui/ProgressSplashScreen.cpp
@@ -497,6 +501,26 @@ if(BUILD_TESTING)
     target_link_libraries(ThreadListModelTest PRIVATE Qt6::Core Qt6::Test Qt6::Widgets)
 
     add_test(NAME ThreadListModelTest COMMAND ThreadListModelTest)
+
+    qt_add_executable(ApiLogModelTest
+        resources/qodex.qrc
+        tests/ui/ApiLogModelTest.cpp
+        src/storage/DatabaseManager.cpp
+        src/storage/DatabaseManager.h
+        src/storage/Migration.h
+        src/storage/MigrationRunner.cpp
+        src/storage/MigrationRunner.h
+        src/ui/ApiLogModel.cpp
+        src/ui/ApiLogModel.h
+    )
+
+    target_include_directories(ApiLogModelTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(ApiLogModelTest PRIVATE Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME ApiLogModelTest COMMAND ApiLogModelTest)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)
