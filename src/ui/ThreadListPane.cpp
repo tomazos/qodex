@@ -129,6 +129,25 @@ ThreadListPane::ThreadListPane(ThreadListModel *model, QWidget *parent)
     resizeSnugColumns();
 }
 
+QByteArray ThreadListPane::saveHeaderState() const {
+    if (m_treeView == nullptr || m_treeView->header() == nullptr) {
+        return {};
+    }
+    return m_treeView->header()->saveState();
+}
+
+bool ThreadListPane::restoreHeaderState(const QByteArray &state) {
+    if (m_treeView == nullptr || m_treeView->header() == nullptr || state.isEmpty()) {
+        return false;
+    }
+
+    const bool restored = m_treeView->header()->restoreState(state);
+    if (restored) {
+        resizeSnugColumns();
+    }
+    return restored;
+}
+
 void ThreadListPane::resizeSnugColumns() {
     if (m_treeView == nullptr || m_treeView->header() == nullptr) {
         return;

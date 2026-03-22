@@ -9,5 +9,7 @@ python3-venv
 qt6-base-dev
 qt6-base-dev-tools
 libkddockwidgets-qt6-dev
+libqt6sql6-sqlite
+libsqlite3-dev
 nodejs
 npm

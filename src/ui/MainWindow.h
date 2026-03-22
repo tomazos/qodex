@@ -29,6 +29,7 @@ public:
     ~MainWindow() override;
 
     [[nodiscard]] ThreadListPane *threadListPane() const;
+    [[nodiscard]] QString windowKey() const;
     void setStatusMessage(const QString &message);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
@@ -38,6 +39,7 @@ signals:
 private:
     QString windowMenuTitleFor(const MainWindow *window, int index) const;
 
+    QString m_windowKey;
     KDDockWidgets::QtWidgets::DockWidget *m_threadListDock = nullptr;
     ThreadListPane *m_threadListPane = nullptr;
     QMenu *m_windowMenu = nullptr;

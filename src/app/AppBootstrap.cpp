@@ -1,9 +1,18 @@
 #include "app/AppBootstrap.h"
 
+#include <algorithm>
+
+#include <QCoreApplication>
+#include <QRegularExpression>
+#include <kddockwidgets/LayoutSaver.h>
+
+#include "ui/ThreadListPane.h"
+
 namespace qodex::app {
 
-AppBootstrap::AppBootstrap(const AppPaths &paths)
+AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManager *databaseManager)
     : m_paths(paths),
+      m_databaseManager(databaseManager),
       m_config(AppConfig::loadDefault(m_paths)),
       m_transport(),
       m_client(&m_transport),
@@ -17,6 +26,8 @@ AppBootstrap::AppBootstrap(const AppPaths &paths)
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
+    QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, [&] { savePersistentState(); });
+    restorePersistentState();
     rebuildWindowMenus();
 }
 
@@ -35,17 +46,181 @@ void AppBootstrap::start() {
     m_sessionController.start();
 }
 
-void AppBootstrap::createNewWindow() {
-    auto window = std::make_unique<qodex::ui::MainWindow>(
-        QStringLiteral("qodex.MainWindow.%1").arg(m_nextWindowNumber),
-        QStringLiteral("Qodex %1").arg(m_nextWindowNumber),
-        &m_threadListModel
+QString AppBootstrap::titleForWindowKey(const QString &windowKey) {
+    if (windowKey == QStringLiteral("qodex.MainWindow.Primary")) {
+        return QStringLiteral("Qodex");
+    }
+
+    static const QRegularExpression numberedWindowPattern(QStringLiteral(R"(qodex\.MainWindow\.(\d+))"));
+    const QRegularExpressionMatch match = numberedWindowPattern.match(windowKey);
+    if (match.hasMatch()) {
+        return QStringLiteral("Qodex %1").arg(match.captured(1));
+    }
+
+    return QStringLiteral("Qodex");
+}
+
+QString AppBootstrap::threadListViewKeyForWindowKey(const QString &windowKey) {
+    return QStringLiteral("%1/thread-list-header").arg(windowKey);
+}
+
+qodex::ui::MainWindow *AppBootstrap::windowByKey(const QString &windowKey) {
+    if (m_mainWindow.windowKey() == windowKey) {
+        return &m_mainWindow;
+    }
+
+    for (const std::unique_ptr<qodex::ui::MainWindow> &window : m_additionalWindows) {
+        if (window != nullptr && window->windowKey() == windowKey) {
+            return window.get();
+        }
+    }
+    return nullptr;
+}
+
+void AppBootstrap::restorePersistentState() {
+    if (m_databaseManager == nullptr || !m_databaseManager->isOpen()) {
+        return;
+    }
+
+    QString errorMessage;
+    const QList<qodex::storage::WindowStateRecord> windowStates = m_databaseManager->loadWindowStates(&errorMessage);
+    if (!errorMessage.isEmpty()) {
+        qWarning("Failed to load persisted window state: %s", qPrintable(errorMessage));
+    }
+
+    int highestWindowNumber = 1;
+    for (const qodex::storage::WindowStateRecord &record : windowStates) {
+        if (record.windowKey == m_mainWindow.windowKey()) {
+            continue;
+        }
+        createWindow(record.windowKey, titleForWindowKey(record.windowKey), false);
+
+        static const QRegularExpression numberedWindowPattern(QStringLiteral(R"(qodex\.MainWindow\.(\d+))"));
+        const QRegularExpressionMatch match = numberedWindowPattern.match(record.windowKey);
+        if (match.hasMatch()) {
+            highestWindowNumber = std::max(highestWindowNumber, match.captured(1).toInt());
+        }
+    }
+    m_nextWindowNumber = std::max(2, highestWindowNumber + 1);
+
+    for (const qodex::storage::WindowStateRecord &record : windowStates) {
+        qodex::ui::MainWindow *window = windowByKey(record.windowKey);
+        if (window == nullptr) {
+            continue;
+        }
+        restoreWindowViewState(window);
+    }
+
+    const auto primaryState = std::find_if(
+        windowStates.begin(),
+        windowStates.end(),
+        [this](const qodex::storage::WindowStateRecord &record) { return record.windowKey == m_mainWindow.windowKey(); }
     );
+    if (primaryState != windowStates.end() && !primaryState->layout.isEmpty()) {
+        KDDockWidgets::LayoutSaver layoutSaver;
+        if (!layoutSaver.restoreLayout(primaryState->layout)) {
+            qWarning("Failed to restore persisted dock layout.");
+        }
+    }
+
+    for (const qodex::storage::WindowStateRecord &record : windowStates) {
+        qodex::ui::MainWindow *window = windowByKey(record.windowKey);
+        if (window == nullptr) {
+            continue;
+        }
+        if (!record.geometry.isEmpty()) {
+            window->restoreGeometry(record.geometry);
+        }
+        if (window != &m_mainWindow) {
+            window->show();
+        }
+    }
+}
+
+void AppBootstrap::savePersistentState() {
+    if (m_databaseManager == nullptr || !m_databaseManager->isOpen()) {
+        return;
+    }
+
+    QList<qodex::storage::WindowStateRecord> windowStates;
+    QList<qodex::storage::ViewStateRecord> viewStates;
+    KDDockWidgets::LayoutSaver layoutSaver;
+    const QByteArray serializedLayout = layoutSaver.serializeLayout();
+
+    const auto collectWindowState = [&](qodex::ui::MainWindow *window, const bool includeLayout) {
+        if (window == nullptr) {
+            return;
+        }
+
+        windowStates.append({
+            window->windowKey(),
+            window->saveGeometry(),
+            includeLayout ? serializedLayout : QByteArray{},
+        });
+
+        if (qodex::ui::ThreadListPane *pane = window->threadListPane()) {
+            viewStates.append(qodex::storage::ViewStateRecord{
+                threadListViewKeyForWindowKey(window->windowKey()),
+                pane->saveHeaderState(),
+            });
+        }
+    };
+
+    collectWindowState(&m_mainWindow, true);
+    for (const std::unique_ptr<qodex::ui::MainWindow> &window : m_additionalWindows) {
+        collectWindowState(window.get(), false);
+    }
+
+    QString errorMessage;
+    if (!m_databaseManager->replaceWindowStates(windowStates, &errorMessage)) {
+        qWarning("Failed to save window state: %s", qPrintable(errorMessage));
+    }
+
+    errorMessage.clear();
+    if (!m_databaseManager->replaceViewStates(viewStates, &errorMessage)) {
+        qWarning("Failed to save view state: %s", qPrintable(errorMessage));
+    }
+}
+
+void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
+    if (m_databaseManager == nullptr || window == nullptr || window->threadListPane() == nullptr) {
+        return;
+    }
+
+    QString errorMessage;
+    const auto headerState = m_databaseManager->loadViewState(threadListViewKeyForWindowKey(window->windowKey()), &errorMessage);
+    if (!errorMessage.isEmpty()) {
+        qWarning("Failed to load thread list view state: %s", qPrintable(errorMessage));
+        return;
+    }
+    if (headerState.has_value()) {
+        window->threadListPane()->restoreHeaderState(*headerState);
+    }
+}
+
+qodex::ui::MainWindow *AppBootstrap::createWindow(
+    const QString &windowKey,
+    const QString &windowTitle,
+    const bool showImmediately
+) {
+    auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, &m_threadListModel);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
     m_sessionController.attachWindow(window.get());
-    window->show();
+    qodex::ui::MainWindow *windowPtr = window.get();
+    if (showImmediately) {
+        windowPtr->show();
+    }
     m_additionalWindows.push_back(std::move(window));
+    return windowPtr;
+}
+
+void AppBootstrap::createNewWindow() {
+    createWindow(
+        QStringLiteral("qodex.MainWindow.%1").arg(m_nextWindowNumber),
+        QStringLiteral("Qodex %1").arg(m_nextWindowNumber),
+        true
+    );
     ++m_nextWindowNumber;
     rebuildWindowMenus();
 }

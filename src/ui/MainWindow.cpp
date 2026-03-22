@@ -22,7 +22,8 @@ MainWindow::MainWindow(
           uniqueName,
           KDDockWidgets::MainWindowOption_HasCentralGroup,
           parent
-      ) {
+      ),
+      m_windowKey(uniqueName) {
     setWindowTitle(windowTitle);
     resize(1200, 760);
 
@@ -52,6 +53,10 @@ MainWindow::~MainWindow() {
 
 ThreadListPane *MainWindow::threadListPane() const {
     return m_threadListPane;
+}
+
+QString MainWindow::windowKey() const {
+    return m_windowKey;
 }
 
 void MainWindow::setStatusMessage(const QString &message) {

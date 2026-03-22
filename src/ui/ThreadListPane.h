@@ -15,6 +15,8 @@ class ThreadListPane final : public QWidget {
 public:
     explicit ThreadListPane(ThreadListModel *model, QWidget *parent = nullptr);
 
+    [[nodiscard]] QByteArray saveHeaderState() const;
+    bool restoreHeaderState(const QByteArray &state);
     void setCurrentThreadId(const QString &threadId);
 
 signals:

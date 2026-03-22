@@ -10,7 +10,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets Test)
+find_package(SQLite3 REQUIRED)
 find_package(KDDockWidgets QUIET)
 if(NOT KDDockWidgets_FOUND)
     find_package(KDDockWidgets-qt6 REQUIRED)
@@ -320,6 +321,11 @@ qt_add_executable(qodex
     src/domain/CodexTypes.h
     src/domain/ThreadStore.cpp
     src/domain/ThreadStore.h
+    src/storage/DatabaseManager.cpp
+    src/storage/DatabaseManager.h
+    src/storage/Migration.h
+    src/storage/MigrationRunner.cpp
+    src/storage/MigrationRunner.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
     src/ui/ThreadListModel.cpp
@@ -333,7 +339,7 @@ target_include_directories(qodex PRIVATE
     "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Widgets KDAB::kddockwidgets)
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
 target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
 add_dependencies(qodex qodex_protocol_artifacts)
@@ -412,6 +418,40 @@ if(BUILD_TESTING)
     target_link_libraries(SingleInstanceManagerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 
     add_test(NAME SingleInstanceManagerTest COMMAND SingleInstanceManagerTest)
+
+    qt_add_executable(MigrationRunnerTest
+        resources/qodex.qrc
+        tests/storage/MigrationRunnerTest.cpp
+        src/storage/Migration.h
+        src/storage/MigrationRunner.cpp
+        src/storage/MigrationRunner.h
+    )
+
+    target_include_directories(MigrationRunnerTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(MigrationRunnerTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME MigrationRunnerTest COMMAND MigrationRunnerTest)
+
+    qt_add_executable(DatabaseManagerTest
+        resources/qodex.qrc
+        tests/storage/DatabaseManagerTest.cpp
+        src/storage/DatabaseManager.cpp
+        src/storage/DatabaseManager.h
+        src/storage/Migration.h
+        src/storage/MigrationRunner.cpp
+        src/storage/MigrationRunner.h
+    )
+
+    target_include_directories(DatabaseManagerTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(DatabaseManagerTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME DatabaseManagerTest COMMAND DatabaseManagerTest)
 
     qt_add_executable(ThreadListModelTest
         resources/qodex.qrc
