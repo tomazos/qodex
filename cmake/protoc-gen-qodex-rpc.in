@@ -1,0 +1,9 @@
+#!@QODEX_VENV_PYTHON@
+import sys
+
+sys.path.insert(0, "@PROJECT_SOURCE_DIR@/scripts")
+
+from protobuf_service_codegen.plugin import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

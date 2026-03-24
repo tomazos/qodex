@@ -57,9 +57,15 @@ set(QODEX_THREAD_UI_IPC_PROTO_FILES
     "${QODEX_THREAD_UI_IPC_PROTO_DIR}/ui_to_qodex.proto"
     "${QODEX_THREAD_UI_IPC_PROTO_DIR}/qodex_to_ui.proto"
 )
+set(QODEX_THREAD_UI_RPC_GENERATED_HEADERS
+    "${QODEX_THREAD_UI_IPC_GENERATED_ROOT}/ui_to_qodex.qodex_rpc.h"
+    "${QODEX_THREAD_UI_IPC_GENERATED_ROOT}/qodex_to_ui.qodex_rpc.h"
+)
+set(QODEX_THREAD_UI_RPC_PLUGIN "${QODEX_GENERATED_ROOT}/protoc-gen-qodex_rpc")
 set_source_files_properties(
     src/threadui/ThreadUiIpcFraming.cpp
     src/threadui/ThreadUiIpcServer.cpp
+    src/threadui/ThreadUiRpcSupport.h
     src/threadui_native/ThreadUiEngine.cpp
     tests/threadui/ThreadUiIpcServerTest.cpp
     tests/threadui/ThreadUiEngineConnectionTest.cpp
@@ -87,6 +93,7 @@ qodex_add_staged_thread_ui(qodex_thread_ui_assets
 add_library(qodex_thread_ui_ipc STATIC
     src/threadui/ThreadUiIpcFraming.cpp
     src/threadui/ThreadUiIpcFraming.h
+    src/threadui/ThreadUiRpcSupport.h
 )
 set_target_properties(qodex_thread_ui_ipc PROPERTIES
     AUTOMOC OFF
@@ -119,6 +126,7 @@ qodex_add_napi_module(qodex_thread_ui_native
 target_include_directories(qodex_thread_ui_native PRIVATE "${QODEX_ASIO_INCLUDE_DIR}")
 target_compile_definitions(qodex_thread_ui_native PRIVATE ASIO_STANDALONE)
 target_link_libraries(qodex_thread_ui_native PRIVATE qodex_thread_ui_ipc Threads::Threads)
+add_dependencies(qodex_thread_ui_native qodex_thread_ui_ipc_codegen)
 
 add_custom_target(qodex_thread_ui
     DEPENDS
@@ -160,6 +168,52 @@ set(QODEX_SERVICE_TRANSLATION_SOURCES
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexClient.h.j2"
     "${PROJECT_SOURCE_DIR}/scripts/service_translation/generators/templates/qt/CodexClient.cpp.j2"
 )
+set(QODEX_PROTOBUF_SERVICE_GENERATION_SOURCES
+    "${PROJECT_SOURCE_DIR}/scripts/protobuf_service_codegen/__init__.py"
+    "${PROJECT_SOURCE_DIR}/scripts/protobuf_service_codegen/model.py"
+    "${PROJECT_SOURCE_DIR}/scripts/protobuf_service_codegen/generator.py"
+    "${PROJECT_SOURCE_DIR}/scripts/protobuf_service_codegen/plugin.py"
+    "${PROJECT_SOURCE_DIR}/scripts/protobuf_service_codegen/templates/cpp_service_header.j2"
+    "${PROJECT_SOURCE_DIR}/cmake/protoc-gen-qodex-rpc.in"
+)
+
+file(MAKE_DIRECTORY "${QODEX_GENERATED_ROOT}")
+configure_file(
+    "${PROJECT_SOURCE_DIR}/cmake/protoc-gen-qodex-rpc.in"
+    "${QODEX_THREAD_UI_RPC_PLUGIN}"
+    @ONLY
+)
+file(CHMOD "${QODEX_THREAD_UI_RPC_PLUGIN}"
+    PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+)
+
+add_custom_command(
+    OUTPUT ${QODEX_THREAD_UI_RPC_GENERATED_HEADERS}
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${QODEX_THREAD_UI_IPC_GENERATED_ROOT}"
+    COMMAND "${BASH_EXECUTABLE}" "${QODEX_SETUP_PYTHON_SCRIPT}"
+    COMMAND "${Protobuf_PROTOC_EXECUTABLE}"
+            "--proto_path=${QODEX_THREAD_UI_IPC_PROTO_DIR}"
+            "--plugin=protoc-gen-qodex_rpc=${QODEX_THREAD_UI_RPC_PLUGIN}"
+            "--qodex_rpc_out=${QODEX_THREAD_UI_IPC_GENERATED_ROOT}"
+            ui_to_qodex.proto
+            qodex_to_ui.proto
+    WORKING_DIRECTORY "${QODEX_THREAD_UI_IPC_PROTO_DIR}"
+    DEPENDS
+        "${QODEX_PYTHON_ENV_STAMP}"
+        "${QODEX_THREAD_UI_RPC_PLUGIN}"
+        ${QODEX_THREAD_UI_IPC_PROTO_FILES}
+        ${QODEX_PROTOBUF_SERVICE_GENERATION_SOURCES}
+    VERBATIM
+)
+
+add_custom_target(qodex_thread_ui_ipc_codegen
+    DEPENDS ${QODEX_THREAD_UI_RPC_GENERATED_HEADERS}
+)
+
+add_dependencies(qodex_thread_ui_ipc qodex_thread_ui_ipc_codegen)
 
 add_custom_command(
     OUTPUT "${QODEX_PYTHON_ENV_STAMP}"
@@ -459,6 +513,7 @@ target_link_libraries(
         SQLite::SQLite3
         qodex_thread_ui_ipc
 )
+add_dependencies(qodex qodex_thread_ui_ipc_codegen)
 target_compile_definitions(qodex PRIVATE
     QODEX_APP_VERSION="${PROJECT_VERSION}"
     QODEX_THREAD_UI_BUILD_APP_DIR="${QODEX_THREAD_UI_APP_DIR}"
@@ -577,6 +632,7 @@ if(BUILD_TESTING)
     )
 
     target_link_libraries(ThreadUiIpcServerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test qodex_thread_ui_ipc)
+    add_dependencies(ThreadUiIpcServerTest qodex_thread_ui_ipc_codegen)
 
     add_test(NAME ThreadUiIpcServerTest COMMAND ThreadUiIpcServerTest)
 
@@ -604,6 +660,7 @@ if(BUILD_TESTING)
             Threads::Threads
             qodex_thread_ui_ipc
     )
+    add_dependencies(ThreadUiEngineConnectionTest qodex_thread_ui_ipc_codegen)
 
     add_test(NAME ThreadUiEngineConnectionTest COMMAND ThreadUiEngineConnectionTest)
 

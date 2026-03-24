@@ -5,13 +5,14 @@
 #include <QRegularExpression>
 #include <QTcpSocket>
 
-#include "common.pb.h"
+#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "threadui/ThreadUiIpcServer.h"
-#include "ui_to_qodex.pb.h"
+#include "ui_to_qodex.qodex_rpc.h"
 
 using qodex::threadui::ThreadUiIpcServer;
 using qodex::threadui::ThreadUiLaunchConfig;
+namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
 
 namespace {
 
@@ -113,11 +114,8 @@ void ThreadUiIpcServerTest::acceptsValidLoginAndRepliesOk() {
     qodex::threadui::ipc::ui_to_qodex::LoginRequest request;
     request.set_token(launchConfig.token.toStdString());
 
-    qodex::threadui::ipc::common::RpcEnvelope envelope;
-    envelope.set_request_id(1);
-    envelope.set_is_response(false);
-    envelope.set_method(qodex::threadui::ipc::kLoginMethodName);
-    envelope.set_payload(request.SerializeAsString());
+    const qodex::threadui::ipc::common::RpcEnvelope envelope =
+        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::Login>(1, request);
 
     const std::string frame = qodex::threadui::ipc::encodeEnvelopeFrame(envelope);
     QCOMPARE(socket.write(frame.data(), static_cast<qint64>(frame.size())), static_cast<qint64>(frame.size()));
@@ -129,7 +127,7 @@ void ThreadUiIpcServerTest::acceptsValidLoginAndRepliesOk() {
     QVERIFY2(readNextEnvelope(&socket, &inputBuffer, &responseEnvelope, &readErrorMessage), readErrorMessage.c_str());
     QVERIFY(responseEnvelope.is_response());
     QCOMPARE(responseEnvelope.request_id(), 1U);
-    QCOMPARE(responseEnvelope.method(), std::string(qodex::threadui::ipc::kLoginMethodName));
+    QCOMPARE(responseEnvelope.method(), std::string(UiToQodexRpc::Login::kMethodName));
 
     qodex::threadui::ipc::ui_to_qodex::LoginResponse response;
     QVERIFY(response.ParseFromString(responseEnvelope.payload()));
@@ -157,11 +155,8 @@ void ThreadUiIpcServerTest::acceptsTestPingAndRepliesOk() {
     qodex::threadui::ipc::ui_to_qodex::LoginRequest loginRequest;
     loginRequest.set_token(launchConfig.token.toStdString());
 
-    qodex::threadui::ipc::common::RpcEnvelope loginEnvelope;
-    loginEnvelope.set_request_id(1);
-    loginEnvelope.set_is_response(false);
-    loginEnvelope.set_method(qodex::threadui::ipc::kLoginMethodName);
-    loginEnvelope.set_payload(loginRequest.SerializeAsString());
+    const qodex::threadui::ipc::common::RpcEnvelope loginEnvelope =
+        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::Login>(1, loginRequest);
 
     const std::string loginFrame = qodex::threadui::ipc::encodeEnvelopeFrame(loginEnvelope);
     QCOMPARE(socket.write(loginFrame.data(), static_cast<qint64>(loginFrame.size())), static_cast<qint64>(loginFrame.size()));
@@ -175,16 +170,13 @@ void ThreadUiIpcServerTest::acceptsTestPingAndRepliesOk() {
         readErrorMessage.c_str()
     );
     QVERIFY(loginResponseEnvelope.is_response());
-    QCOMPARE(loginResponseEnvelope.method(), std::string(qodex::threadui::ipc::kLoginMethodName));
+    QCOMPARE(loginResponseEnvelope.method(), std::string(UiToQodexRpc::Login::kMethodName));
 
     qodex::threadui::ipc::ui_to_qodex::TestPingRequest testPingRequest;
     testPingRequest.set_value(7);
 
-    qodex::threadui::ipc::common::RpcEnvelope testPingEnvelope;
-    testPingEnvelope.set_request_id(2);
-    testPingEnvelope.set_is_response(false);
-    testPingEnvelope.set_method(qodex::threadui::ipc::kTestPingMethodName);
-    testPingEnvelope.set_payload(testPingRequest.SerializeAsString());
+    const qodex::threadui::ipc::common::RpcEnvelope testPingEnvelope =
+        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::TestPing>(2, testPingRequest);
 
     const std::string testPingFrame = qodex::threadui::ipc::encodeEnvelopeFrame(testPingEnvelope);
     QCOMPARE(
@@ -200,7 +192,7 @@ void ThreadUiIpcServerTest::acceptsTestPingAndRepliesOk() {
     );
     QVERIFY(testPingResponseEnvelope.is_response());
     QCOMPARE(testPingResponseEnvelope.request_id(), 2U);
-    QCOMPARE(testPingResponseEnvelope.method(), std::string(qodex::threadui::ipc::kTestPingMethodName));
+    QCOMPARE(testPingResponseEnvelope.method(), std::string(UiToQodexRpc::TestPing::kMethodName));
 
     qodex::threadui::ipc::ui_to_qodex::TestPingResponse testPingResponse;
     QVERIFY(testPingResponse.ParseFromString(testPingResponseEnvelope.payload()));

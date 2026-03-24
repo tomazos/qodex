@@ -1,18 +1,15 @@
 #include "threadui/ThreadUiIpcServer.h"
 
 #include <algorithm>
-#include <cinttypes>
-
 #include <QByteArray>
 #include <QHostAddress>
 #include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
 
-#include "common.pb.h"
-#include "qodex_to_ui.pb.h"
 #include "threadui/ThreadUiIpcFraming.h"
-#include "ui_to_qodex.pb.h"
+#include "ui_to_qodex.qodex_rpc.h"
+#include "qodex_to_ui.qodex_rpc.h"
 
 namespace qodex::threadui {
 
@@ -21,18 +18,14 @@ namespace {
 using qodex::threadui::ipc::FrameDecodeResult;
 using qodex::threadui::ipc::common::RESULT_STATUS_ERROR;
 using qodex::threadui::ipc::common::RESULT_STATUS_OK;
+namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
+namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 
 qodex::threadui::ipc::common::RpcEnvelope makeResponseEnvelope(
     const std::uint64_t requestId,
-    const char *methodName,
-    const std::string &payload
+    const qodex::threadui::ipc::ui_to_qodex::LoginResponse &response
 ) {
-    qodex::threadui::ipc::common::RpcEnvelope envelope;
-    envelope.set_request_id(requestId);
-    envelope.set_is_response(true);
-    envelope.set_method(methodName);
-    envelope.set_payload(payload);
-    return envelope;
+    return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::Login>(requestId, response);
 }
 
 qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
@@ -44,7 +37,7 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     response.set_status(status);
     response.set_message(message.toStdString());
 
-    return makeResponseEnvelope(requestId, qodex::threadui::ipc::kLoginMethodName, response.SerializeAsString());
+    return makeResponseEnvelope(requestId, response);
 }
 
 qodex::threadui::ipc::common::RpcEnvelope makeTestPingResponseEnvelope(
@@ -56,7 +49,7 @@ qodex::threadui::ipc::common::RpcEnvelope makeTestPingResponseEnvelope(
     response.set_status(status);
     response.set_message(message.toStdString());
 
-    return makeResponseEnvelope(requestId, qodex::threadui::ipc::kTestPingMethodName, response.SerializeAsString());
+    return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::TestPing>(requestId, response);
 }
 
 qodex::threadui::ipc::common::RpcEnvelope makeTestPongRequestEnvelope(
@@ -66,12 +59,7 @@ qodex::threadui::ipc::common::RpcEnvelope makeTestPongRequestEnvelope(
     qodex::threadui::ipc::qodex_to_ui::TestPongRequest request;
     request.set_value(value);
 
-    qodex::threadui::ipc::common::RpcEnvelope envelope;
-    envelope.set_request_id(requestId);
-    envelope.set_is_response(false);
-    envelope.set_method(qodex::threadui::ipc::kTestPongMethodName);
-    envelope.set_payload(request.SerializeAsString());
-    return envelope;
+    return qodex::threadui::ipc::makeRequestEnvelope<QodexToUiRpc::TestPong>(requestId, request);
 }
 
 bool sendEnvelope(
@@ -233,145 +221,208 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
             return;
         }
 
+        auto &connectionState = connectionStateIt.value();
+
         if (!connectionStateIt->authenticatedToken.isEmpty()) {
             if (envelope.is_response()) {
-                if (envelope.method() != qodex::threadui::ipc::kTestPongMethodName) {
-                    qWarning("Unexpected Thread UI IPC response method: %s", envelope.method().c_str());
+                struct QodexToUiResponseHandler final {
+                    ConnectionState &connectionState;
+
+                    bool onTestPongResponse(
+                        const std::uint64_t requestId,
+                        const qodex::threadui::ipc::qodex_to_ui::TestPongResponse &response,
+                        std::string *errorMessage
+                    ) {
+                        const auto pendingRequestIt = connectionState.pendingTestPongValuesByRequestId.find(requestId);
+                        if (pendingRequestIt == connectionState.pendingTestPongValuesByRequestId.end()) {
+                            if (errorMessage != nullptr) {
+                                *errorMessage =
+                                    "Received a TestPong response for unknown request id " + std::to_string(requestId) +
+                                    '.';
+                            }
+                            return false;
+                        }
+
+                        connectionState.pendingTestPongValuesByRequestId.erase(pendingRequestIt);
+                        if (response.status() != RESULT_STATUS_OK) {
+                            qWarning("Thread UI rejected TestPong request: %s", response.message().c_str());
+                        }
+                        return true;
+                    }
+                } handler{connectionState};
+
+                std::string dispatchErrorMessage;
+                if (!QodexToUiRpc::dispatchResponseEnvelope(envelope, handler, &dispatchErrorMessage)) {
+                    qWarning("Thread UI IPC protocol error: %s", dispatchErrorMessage.c_str());
                     socket->disconnectFromHost();
                     return;
-                }
-
-                qodex::threadui::ipc::qodex_to_ui::TestPongResponse response;
-                if (!response.ParseFromString(envelope.payload())) {
-                    qWarning("Failed to parse QodexToUi.TestPong response payload.");
-                    socket->disconnectFromHost();
-                    return;
-                }
-
-                const auto pendingRequestIt =
-                    connectionStateIt->pendingTestPongValuesByRequestId.find(envelope.request_id());
-                if (pendingRequestIt == connectionStateIt->pendingTestPongValuesByRequestId.end()) {
-                    qWarning("Received a TestPong response for unknown request id %" PRIu64, envelope.request_id());
-                    socket->disconnectFromHost();
-                    return;
-                }
-
-                connectionStateIt->pendingTestPongValuesByRequestId.erase(pendingRequestIt);
-                if (response.status() != RESULT_STATUS_OK) {
-                    qWarning("Thread UI rejected TestPong request: %s", response.message().c_str());
                 }
                 continue;
             }
 
-            if (envelope.method() != qodex::threadui::ipc::kTestPingMethodName) {
-                qWarning("Unexpected Thread UI IPC request method: %s", envelope.method().c_str());
-                socket->disconnectFromHost();
-                return;
-            }
+            struct UiToQodexRequestHandler final {
+                QTcpSocket *socket;
+                ConnectionState &connectionState;
+                std::int64_t &highestReceivedTestPing;
 
-            qodex::threadui::ipc::ui_to_qodex::TestPingRequest request;
-            if (!request.ParseFromString(envelope.payload())) {
-                sendEnvelope(
-                    socket,
-                    makeTestPingResponseEnvelope(
-                        envelope.request_id(),
-                        RESULT_STATUS_ERROR,
-                        QStringLiteral("Failed to parse UiToQodex.TestPing request payload.")
-                    )
-                );
-                socket->disconnectFromHost();
-                return;
-            }
+                bool onLoginRequest(
+                    const std::uint64_t requestId,
+                    const qodex::threadui::ipc::ui_to_qodex::LoginRequest &,
+                    std::string *errorMessage
+                ) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "UiToQodex.Login is only valid before authentication.";
+                    }
 
-            m_highestReceivedTestPing = std::max(m_highestReceivedTestPing, static_cast<std::int64_t>(request.value()));
+                    sendEnvelope(
+                        socket,
+                        makeLoginResponseEnvelope(
+                            requestId,
+                            RESULT_STATUS_ERROR,
+                            QStringLiteral("UiToQodex.Login is only valid before authentication.")
+                        )
+                    );
+                    return false;
+                }
 
-            if (!sendEnvelope(
-                    socket,
-                    makeTestPingResponseEnvelope(
-                        envelope.request_id(),
-                        RESULT_STATUS_OK,
-                        QStringLiteral("Test ping received.")
-                    ))) {
-                socket->disconnectFromHost();
-                return;
-            }
+                bool onTestPingRequest(
+                    const std::uint64_t requestId,
+                    const qodex::threadui::ipc::ui_to_qodex::TestPingRequest &request,
+                    std::string *errorMessage
+                ) {
+                    highestReceivedTestPing = std::max(highestReceivedTestPing, static_cast<std::int64_t>(request.value()));
 
-            const std::uint64_t outgoingRequestId = connectionStateIt->nextOutgoingRequestId++;
-            connectionStateIt->pendingTestPongValuesByRequestId.insert({outgoingRequestId, request.value()});
-            if (!sendEnvelope(socket, makeTestPongRequestEnvelope(outgoingRequestId, request.value()))) {
-                connectionStateIt->pendingTestPongValuesByRequestId.erase(outgoingRequestId);
+                    if (!sendEnvelope(
+                            socket,
+                            makeTestPingResponseEnvelope(
+                                requestId,
+                                RESULT_STATUS_OK,
+                                QStringLiteral("Test ping received.")
+                            ))) {
+                        if (errorMessage != nullptr) {
+                            *errorMessage = "Failed to send UiToQodex.TestPing response.";
+                        }
+                        return false;
+                    }
+
+                    const std::uint64_t outgoingRequestId = connectionState.nextOutgoingRequestId++;
+                    connectionState.pendingTestPongValuesByRequestId.insert({outgoingRequestId, request.value()});
+                    if (!sendEnvelope(socket, makeTestPongRequestEnvelope(outgoingRequestId, request.value()))) {
+                        connectionState.pendingTestPongValuesByRequestId.erase(outgoingRequestId);
+                        if (errorMessage != nullptr) {
+                            *errorMessage = "Failed to send QodexToUi.TestPong request.";
+                        }
+                        return false;
+                    }
+
+                    return true;
+                }
+            } handler{socket, connectionState, m_highestReceivedTestPing};
+
+            std::string dispatchErrorMessage;
+            if (!UiToQodexRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
+                qWarning("Thread UI IPC protocol error: %s", dispatchErrorMessage.c_str());
                 socket->disconnectFromHost();
                 return;
             }
             continue;
         }
 
-        if (envelope.is_response() || envelope.method() != qodex::threadui::ipc::kLoginMethodName) {
-            sendEnvelope(
-                socket,
-                makeLoginResponseEnvelope(
-                    envelope.request_id(),
-                    RESULT_STATUS_ERROR,
-                    QStringLiteral("Expected UiToQodex.Login as the first request.")
-                )
-            );
-            socket->disconnectFromHost();
-            return;
-        }
+        struct LoginRequestHandler final {
+            QTcpSocket *socket;
+            ConnectionState &connectionState;
+            QSet<QString> &issuedLaunchTokens;
+            QHash<QString, QTcpSocket *> &authenticatedConnectionsByToken;
+            QSet<QTcpSocket *> &unauthenticatedConnections;
 
-        qodex::threadui::ipc::ui_to_qodex::LoginRequest request;
-        if (!request.ParseFromString(envelope.payload())) {
-            sendEnvelope(
-                socket,
-                makeLoginResponseEnvelope(
-                    envelope.request_id(),
-                    RESULT_STATUS_ERROR,
-                    QStringLiteral("Failed to parse UiToQodex.Login request payload.")
-                )
-            );
-            socket->disconnectFromHost();
-            return;
-        }
+            bool onLoginRequest(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::LoginRequest &request,
+                std::string *errorMessage
+            ) {
+                const QString token = QString::fromStdString(request.token());
+                if (!issuedLaunchTokens.contains(token)) {
+                    sendEnvelope(
+                        socket,
+                        makeLoginResponseEnvelope(
+                            requestId,
+                            RESULT_STATUS_ERROR,
+                            QStringLiteral("Login token was not recognized.")
+                        )
+                    );
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Login token was not recognized.";
+                    }
+                    return false;
+                }
 
-        const QString token = QString::fromStdString(request.token());
-        if (!m_issuedLaunchTokens.contains(token)) {
-            sendEnvelope(
-                socket,
-                makeLoginResponseEnvelope(
-                    envelope.request_id(),
-                    RESULT_STATUS_ERROR,
-                    QStringLiteral("Login token was not recognized.")
-                )
-            );
-            socket->disconnectFromHost();
-            return;
-        }
+                if (authenticatedConnectionsByToken.contains(token)) {
+                    sendEnvelope(
+                        socket,
+                        makeLoginResponseEnvelope(
+                            requestId,
+                            RESULT_STATUS_ERROR,
+                            QStringLiteral("Login token is already in use by another connection.")
+                        )
+                    );
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Login token is already in use by another connection.";
+                    }
+                    return false;
+                }
 
-        if (m_authenticatedConnectionsByToken.contains(token)) {
-            sendEnvelope(
-                socket,
-                makeLoginResponseEnvelope(
-                    envelope.request_id(),
-                    RESULT_STATUS_ERROR,
-                    QStringLiteral("Login token is already in use by another connection.")
-                )
-            );
-            socket->disconnectFromHost();
-            return;
-        }
+                connectionState.authenticatedToken = token;
+                unauthenticatedConnections.remove(socket);
+                authenticatedConnectionsByToken.insert(token, socket);
 
-        connectionStateIt->authenticatedToken = token;
-        m_unauthenticatedConnections.remove(socket);
-        m_authenticatedConnectionsByToken.insert(token, socket);
+                if (!sendEnvelope(
+                        socket,
+                        makeLoginResponseEnvelope(
+                            requestId,
+                            RESULT_STATUS_OK,
+                            QStringLiteral("Thread UI connection authenticated.")
+                        ))) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Failed to send UiToQodex.Login response.";
+                    }
+                    return false;
+                }
 
-        sendEnvelope(
+                return true;
+            }
+
+            bool onTestPingRequest(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::TestPingRequest &,
+                std::string *errorMessage
+            ) {
+                sendEnvelope(
+                    socket,
+                    makeTestPingResponseEnvelope(
+                        requestId,
+                        RESULT_STATUS_ERROR,
+                        QStringLiteral("Expected UiToQodex.Login as the first request.")
+                    )
+                );
+                if (errorMessage != nullptr) {
+                    *errorMessage = "Expected UiToQodex.Login as the first request.";
+                }
+                return false;
+            }
+        } handler{
             socket,
-            makeLoginResponseEnvelope(
-                envelope.request_id(),
-                RESULT_STATUS_OK,
-                QStringLiteral("Thread UI connection authenticated.")
-            )
-        );
+            connectionState,
+            m_issuedLaunchTokens,
+            m_authenticatedConnectionsByToken,
+            m_unauthenticatedConnections,
+        };
+
+        std::string dispatchErrorMessage;
+        if (!UiToQodexRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
+            qWarning("Thread UI IPC protocol error: %s", dispatchErrorMessage.c_str());
+            socket->disconnectFromHost();
+            return;
+        }
     }
 }
 

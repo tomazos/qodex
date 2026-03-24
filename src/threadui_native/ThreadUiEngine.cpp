@@ -11,10 +11,9 @@
 #include <thread>
 #include <utility>
 
-#include "common.pb.h"
-#include "qodex_to_ui.pb.h"
+#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
-#include "ui_to_qodex.pb.h"
+#include "ui_to_qodex.qodex_rpc.h"
 
 namespace qodex::threadui::native {
 
@@ -27,6 +26,8 @@ FrameCountDisplayCallback frameCountDisplayCallback;
 std::atomic<std::int64_t> highestTestPongValue{0};
 struct IpcClientState;
 std::unique_ptr<IpcClientState> ipcClientState;
+namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
+namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
     return !launchConfig.host.empty() && launchConfig.port != 0;
@@ -69,32 +70,6 @@ void scheduleConnect(IpcClientState *state);
 void scheduleReconnect(IpcClientState *state, const asio::error_code &errorCode);
 
 void stopIpcClient();
-
-qodex::threadui::ipc::common::RpcEnvelope makeRequestEnvelope(
-    const std::uint64_t requestId,
-    const char *methodName,
-    const std::string &payload
-) {
-    qodex::threadui::ipc::common::RpcEnvelope envelope;
-    envelope.set_request_id(requestId);
-    envelope.set_is_response(false);
-    envelope.set_method(methodName);
-    envelope.set_payload(payload);
-    return envelope;
-}
-
-qodex::threadui::ipc::common::RpcEnvelope makeResponseEnvelope(
-    const std::uint64_t requestId,
-    const char *methodName,
-    const std::string &payload
-) {
-    qodex::threadui::ipc::common::RpcEnvelope envelope;
-    envelope.set_request_id(requestId);
-    envelope.set_is_response(true);
-    envelope.set_method(methodName);
-    envelope.set_payload(payload);
-    return envelope;
-}
 
 void beginWriteQueuedFrames(IpcClientState *state);
 
@@ -221,7 +196,7 @@ void sendTestPingRequest(IpcClientState *state, const std::int64_t value) {
     state->pendingTestPingValue = value;
     queueEnvelopeForWrite(
         state,
-        makeRequestEnvelope(requestId, qodex::threadui::ipc::kTestPingMethodName, request.SerializeAsString())
+        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::TestPing>(requestId, request)
     );
 }
 
@@ -240,89 +215,8 @@ void sendTestPongResponse(
     response.set_message(message);
     queueEnvelopeForWrite(
         state,
-        makeResponseEnvelope(requestId, qodex::threadui::ipc::kTestPongMethodName, response.SerializeAsString())
+        qodex::threadui::ipc::makeResponseEnvelope<QodexToUiRpc::TestPong>(requestId, response)
     );
-}
-
-void handleResponseEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
-    if (envelope.method() == qodex::threadui::ipc::kLoginMethodName) {
-        if (envelope.request_id() != state->pendingLoginRequestId) {
-            stopClientOnProtocolFailure(state, "Received a Login response for an unknown request id.");
-            return;
-        }
-
-        qodex::threadui::ipc::ui_to_qodex::LoginResponse response;
-        if (!response.ParseFromString(envelope.payload())) {
-            stopClientOnProtocolFailure(state, "Failed to parse Thread UI Login response.");
-            return;
-        }
-
-        state->pendingLoginRequestId = 0;
-        if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
-            stopClientOnProtocolFailure(state, "Thread UI Login failed: " + response.message());
-            return;
-        }
-
-        state->authenticated = true;
-        std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
-        sendTestPingRequest(state, 1);
-        return;
-    }
-
-    if (envelope.method() == qodex::threadui::ipc::kTestPingMethodName) {
-        if (envelope.request_id() != state->pendingTestPingRequestId) {
-            stopClientOnProtocolFailure(state, "Received a TestPing response for an unknown request id.");
-            return;
-        }
-
-        qodex::threadui::ipc::ui_to_qodex::TestPingResponse response;
-        if (!response.ParseFromString(envelope.payload())) {
-            stopClientOnProtocolFailure(state, "Failed to parse Thread UI TestPing response.");
-            return;
-        }
-
-        const std::int64_t completedPingValue = state->pendingTestPingValue;
-        state->pendingTestPingRequestId = 0;
-        state->pendingTestPingValue = 0;
-        if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
-            stopClientOnProtocolFailure(
-                state,
-                "Thread UI TestPing failed for value " + std::to_string(completedPingValue) + ": " + response.message()
-            );
-            return;
-        }
-        return;
-    }
-
-    stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC response envelope.");
-}
-
-void handleRequestEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
-    if (envelope.method() != qodex::threadui::ipc::kTestPongMethodName) {
-        stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC request envelope.");
-        return;
-    }
-
-    qodex::threadui::ipc::qodex_to_ui::TestPongRequest request;
-    if (!request.ParseFromString(envelope.payload())) {
-        sendTestPongResponse(
-            state,
-            envelope.request_id(),
-            qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-            "Failed to parse QodexToUi.TestPong request payload."
-        );
-        stopClientOnProtocolFailure(state, "Failed to parse Thread UI TestPong request.");
-        return;
-    }
-
-    updateHighestTestPong(request.value());
-    sendTestPongResponse(
-        state,
-        envelope.request_id(),
-        qodex::threadui::ipc::common::RESULT_STATUS_OK,
-        "Test pong received."
-    );
-    sendTestPingRequest(state, request.value() + 1);
 }
 
 void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
@@ -331,11 +225,101 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
     }
 
     if (envelope.is_response()) {
-        handleResponseEnvelope(state, envelope);
+        struct UiToQodexResponseHandler final {
+            IpcClientState *state;
+
+            bool onLoginResponse(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::LoginResponse &response,
+                std::string *errorMessage
+            ) {
+                if (requestId != state->pendingLoginRequestId) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Received a Login response for an unknown request id.";
+                    }
+                    return false;
+                }
+
+                state->pendingLoginRequestId = 0;
+                if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Thread UI Login failed: " + response.message();
+                    }
+                    return false;
+                }
+
+                state->authenticated = true;
+                std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
+                sendTestPingRequest(state, 1);
+                return true;
+            }
+
+            bool onTestPingResponse(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::TestPingResponse &response,
+                std::string *errorMessage
+            ) {
+                if (requestId != state->pendingTestPingRequestId) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Received a TestPing response for an unknown request id.";
+                    }
+                    return false;
+                }
+
+                const std::int64_t completedPingValue = state->pendingTestPingValue;
+                state->pendingTestPingRequestId = 0;
+                state->pendingTestPingValue = 0;
+                if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Thread UI TestPing failed for value " +
+                                        std::to_string(completedPingValue) + ": " + response.message();
+                    }
+                    return false;
+                }
+
+                return true;
+            }
+        } handler{state};
+
+        std::string dispatchErrorMessage;
+        if (!UiToQodexRpc::dispatchResponseEnvelope(envelope, handler, &dispatchErrorMessage)) {
+            stopClientOnProtocolFailure(state, dispatchErrorMessage);
+        }
         return;
     }
 
-    handleRequestEnvelope(state, envelope);
+    struct QodexToUiRequestHandler final {
+        IpcClientState *state;
+
+        bool onTestPongRequest(
+            const std::uint64_t requestId,
+            const qodex::threadui::ipc::qodex_to_ui::TestPongRequest &request,
+            std::string *
+        ) {
+            updateHighestTestPong(request.value());
+            sendTestPongResponse(
+                state,
+                requestId,
+                qodex::threadui::ipc::common::RESULT_STATUS_OK,
+                "Test pong received."
+            );
+            sendTestPingRequest(state, request.value() + 1);
+            return true;
+        }
+    } handler{state};
+
+    std::string dispatchErrorMessage;
+    if (!QodexToUiRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
+        if (envelope.method() == QodexToUiRpc::TestPong::kMethodName) {
+            sendTestPongResponse(
+                state,
+                envelope.request_id(),
+                qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+                dispatchErrorMessage
+            );
+        }
+        stopClientOnProtocolFailure(state, dispatchErrorMessage);
+    }
 }
 
 void beginReadFromSocket(IpcClientState *state) {
@@ -394,7 +378,7 @@ void sendLoginRequest(IpcClientState *state) {
     state->pendingLoginRequestId = requestId;
     queueEnvelopeForWrite(
         state,
-        makeRequestEnvelope(requestId, qodex::threadui::ipc::kLoginMethodName, request.SerializeAsString())
+        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::Login>(requestId, request)
     );
     std::cout << "Sent Thread UI Login request." << std::endl;
 }
