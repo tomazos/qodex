@@ -10,7 +10,6 @@
 #include "ui/ApiLogPane.h"
 #include "ui/ThreadListModel.h"
 #include "ui/ThreadListPane.h"
-#include "ui/ThreadTranscriptPane.h"
 
 namespace qodex::ui {
 
@@ -65,11 +64,6 @@ MainWindow::MainWindow(
 }
 
 MainWindow::~MainWindow() {
-    for (auto it = m_threadTranscriptDocks.begin(); it != m_threadTranscriptDocks.end(); ++it) {
-        if (it.value() != nullptr) {
-            delete it.value();
-        }
-    }
     delete m_apiLogDock;
     delete m_threadListDock;
 }
@@ -99,54 +93,6 @@ QList<QAction *> MainWindow::viewActions() const {
 
 void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
-}
-
-void MainWindow::showThreadTranscript(
-    const QString &threadId,
-    const QString &title,
-    const QString &transcriptHtml
-) {
-    if (threadId.isEmpty()) {
-        return;
-    }
-
-    KDDockWidgets::QtWidgets::DockWidget *dock = m_threadTranscriptDocks.value(threadId, nullptr);
-    ThreadTranscriptPane *pane = m_threadTranscriptPanes.value(threadId, nullptr);
-    if (dock == nullptr || pane == nullptr) {
-        pane = new ThreadTranscriptPane;
-        dock = new KDDockWidgets::QtWidgets::DockWidget(
-            QStringLiteral("qodex.ThreadTranscript.%1").arg(threadId),
-            KDDockWidgets::DockWidgetOption_DeleteOnClose,
-            KDDockWidgets::LayoutSaverOption::Skip
-        );
-        dock->setWidget(pane);
-        m_threadTranscriptDocks.insert(threadId, dock);
-        m_threadTranscriptPanes.insert(threadId, pane);
-
-        connect(dock, &QObject::destroyed, this, [this, threadId] {
-            m_threadTranscriptDocks.remove(threadId);
-            m_threadTranscriptPanes.remove(threadId);
-        });
-
-        if (m_threadListDock != nullptr) {
-            m_threadListDock->addDockWidgetAsTab(dock);
-        } else if (m_apiLogDock != nullptr) {
-            m_apiLogDock->addDockWidgetAsTab(dock);
-        } else {
-            addDockWidgetAsTab(dock);
-        }
-    }
-
-    dock->setTitle(title);
-    pane->setTranscriptHtml(transcriptHtml);
-    dock->show();
-    dock->raise();
-}
-
-void MainWindow::closeThreadTranscript(const QString &threadId) {
-    if (KDDockWidgets::QtWidgets::DockWidget *dock = m_threadTranscriptDocks.value(threadId, nullptr)) {
-        dock->close();
-    }
 }
 
 void MainWindow::rebuildViewMenu(const QList<QAction *> &actions) {

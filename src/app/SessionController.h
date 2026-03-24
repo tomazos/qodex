@@ -54,7 +54,6 @@ private slots:
     void onRefreshRequested();
     void onThreadSelected(const QString &threadId);
     void onRenameThreadRequested(const QString &threadId);
-    void onResumeThreadRequested(const QString &threadId);
     void onCloseThreadsRequested(const QStringList &threadIds);
     void onForkThreadRequested(const QString &threadId);
     void onArchiveThreadsRequested(const QStringList &threadIds);
@@ -65,8 +64,6 @@ private slots:
     void onThreadNameSetFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadArchiveSucceeded(const qodex::codex::JsonRpcId &id, qodex::codex::EmptyObject response);
     void onThreadArchiveFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
-    void onThreadResumeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response);
-    void onThreadResumeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadUnsubscribeSucceeded(
         const qodex::codex::JsonRpcId &id,
         const qodex::codex::ThreadUnsubscribeResponse &response
@@ -115,7 +112,6 @@ private:
     QString m_archivedThreadListRequestKey;
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;
-    QHash<QString, QString> m_pendingResumeRequests;
     QHash<QString, QString> m_pendingUnsubscribeRequests;
     QHash<QString, QString> m_pendingForkRequests;
     QHash<QString, QString> m_pendingUnarchiveRequests;

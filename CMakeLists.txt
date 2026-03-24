@@ -10,7 +10,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Network Sql WebEngineWidgets Widgets Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets Test)
 find_package(SQLite3 REQUIRED)
 find_package(KDDockWidgets QUIET)
 if(NOT KDDockWidgets_FOUND)
@@ -340,10 +340,6 @@ qt_add_executable(qodex
     src/ui/ThreadListModel.h
     src/ui/ThreadListPane.cpp
     src/ui/ThreadListPane.h
-    src/ui/ThreadTranscriptFormatter.cpp
-    src/ui/ThreadTranscriptFormatter.h
-    src/ui/ThreadTranscriptPane.cpp
-    src/ui/ThreadTranscriptPane.h
 )
 
 target_include_directories(qodex PRIVATE
@@ -351,7 +347,7 @@ target_include_directories(qodex PRIVATE
     "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::WebEngineWidgets Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
+target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
 target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
 add_dependencies(qodex qodex_protocol_artifacts)
@@ -526,22 +522,6 @@ if(BUILD_TESTING)
 
     add_test(NAME ApiLogModelTest COMMAND ApiLogModelTest)
 
-    qt_add_executable(ThreadTranscriptFormatterTest
-        tests/ui/ThreadTranscriptFormatterTest.cpp
-        src/ui/ThreadTranscriptFormatter.cpp
-        src/ui/ThreadTranscriptFormatter.h
-        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
-        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
-    )
-
-    target_include_directories(ThreadTranscriptFormatterTest PRIVATE
-        "${PROJECT_SOURCE_DIR}/src"
-        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
-    )
-
-    target_link_libraries(ThreadTranscriptFormatterTest PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
-
-    add_test(NAME ThreadTranscriptFormatterTest COMMAND ThreadTranscriptFormatterTest)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)

@@ -293,7 +293,6 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     QMenu menu(this);
     QAction *refreshAction = menu.addAction(QStringLiteral("Refresh Thread List"));
     QAction *renameAction = nullptr;
-    QAction *resumeAction = nullptr;
     QAction *closeAction = nullptr;
     QAction *forkAction = nullptr;
     QAction *archiveAction = nullptr;
@@ -305,8 +304,6 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
 
         renameAction = menu.addAction(QStringLiteral("Rename..."));
         renameAction->setEnabled(selectedThreadIds.size() == 1);
-        resumeAction = menu.addAction(QStringLiteral("Resume Thread"));
-        resumeAction->setEnabled(selectedThreadIds.size() == 1);
         for (const QString &threadId : selectedThreadIds) {
             const QModelIndex threadIndex = m_model->match(
                 m_model->index(0, ThreadListModel::ThreadColumn),
@@ -358,10 +355,6 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     }
     if (selectedAction == renameAction && selectedThreadIds.size() == 1) {
         emit renameThreadRequested(selectedThreadIds.constFirst());
-        return;
-    }
-    if (selectedAction == resumeAction && selectedThreadIds.size() == 1) {
-        emit resumeThreadRequested(selectedThreadIds.constFirst());
         return;
     }
     if (selectedAction == closeAction && !closeThreadIds.isEmpty()) {
