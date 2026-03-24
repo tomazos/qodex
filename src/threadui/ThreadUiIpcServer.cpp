@@ -17,7 +17,6 @@ namespace {
 using qodex::threadui::ipc::FrameDecodeResult;
 using qodex::threadui::ipc::common::RESULT_STATUS_ERROR;
 using qodex::threadui::ipc::common::RESULT_STATUS_OK;
-using qodex::threadui::ipc::common::RPC_SERVICE_UI_TO_QODEX;
 
 qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     const std::uint64_t requestId,
@@ -31,7 +30,6 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     qodex::threadui::ipc::common::RpcEnvelope envelope;
     envelope.set_request_id(requestId);
     envelope.set_is_response(true);
-    envelope.set_service(RPC_SERVICE_UI_TO_QODEX);
     envelope.set_method(qodex::threadui::ipc::kLoginMethodName);
     envelope.set_payload(response.SerializeAsString());
     return envelope;
@@ -194,8 +192,7 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
             continue;
         }
 
-        if (envelope.is_response() || envelope.service() != RPC_SERVICE_UI_TO_QODEX ||
-            envelope.method() != qodex::threadui::ipc::kLoginMethodName) {
+        if (envelope.is_response() || envelope.method() != qodex::threadui::ipc::kLoginMethodName) {
             sendEnvelope(
                 socket,
                 makeLoginResponseEnvelope(

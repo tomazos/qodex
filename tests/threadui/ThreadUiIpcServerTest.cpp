@@ -68,7 +68,6 @@ void ThreadUiIpcServerTest::acceptsValidLoginAndRepliesOk() {
     qodex::threadui::ipc::common::RpcEnvelope envelope;
     envelope.set_request_id(1);
     envelope.set_is_response(false);
-    envelope.set_service(qodex::threadui::ipc::common::RPC_SERVICE_UI_TO_QODEX);
     envelope.set_method(qodex::threadui::ipc::kLoginMethodName);
     envelope.set_payload(request.SerializeAsString());
 
@@ -104,7 +103,6 @@ void ThreadUiIpcServerTest::acceptsValidLoginAndRepliesOk() {
     QVERIFY2(parseErrorMessage.empty(), parseErrorMessage.c_str());
     QVERIFY(responseEnvelope.is_response());
     QCOMPARE(responseEnvelope.request_id(), 1U);
-    QCOMPARE(responseEnvelope.service(), qodex::threadui::ipc::common::RPC_SERVICE_UI_TO_QODEX);
     QCOMPARE(responseEnvelope.method(), std::string(qodex::threadui::ipc::kLoginMethodName));
 
     qodex::threadui::ipc::ui_to_qodex::LoginResponse response;

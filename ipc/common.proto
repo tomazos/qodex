@@ -2,12 +2,6 @@ syntax = "proto3";
 
 package qodex.threadui.ipc.common;
 
-enum RpcService {
-  RPC_SERVICE_UNSPECIFIED = 0;
-  RPC_SERVICE_UI_TO_QODEX = 1;
-  RPC_SERVICE_QODEX_TO_UI = 2;
-}
-
 enum ResultStatus {
   RESULT_STATUS_UNSPECIFIED = 0;
   RESULT_STATUS_OK = 1;
@@ -17,7 +11,6 @@ enum ResultStatus {
 message RpcEnvelope {
   uint64 request_id = 1;
   bool is_response = 2;
-  RpcService service = 3;
   string method = 4;
   bytes payload = 5;
 }

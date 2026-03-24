@@ -1,36 +1,81 @@
 #include "threadui/ThreadUiIpcFraming.h"
 
+#include <algorithm>
 #include <cstddef>
+
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
 namespace qodex::threadui::ipc {
 
 namespace {
 
-void writeBigEndianUint32(char *destination, const std::uint32_t value) {
-    destination[0] = static_cast<char>((value >> 24) & 0xffU);
-    destination[1] = static_cast<char>((value >> 16) & 0xffU);
-    destination[2] = static_cast<char>((value >> 8) & 0xffU);
-    destination[3] = static_cast<char>(value & 0xffU);
+FrameDecodeResult tryDecodeLengthPrefix(
+    const std::string &buffer,
+    std::uint32_t *payloadSize,
+    std::size_t *prefixSize,
+    std::string *errorMessage
+) {
+    if (payloadSize == nullptr || prefixSize == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "Frame length decode arguments were invalid.";
+        }
+        return FrameDecodeResult::InvalidFrame;
+    }
+
+    const std::size_t bytesToInspect = std::min(buffer.size(), kMaxEnvelopeLengthPrefixBytes);
+    for (std::size_t index = 0; index < bytesToInspect; ++index) {
+        const unsigned char byte = static_cast<unsigned char>(buffer[index]);
+        if ((byte & 0x80U) != 0U) {
+            continue;
+        }
+
+        google::protobuf::io::ArrayInputStream inputStream(buffer.data(), static_cast<int>(index + 1));
+        google::protobuf::io::CodedInputStream codedInput(&inputStream);
+        std::uint32_t decodedPayloadSize = 0;
+        if (!codedInput.ReadVarint32(&decodedPayloadSize)) {
+            if (errorMessage != nullptr) {
+                *errorMessage = "Failed to decode envelope frame length prefix.";
+            }
+            return FrameDecodeResult::InvalidFrame;
+        }
+
+        *payloadSize = decodedPayloadSize;
+        *prefixSize = index + 1;
+        return FrameDecodeResult::Success;
+    }
+
+    if (buffer.size() < kMaxEnvelopeLengthPrefixBytes) {
+        return FrameDecodeResult::Incomplete;
+    }
+
+    if (errorMessage != nullptr) {
+        *errorMessage = "Envelope frame length prefix exceeded the maximum varint size.";
+    }
+    return FrameDecodeResult::InvalidFrame;
 }
 
 }  // namespace
 
 std::string encodeEnvelopeFrame(const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     const std::string payload = envelope.SerializeAsString();
+    const std::size_t prefixSize =
+        google::protobuf::io::CodedOutputStream::VarintSize32(static_cast<std::uint32_t>(payload.size()));
 
     std::string frame;
-    frame.resize(kFrameHeaderSizeBytes + payload.size());
-    writeBigEndianUint32(frame.data(), static_cast<std::uint32_t>(payload.size()));
-    frame.replace(kFrameHeaderSizeBytes, payload.size(), payload);
-    return frame;
-}
+    frame.resize(prefixSize + payload.size());
 
-std::uint32_t decodeFramePayloadSize(const char *headerBytes) {
-    const auto *bytes = reinterpret_cast<const unsigned char *>(headerBytes);
-    return (static_cast<std::uint32_t>(bytes[0]) << 24U) |
-           (static_cast<std::uint32_t>(bytes[1]) << 16U) |
-           (static_cast<std::uint32_t>(bytes[2]) << 8U) |
-           static_cast<std::uint32_t>(bytes[3]);
+    auto *target = reinterpret_cast<std::uint8_t *>(frame.data());
+    target = google::protobuf::io::CodedOutputStream::WriteVarint32ToArray(
+        static_cast<std::uint32_t>(payload.size()),
+        target
+    );
+    google::protobuf::io::CodedOutputStream::WriteRawToArray(
+        payload.data(),
+        static_cast<int>(payload.size()),
+        target
+    );
+    return frame;
 }
 
 bool parseEnvelopePayload(
@@ -67,11 +112,14 @@ FrameDecodeResult tryDecodeNextEnvelope(
         return FrameDecodeResult::InvalidFrame;
     }
 
-    if (buffer->size() < kFrameHeaderSizeBytes) {
-        return FrameDecodeResult::Incomplete;
+    std::uint32_t payloadSize = 0;
+    std::size_t prefixSize = 0;
+    const FrameDecodeResult prefixDecodeResult =
+        tryDecodeLengthPrefix(*buffer, &payloadSize, &prefixSize, errorMessage);
+    if (prefixDecodeResult != FrameDecodeResult::Success) {
+        return prefixDecodeResult;
     }
 
-    const std::uint32_t payloadSize = decodeFramePayloadSize(buffer->data());
     if (payloadSize > kMaxEnvelopePayloadSizeBytes) {
         if (errorMessage != nullptr) {
             *errorMessage = "Envelope frame exceeded the maximum supported payload size.";
@@ -79,12 +127,12 @@ FrameDecodeResult tryDecodeNextEnvelope(
         return FrameDecodeResult::InvalidFrame;
     }
 
-    const std::size_t frameSize = kFrameHeaderSizeBytes + static_cast<std::size_t>(payloadSize);
+    const std::size_t frameSize = prefixSize + static_cast<std::size_t>(payloadSize);
     if (buffer->size() < frameSize) {
         return FrameDecodeResult::Incomplete;
     }
 
-    const std::string payload = buffer->substr(kFrameHeaderSizeBytes, payloadSize);
+    const std::string payload = buffer->substr(prefixSize, payloadSize);
     buffer->erase(0, frameSize);
 
     if (!parseEnvelopePayload(payload, envelope, errorMessage)) {

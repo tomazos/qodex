@@ -13,12 +13,11 @@ enum class FrameDecodeResult {
     InvalidFrame,
 };
 
-inline constexpr std::uint32_t kFrameHeaderSizeBytes = 4;
+inline constexpr std::size_t kMaxEnvelopeLengthPrefixBytes = 5;
 inline constexpr std::uint32_t kMaxEnvelopePayloadSizeBytes = 1024U * 1024U;
 inline constexpr char kLoginMethodName[] = "Login";
 
 [[nodiscard]] std::string encodeEnvelopeFrame(const qodex::threadui::ipc::common::RpcEnvelope &envelope);
-[[nodiscard]] std::uint32_t decodeFramePayloadSize(const char *headerBytes);
 [[nodiscard]] bool parseEnvelopePayload(
     const std::string &payload,
     qodex::threadui::ipc::common::RpcEnvelope *envelope,

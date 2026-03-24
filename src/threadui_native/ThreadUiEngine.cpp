@@ -44,8 +44,8 @@ struct IpcClientState final {
     asio::ip::tcp::socket socket;
     asio::steady_timer reconnectTimer;
     std::thread thread;
-    std::array<char, qodex::threadui::ipc::kFrameHeaderSizeBytes> readHeader{};
-    std::string readPayload;
+    std::array<char, 4096> readChunk{};
+    std::string inputBuffer;
     std::uint64_t nextRequestId = 1;
     bool stopRequested = false;
     bool connected = false;
@@ -100,72 +100,43 @@ void stopClientOnProtocolFailure(IpcClientState *state, const std::string &messa
     state->workGuard.reset();
 }
 
-void beginReadEnvelopeHeader(IpcClientState *state);
+void beginReadFromSocket(IpcClientState *state);
 
-void beginReadEnvelopeBody(IpcClientState *state, const std::uint32_t payloadSize) {
+void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     if (state == nullptr || state->stopRequested) {
         return;
     }
 
-    state->readPayload.assign(payloadSize, '\0');
-    asio::async_read(
-        state->socket,
-        asio::buffer(state->readPayload.data(), state->readPayload.size()),
-        [state](const asio::error_code &readError, const std::size_t) {
-            if (state->stopRequested) {
-                return;
-            }
+    if (!envelope.is_response() || envelope.method() != qodex::threadui::ipc::kLoginMethodName) {
+        stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC envelope.");
+        return;
+    }
 
-            if (readError) {
-                scheduleReconnect(state, readError);
-                return;
-            }
+    qodex::threadui::ipc::ui_to_qodex::LoginResponse response;
+    if (!response.ParseFromString(envelope.payload())) {
+        stopClientOnProtocolFailure(state, "Failed to parse Thread UI Login response.");
+        return;
+    }
 
-            qodex::threadui::ipc::common::RpcEnvelope envelope;
-            std::string parseErrorMessage;
-            if (!qodex::threadui::ipc::parseEnvelopePayload(state->readPayload, &envelope, &parseErrorMessage)) {
-                stopClientOnProtocolFailure(state, parseErrorMessage);
-                return;
-            }
-
-            if (!envelope.is_response() ||
-                envelope.service() != qodex::threadui::ipc::common::RPC_SERVICE_UI_TO_QODEX ||
-                envelope.method() != qodex::threadui::ipc::kLoginMethodName) {
-                stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC envelope.");
-                return;
-            }
-
-            qodex::threadui::ipc::ui_to_qodex::LoginResponse response;
-            if (!response.ParseFromString(envelope.payload())) {
-                stopClientOnProtocolFailure(state, "Failed to parse Thread UI Login response.");
-                return;
-            }
-
-            if (response.status() == qodex::threadui::ipc::common::RESULT_STATUS_OK) {
-                state->authenticated = true;
-                std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
-            } else {
-                stopClientOnProtocolFailure(
-                    state,
-                    "Thread UI Login failed: " + response.message()
-                );
-                return;
-            }
-
-            beginReadEnvelopeHeader(state);
-        }
-    );
+    if (response.status() == qodex::threadui::ipc::common::RESULT_STATUS_OK) {
+        state->authenticated = true;
+        std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
+    } else {
+        stopClientOnProtocolFailure(
+            state,
+            "Thread UI Login failed: " + response.message()
+        );
+    }
 }
 
-void beginReadEnvelopeHeader(IpcClientState *state) {
+void beginReadFromSocket(IpcClientState *state) {
     if (state == nullptr || state->stopRequested) {
         return;
     }
 
-    asio::async_read(
-        state->socket,
-        asio::buffer(state->readHeader),
-        [state](const asio::error_code &readError, const std::size_t) {
+    state->socket.async_read_some(
+        asio::buffer(state->readChunk),
+        [state](const asio::error_code &readError, const std::size_t bytesRead) {
             if (state->stopRequested) {
                 return;
             }
@@ -175,13 +146,29 @@ void beginReadEnvelopeHeader(IpcClientState *state) {
                 return;
             }
 
-            const std::uint32_t payloadSize = qodex::threadui::ipc::decodeFramePayloadSize(state->readHeader.data());
-            if (payloadSize > qodex::threadui::ipc::kMaxEnvelopePayloadSizeBytes) {
-                stopClientOnProtocolFailure(state, "Received an oversized Thread UI IPC envelope.");
-                return;
+            state->inputBuffer.append(state->readChunk.data(), bytesRead);
+
+            while (true) {
+                qodex::threadui::ipc::common::RpcEnvelope envelope;
+                std::string parseErrorMessage;
+                const qodex::threadui::ipc::FrameDecodeResult decodeResult =
+                    qodex::threadui::ipc::tryDecodeNextEnvelope(&state->inputBuffer, &envelope, &parseErrorMessage);
+                if (decodeResult == qodex::threadui::ipc::FrameDecodeResult::Incomplete) {
+                    break;
+                }
+
+                if (decodeResult == qodex::threadui::ipc::FrameDecodeResult::InvalidFrame) {
+                    stopClientOnProtocolFailure(state, parseErrorMessage);
+                    return;
+                }
+
+                handleEnvelope(state, envelope);
+                if (state->stopRequested) {
+                    return;
+                }
             }
 
-            beginReadEnvelopeBody(state, payloadSize);
+            beginReadFromSocket(state);
         }
     );
 }
@@ -197,7 +184,6 @@ void sendLoginRequest(IpcClientState *state) {
     qodex::threadui::ipc::common::RpcEnvelope envelope;
     envelope.set_request_id(state->nextRequestId++);
     envelope.set_is_response(false);
-    envelope.set_service(qodex::threadui::ipc::common::RPC_SERVICE_UI_TO_QODEX);
     envelope.set_method(qodex::threadui::ipc::kLoginMethodName);
     envelope.set_payload(request.SerializeAsString());
 
@@ -259,7 +245,7 @@ void scheduleConnect(IpcClientState *state) {
                               << endpointDescription(state->launchConfig)
                               << '.'
                               << std::endl;
-                    beginReadEnvelopeHeader(state);
+                    beginReadFromSocket(state);
                     sendLoginRequest(state);
                 }
             );
