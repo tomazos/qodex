@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Qodex
+Comment=Desktop shell for Codex sessions
+Exec=qodex
+Icon=qodex
+Terminal=false
+Categories=Development;IDE;
+Keywords=codex;chat;threads;assistant;
+StartupNotify=true
+StartupWMClass=Qodex

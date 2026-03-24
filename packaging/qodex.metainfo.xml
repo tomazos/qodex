@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.tomazos.qodex.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Qodex</name>
+  <summary>Desktop shell for Codex sessions</summary>
+  <description>
+    <p>
+      Qodex is a Qt desktop shell for managing Codex sessions and launching
+      Electron-based thread user interfaces.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.tomazos.qodex.desktop</launchable>
+  <provides>
+    <binary>qodex</binary>
+  </provides>
+  <url type="homepage">https://github.com/tomazos/qodex</url>
+  <categories>
+    <category>Development</category>
+    <category>IDE</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <developer id="com.tomazos">
+    <name>Tomazos</name>
+  </developer>
+</component>

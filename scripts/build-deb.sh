@@ -60,6 +60,8 @@ stage_thread_ui_root="${stage_dir}/usr/lib/qodex/thread-ui"
 stage_thread_ui_app_dir="${stage_thread_ui_root}/app"
 stage_thread_ui_native_dir="${stage_thread_ui_root}/native"
 stage_electron_dist_dir="${stage_thread_ui_app_dir}/node_modules/electron/dist"
+stage_desktop_file="${stage_dir}/usr/share/applications/com.tomazos.qodex.desktop"
+stage_metainfo_file="${stage_dir}/usr/share/metainfo/com.tomazos.qodex.metainfo.xml"
 
 if [[ ! -x "${stage_qodex}" ]]; then
     printf 'Expected installed qodex executable at %s\n' "${stage_qodex}" >&2
@@ -76,6 +78,16 @@ if [[ ! -f "${stage_thread_ui_native_dir}/qodex_thread_ui.node" ]]; then
     exit 1
 fi
 
+if [[ ! -f "${stage_desktop_file}" ]]; then
+    printf 'Expected installed desktop entry at %s\n' "${stage_desktop_file}" >&2
+    exit 1
+fi
+
+if [[ ! -f "${stage_metainfo_file}" ]]; then
+    printf 'Expected installed metainfo file at %s\n' "${stage_metainfo_file}" >&2
+    exit 1
+fi
+
 find "${stage_dir}" -type d -exec chmod 0755 {} +
 find "${stage_dir}" -type f -exec chmod 0644 {} +
 chmod 0755 \
@@ -86,6 +98,9 @@ chmod 0755 \
 if [[ -e "${stage_electron_dist_dir}/chrome-sandbox" ]]; then
     chmod 0755 "${stage_electron_dist_dir}/chrome-sandbox"
 fi
+
+install -m 0755 "${repo_root}/packaging/postinst" "${stage_dir}/DEBIAN/postinst"
+install -m 0755 "${repo_root}/packaging/postrm" "${stage_dir}/DEBIAN/postrm"
 
 cat > "${helper_dir}/debian/control" <<EOF
 Source: ${package_name}
@@ -145,6 +160,14 @@ Maintainer: Andrew Tomazos <andrewtomazos@gmail.com>
 Depends: ${manual_depends}
 Description: Qt desktop shell for Codex sessions with an Electron thread UI
 EOF
+
+if command -v desktop-file-validate >/dev/null 2>&1; then
+    desktop-file-validate "${stage_desktop_file}"
+fi
+
+if command -v appstreamcli >/dev/null 2>&1; then
+    appstreamcli validate --no-net "${stage_metainfo_file}"
+fi
 
 rm -f "${package_path}"
 dpkg-deb --build --root-owner-group "${stage_dir}" "${package_path}" >/dev/null

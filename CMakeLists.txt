@@ -43,6 +43,10 @@ set(QODEX_THREAD_UI_NATIVE_DIR "${QODEX_THREAD_UI_RUNTIME_ROOT}/native")
 set(QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR "../lib/qodex/thread-ui/app")
 set(QODEX_THREAD_UI_INSTALL_APP_DIR "lib/qodex/thread-ui/app")
 set(QODEX_THREAD_UI_INSTALL_NATIVE_DIR "lib/qodex/thread-ui/native")
+set(QODEX_DESKTOP_FILE_ID "com.tomazos.qodex")
+set(QODEX_DESKTOP_ENTRY_FILE "${PROJECT_SOURCE_DIR}/packaging/qodex.desktop")
+set(QODEX_METAINFO_FILE "${PROJECT_SOURCE_DIR}/packaging/qodex.metainfo.xml")
+set(QODEX_ICON_SIZES 16 20 22 24 32 48 64 128 256 512)
 
 set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/package.json"
@@ -587,3 +591,13 @@ install(
     USE_SOURCE_PERMISSIONS
     PATTERN ".qodex-*.stamp" EXCLUDE
 )
+install(FILES "${QODEX_DESKTOP_ENTRY_FILE}" DESTINATION share/applications RENAME "${QODEX_DESKTOP_FILE_ID}.desktop")
+install(FILES "${QODEX_METAINFO_FILE}" DESTINATION share/metainfo RENAME "${QODEX_DESKTOP_FILE_ID}.metainfo.xml")
+install(FILES "${PROJECT_SOURCE_DIR}/images/qodex-icon-512x512.png" DESTINATION share/pixmaps RENAME qodex.png)
+foreach(icon_size IN LISTS QODEX_ICON_SIZES)
+    install(
+        FILES "${PROJECT_SOURCE_DIR}/images/qodex-icon-${icon_size}x${icon_size}.png"
+        DESTINATION "share/icons/hicolor/${icon_size}x${icon_size}/apps"
+        RENAME qodex.png
+    )
+endforeach()

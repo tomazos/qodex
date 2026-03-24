@@ -13,6 +13,7 @@
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+    app.setDesktopFileName(QStringLiteral("com.tomazos.qodex"));
     QIcon applicationIcon;
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-16x16.png"), QSize(16, 16));
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-20x20.png"), QSize(20, 20));
