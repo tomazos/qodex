@@ -3,6 +3,8 @@ const readline = require('node:readline');
 const { URL, fileURLToPath } = require('node:url');
 const path = require('path');
 
+const windowIconPath = path.join(__dirname, 'assets', 'qodex-icon-256x256.png');
+
 function readCommandLineValue(name) {
   const prefix = `--${name}=`;
   const matchingArgument = process.argv.find((argument) => argument.startsWith(prefix));
@@ -120,6 +122,7 @@ function createWindow() {
     minHeight: 480,
     frame: false,
     autoHideMenuBar: true,
+    icon: windowIconPath,
     title: instanceInfo.title,
     webPreferences: {
       contextIsolation: false,
@@ -187,6 +190,7 @@ ipcMain.handle('window:close', (event) => {
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
 
 app.whenReady().then(() => {
+  app.setName('Qodex');
   Menu.setApplicationMenu(null);
   installActivationControlChannel();
   createWindow();

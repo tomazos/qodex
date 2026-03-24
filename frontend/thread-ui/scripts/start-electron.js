@@ -31,6 +31,10 @@ args.push(path.resolve(__dirname, '..'));
 args.push(...process.argv.slice(2));
 
 const child = spawn(electronBinary, args, {
+  env: {
+    ...process.env,
+    CHROME_DESKTOP: process.env.CHROME_DESKTOP || 'com.tomazos.qodex.desktop',
+  },
   stdio: 'inherit',
 });
 

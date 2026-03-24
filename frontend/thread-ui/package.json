@@ -2,6 +2,7 @@
   "name": "qodex-thread-ui",
   "version": "0.1.0",
   "description": "Electron thread UI scaffold for qodex",
+  "desktopName": "com.tomazos.qodex.desktop",
   "private": true,
   "main": "main.js",
   "scripts": {
