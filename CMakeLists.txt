@@ -460,10 +460,14 @@ qt_add_executable(qodex
     src/app/AppConfig.h
     src/app/AppPaths.cpp
     src/app/AppPaths.h
+    src/app/LoadedThread.cpp
+    src/app/LoadedThread.h
     src/app/SessionController.cpp
     src/app/SessionController.h
     src/app/SingleInstanceManager.cpp
     src/app/SingleInstanceManager.h
+    src/app/ThreadUiProcess.cpp
+    src/app/ThreadUiProcess.h
     src/app/ThreadUiProcessManager.cpp
     src/app/ThreadUiProcessManager.h
     src/codex/AppServerTransport.cpp

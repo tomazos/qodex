@@ -27,6 +27,7 @@ class MainWindow;
 
 namespace qodex::app {
 
+class LoadedThread;
 class ThreadUiProcessManager;
 
 class SessionController final : public QObject {
@@ -92,11 +93,6 @@ private slots:
     void onThreadUnarchivedNotificationReceived(const qodex::codex::ThreadUnarchivedNotificationParams &params);
     void onTurnStartedNotificationReceived(const qodex::codex::TurnStartedNotificationParams &params);
     void onTurnCompletedNotificationReceived(const qodex::codex::TurnCompletedNotificationParams &params);
-    void onThreadUiUserInputRequested(int instanceId, const QString &threadId, std::uint64_t requestId, const QString &text);
-    void onTurnStartSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::TurnStartResponse &response);
-    void onTurnStartFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
-    void onTurnSteerSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::TurnSteerResponse &response);
-    void onTurnSteerFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void refreshSelectedThreadUi();
 
 private:
@@ -104,18 +100,16 @@ private:
     [[nodiscard]] QString threadStatusText(const qodex::codex::ThreadStatus &status) const;
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
     [[nodiscard]] QString threadSourceText(const qodex::codex::SessionSource &source) const;
-    [[nodiscard]] QString activeTurnIdForThread(const qodex::codex::Thread &thread) const;
-    [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest(
-        const qodex::codex::ThreadResumeResponse &response
-    ) const;
-    [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
-    [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)
-        const;
+    [[nodiscard]] LoadedThread *loadedThreadForId(const QString &threadId) const;
+    [[nodiscard]] LoadedThread *ensureLoadedThread(
+        const QString &threadId,
+        const QString &title
+    );
+    void unloadThread(const QString &threadId);
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
     }
-
     void finishStartup(const QString &message);
     void requestThreadLists();
     void requestThreadList(bool archived);
@@ -134,13 +128,7 @@ private:
     QString m_activeThreadListRequestKey;
     QString m_archivedThreadListRequestKey;
     QHash<QString, QString> m_pendingThreadResumeRequests;
-    struct PendingThreadUiUserInputRequest {
-        int instanceId = 0;
-        std::uint64_t requestId = 0;
-        QString threadId;
-    };
-    QHash<QString, QString> m_activeTurnIdsByThreadId;
-    QHash<QString, PendingThreadUiUserInputRequest> m_pendingThreadUiUserInputRequests;
+    QHash<QString, LoadedThread *> m_loadedThreads;
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;
     QHash<QString, QString> m_pendingUnsubscribeRequests;
