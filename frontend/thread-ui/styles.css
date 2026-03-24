@@ -3,16 +3,17 @@
   font-family: "DejaVu Sans", system-ui, sans-serif;
 }
 
+html,
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: linear-gradient(180deg, color-mix(in srgb, canvas 96%, canvastext 4%), canvas);
   color: canvastext;
 }
 
 .window {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -77,17 +78,21 @@ body {
 }
 
 main {
+  display: flex;
   flex: 1;
   min-height: 0;
   padding: 1rem;
+  overflow: hidden;
 }
 
 .thread-view {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .thread-view__items {
   height: 100%;
+  min-height: 0;
   overflow-y: auto;
   display: grid;
   gap: 0.75rem;
