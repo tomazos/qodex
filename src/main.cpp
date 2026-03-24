@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QIcon>
 #include <QMessageBox>
 
 #include <kddockwidgets/KDDockWidgets.h>
@@ -12,6 +13,19 @@
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+    QIcon applicationIcon;
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-16x16.png"), QSize(16, 16));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-20x20.png"), QSize(20, 20));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-22x22.png"), QSize(22, 22));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-24x24.png"), QSize(24, 24));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-32x32.png"), QSize(32, 32));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-48x48.png"), QSize(48, 48));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-64x64.png"), QSize(64, 64));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-128x128.png"), QSize(128, 128));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-256x256.png"), QSize(256, 256));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-512x512.png"), QSize(512, 512));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-1024x1024.png"), QSize(1024, 1024));
+    app.setWindowIcon(applicationIcon);
     app.setOrganizationName(QStringLiteral("Tomazos.com"));
     app.setApplicationName(QStringLiteral("Qodex"));
     app.setApplicationVersion(QStringLiteral(QODEX_APP_VERSION));
