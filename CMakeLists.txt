@@ -18,7 +18,10 @@ if(NOT KDDockWidgets_FOUND)
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(BASH_EXECUTABLE bash REQUIRED)
+find_program(NPM_EXECUTABLE npm REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+include(QodexElectron)
 qt_standard_project_setup()
 include(CTest)
 
@@ -28,6 +31,43 @@ set(QODEX_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
 set(QODEX_PROTOCOL_SCHEMA_ROOT "${QODEX_GENERATED_ROOT}/protocol/schema")
 set(QODEX_PROTOCOL_MODEL_ROOT "${QODEX_GENERATED_ROOT}/protocol/model")
 set(QODEX_PYTHON_ENV_STAMP "${QODEX_GENERATED_ROOT}/python-env.stamp")
+set(QODEX_THREAD_UI_SOURCE_DIR "${PROJECT_SOURCE_DIR}/frontend/thread-ui")
+set(QODEX_THREAD_UI_RUNTIME_ROOT "${CMAKE_BINARY_DIR}/runtime/thread-ui")
+set(QODEX_THREAD_UI_APP_DIR "${QODEX_THREAD_UI_RUNTIME_ROOT}/app")
+set(QODEX_THREAD_UI_NATIVE_DIR "${QODEX_THREAD_UI_RUNTIME_ROOT}/native")
+
+set(QODEX_THREAD_UI_SOURCE_FILES
+    "${QODEX_THREAD_UI_SOURCE_DIR}/package.json"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/package-lock.json"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/main.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/init.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/index.html"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/styles.css"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/start-electron.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test-links/local-page.html"
+)
+
+qodex_add_staged_thread_ui(qodex_thread_ui_assets
+    SOURCE_DIR "${QODEX_THREAD_UI_SOURCE_DIR}"
+    APP_DIR "${QODEX_THREAD_UI_APP_DIR}"
+    NPM_EXECUTABLE "${NPM_EXECUTABLE}"
+    SOURCE_FILES ${QODEX_THREAD_UI_SOURCE_FILES}
+)
+
+qodex_add_napi_module(qodex_thread_ui_native
+    OUTPUT_DIRECTORY "${QODEX_THREAD_UI_NATIVE_DIR}"
+    OUTPUT_NAME "qodex_thread_ui"
+    SOURCES
+        "${PROJECT_SOURCE_DIR}/src/threadui_native/NativeAdd.cpp"
+        "${PROJECT_SOURCE_DIR}/src/threadui_native/ThreadUiAddon.cpp"
+        "${PROJECT_SOURCE_DIR}/src/threadui_native/ThreadUiEngine.cpp"
+)
+
+add_custom_target(qodex_thread_ui
+    DEPENDS
+        qodex_thread_ui_assets
+        qodex_thread_ui_native
+)
 
 set(QODEX_PROTOCOL_SCHEMA_SOURCES
     "${PROJECT_SOURCE_DIR}/scripts/generate_protocol_schema.py"
@@ -351,6 +391,7 @@ target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets
 target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
 
 add_dependencies(qodex qodex_protocol_artifacts)
+add_dependencies(qodex qodex_thread_ui)
 target_sources(qodex PRIVATE
     "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
     "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"

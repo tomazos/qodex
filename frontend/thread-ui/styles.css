@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light dark;
+  font-family: "DejaVu Sans", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, canvastext 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, canvas 94%, canvastext 6%), canvas);
+  color: canvastext;
+}
+
+.window {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.titlebar {
+  height: 48px;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 1px solid color-mix(in srgb, canvastext 15%, transparent);
+  background: color-mix(in srgb, canvas 90%, canvastext 10%);
+  user-select: none;
+}
+
+.titlebar__drag-region {
+  display: grid;
+  flex: 1;
+  align-items: center;
+  padding: 0 1rem;
+  -webkit-app-region: drag;
+}
+
+.titlebar__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.titlebar__controls {
+  display: flex;
+  align-items: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__button {
+  min-width: 5.5rem;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.titlebar__button:hover {
+  background: color-mix(in srgb, canvastext 10%, transparent);
+}
+
+.titlebar__button:active {
+  background: color-mix(in srgb, canvastext 16%, transparent);
+}
+
+.titlebar__button--close:hover {
+  background: #c42b1c;
+  color: white;
+}
+
+.titlebar__button:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: -2px;
+}
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.hero,
+.links,
+.native-status {
+  width: min(42rem, 100%);
+}
+
+.hero {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  line-height: 0.96;
+}
+
+.lede {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  opacity: 0.82;
+}
+
+.links,
+.native-status {
+  display: grid;
+  gap: 0.4rem;
+}
+
+p {
+  margin: 0;
+  opacity: 0.8;
+}
+
+a {
+  color: inherit;
+}
