@@ -8,17 +8,21 @@
 #include "app/AppConfig.h"
 #include "app/AppPaths.h"
 #include "app/ThreadUiProcessManager.h"
-#include "domain/ThreadStore.h"
-#include "ui/ProgressSplashScreen.h"
-#include "ui/MainWindow.h"
-#include "ui/ApiLogModel.h"
-#include "ui/ThreadListModel.h"
 #include "codex/AppServerTransport.h"
 #include "codex/TrafficLogger.h"
+#include "domain/ThreadStore.h"
 #include "storage/DatabaseManager.h"
+#include "ui/ApiLogModel.h"
+#include "ui/MainWindow.h"
+#include "ui/ProgressSplashScreen.h"
+#include "ui/ThreadListModel.h"
 
 #include "CodexClient.h"
 #include "app/SessionController.h"
+
+namespace qodex::threadui {
+class ThreadUiIpcServer;
+}
 
 namespace qodex::app {
 
@@ -26,7 +30,11 @@ class AppBootstrap final : public QObject {
     Q_OBJECT
 
 public:
-    AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManager *databaseManager);
+    AppBootstrap(
+        const AppPaths &paths,
+        qodex::storage::DatabaseManager *databaseManager,
+        qodex::threadui::ThreadUiIpcServer *threadUiIpcServer
+    );
 
     [[nodiscard]] qodex::ui::MainWindow &mainWindow();
     void showAllWindows();

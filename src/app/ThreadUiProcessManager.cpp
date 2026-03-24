@@ -9,6 +9,8 @@
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 
+#include "threadui/ThreadUiIpcServer.h"
+
 namespace qodex::app {
 
 namespace {
@@ -32,11 +34,14 @@ QString appendStderrMessage(const QString &baseMessage, const QString &stderrTex
 
 }  // namespace
 
-ThreadUiProcessManager::ThreadUiProcessManager(QObject *parent)
+ThreadUiProcessManager::ThreadUiProcessManager(qodex::threadui::ThreadUiIpcServer *threadUiIpcServer, QObject *parent)
     : QObject(parent),
       m_threadUiAppDir(resolveThreadUiAppDir()),
       m_threadUiStartScriptPath(resolveThreadUiStartScriptPath(m_threadUiAppDir)),
-      m_nodeProgram(resolveNodeProgram()) {}
+      m_nodeProgram(resolveNodeProgram()),
+      m_threadUiIpcServer(threadUiIpcServer) {
+    Q_ASSERT(m_threadUiIpcServer != nullptr);
+}
 
 ThreadUiProcessManager::~ThreadUiProcessManager() {
     terminateAllProcesses();
@@ -67,6 +72,11 @@ QList<ThreadUiProcessInfo> ThreadUiProcessManager::activeProcesses() const {
 }
 
 void ThreadUiProcessManager::launchThreadUi() {
+    if (m_threadUiIpcServer == nullptr || !m_threadUiIpcServer->isListening()) {
+        emit statusMessageRequested(QStringLiteral("Unable to launch Thread UI: IPC server is not listening."));
+        return;
+    }
+
     if (m_nodeProgram.isEmpty()) {
         emit statusMessageRequested(QStringLiteral("Unable to launch Thread UI: node executable not found."));
         return;
@@ -82,16 +92,21 @@ void ThreadUiProcessManager::launchThreadUi() {
 
     const int instanceId = m_nextInstanceId++;
     const QString title = QStringLiteral("Thread UI %1").arg(instanceId);
+    const qodex::threadui::ThreadUiLaunchConfig launchConfig = m_threadUiIpcServer->allocateLaunchConfig();
 
     auto record = std::make_unique<ProcessRecord>();
     record->instanceId = instanceId;
     record->title = title;
+    record->launchToken = launchConfig.token;
     record->process = new QProcess(this);
     record->process->setWorkingDirectory(m_threadUiAppDir);
     record->process->setProgram(m_nodeProgram);
     record->process->setArguments({
         m_threadUiStartScriptPath,
         QStringLiteral("--qodex-title=%1").arg(title),
+        QStringLiteral("--qodex-ipc-host=%1").arg(launchConfig.host),
+        QStringLiteral("--qodex-ipc-port=%1").arg(launchConfig.port),
+        QStringLiteral("--qodex-ipc-token=%1").arg(launchConfig.token),
     });
 
     QObject::connect(record->process, &QProcess::started, this, [this] {

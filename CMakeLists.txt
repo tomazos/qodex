@@ -382,6 +382,8 @@ qt_add_executable(qodex
     src/storage/Migration.h
     src/storage/MigrationRunner.cpp
     src/storage/MigrationRunner.h
+    src/threadui/ThreadUiIpcServer.cpp
+    src/threadui/ThreadUiIpcServer.h
     src/ui/ApiLogModel.cpp
     src/ui/ApiLogModel.h
     src/ui/ApiLogPane.cpp
@@ -508,6 +510,20 @@ if(BUILD_TESTING)
     target_link_libraries(SingleInstanceManagerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 
     add_test(NAME SingleInstanceManagerTest COMMAND SingleInstanceManagerTest)
+
+    qt_add_executable(ThreadUiIpcServerTest
+        tests/threadui/ThreadUiIpcServerTest.cpp
+        src/threadui/ThreadUiIpcServer.cpp
+        src/threadui/ThreadUiIpcServer.h
+    )
+
+    target_include_directories(ThreadUiIpcServerTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(ThreadUiIpcServerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+    add_test(NAME ThreadUiIpcServerTest COMMAND ThreadUiIpcServerTest)
 
     qt_add_executable(MigrationRunnerTest
         resources/qodex.qrc

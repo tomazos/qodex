@@ -11,6 +11,20 @@ function readCommandLineValue(name) {
   return matchingArgument ? matchingArgument.slice(prefix.length) : null;
 }
 
+function readCommandLinePort(name) {
+  const value = readCommandLineValue(name);
+  if (value === null) {
+    return 0;
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsedValue) || parsedValue < 0 || parsedValue > 65535) {
+    return 0;
+  }
+
+  return parsedValue;
+}
+
 function hasCommandLineSwitch(name) {
   return process.argv.includes(`--${name}`);
 }
@@ -18,6 +32,12 @@ function hasCommandLineSwitch(name) {
 const instanceInfo = {
   title: readCommandLineValue('qodex-title') || 'Qodex Thread UI',
   smokeTest: hasCommandLineSwitch('smoke-test'),
+};
+
+const launchConfig = {
+  host: readCommandLineValue('qodex-ipc-host') || '',
+  port: readCommandLinePort('qodex-ipc-port'),
+  token: readCommandLineValue('qodex-ipc-token') || '',
 };
 
 let mainWindow = null;
@@ -215,6 +235,7 @@ ipcMain.handle('window:close', (event) => {
 });
 
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
+ipcMain.handle('thread-ui:get-launch-config', () => launchConfig);
 
 ipcMain.handle('thread-ui:notify-ready', () => {
   if (instanceInfo.smokeTest && !smokeTestFinished) {

@@ -13,7 +13,11 @@
 
 namespace qodex::app {
 
-AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManager *databaseManager)
+AppBootstrap::AppBootstrap(
+    const AppPaths &paths,
+    qodex::storage::DatabaseManager *databaseManager,
+    qodex::threadui::ThreadUiIpcServer *threadUiIpcServer
+)
     : QObject(nullptr),
       m_paths(paths),
       m_databaseManager(databaseManager),
@@ -30,7 +34,7 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
           &m_threadListModel,
           &m_apiLogModel
       ),
-      m_threadUiProcessManager(this),
+      m_threadUiProcessManager(threadUiIpcServer, this),
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
     m_mainWindow.installEventFilter(this);

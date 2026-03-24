@@ -1,6 +1,7 @@
 #include <node_api.h>
 
 #include <cstdint>
+#include <string>
 
 #include "threadui_native/NativeAdd.h"
 #include "threadui_native/ThreadUiEngine.h"
@@ -23,6 +24,112 @@ napi_value getUndefined(napi_env env) {
     }
 
     return undefinedValue;
+}
+
+bool readHasNamedProperty(napi_env env, napi_value object, const char *name, bool *hasProperty) {
+    if (napi_has_named_property(env, object, name, hasProperty) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to inspect launch config");
+        return false;
+    }
+
+    return true;
+}
+
+bool readOptionalStringProperty(
+    napi_env env,
+    napi_value object,
+    const char *name,
+    std::string *outValue
+) {
+    bool hasProperty = false;
+    if (!readHasNamedProperty(env, object, name, &hasProperty)) {
+        return false;
+    }
+
+    if (!hasProperty) {
+        return true;
+    }
+
+    napi_value property = nullptr;
+    if (napi_get_named_property(env, object, name, &property) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read launch config property");
+        return false;
+    }
+
+    napi_valuetype valueType = napi_undefined;
+    if (napi_typeof(env, property, &valueType) != napi_ok || valueType != napi_string) {
+        throwTypeError(env, "Launch config string properties must be strings");
+        return false;
+    }
+
+    size_t valueLength = 0;
+    if (napi_get_value_string_utf8(env, property, nullptr, 0, &valueLength) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to measure launch config string");
+        return false;
+    }
+
+    outValue->assign(valueLength + 1, '\0');
+    size_t copiedLength = 0;
+    if (napi_get_value_string_utf8(env, property, outValue->data(), outValue->size(), &copiedLength) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read launch config string");
+        return false;
+    }
+
+    outValue->resize(copiedLength);
+    return true;
+}
+
+bool readOptionalPortProperty(
+    napi_env env,
+    napi_value object,
+    const char *name,
+    std::uint16_t *outValue
+) {
+    bool hasProperty = false;
+    if (!readHasNamedProperty(env, object, name, &hasProperty)) {
+        return false;
+    }
+
+    if (!hasProperty) {
+        return true;
+    }
+
+    napi_value property = nullptr;
+    if (napi_get_named_property(env, object, name, &property) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read launch config property");
+        return false;
+    }
+
+    napi_valuetype valueType = napi_undefined;
+    if (napi_typeof(env, property, &valueType) != napi_ok || valueType != napi_number) {
+        throwTypeError(env, "Launch config port must be a number");
+        return false;
+    }
+
+    std::uint32_t portValue = 0;
+    if (napi_get_value_uint32(env, property, &portValue) != napi_ok || portValue > UINT16_MAX) {
+        throwTypeError(env, "Launch config port must be an integer between 0 and 65535");
+        return false;
+    }
+
+    *outValue = static_cast<std::uint16_t>(portValue);
+    return true;
+}
+
+bool readLaunchConfig(
+    napi_env env,
+    const napi_value value,
+    qodex::threadui::native::LaunchConfig *outLaunchConfig
+) {
+    napi_valuetype valueType = napi_undefined;
+    if (napi_typeof(env, value, &valueType) != napi_ok || valueType != napi_object) {
+        throwTypeError(env, "initialize expects a launch config object");
+        return false;
+    }
+
+    return readOptionalStringProperty(env, value, "host", &outLaunchConfig->host) &&
+           readOptionalPortProperty(env, value, "port", &outLaunchConfig->port) &&
+           readOptionalStringProperty(env, value, "token", &outLaunchConfig->token);
 }
 
 void clearFrameCountDisplayCallback() {
@@ -96,19 +203,25 @@ napi_value addWrapped(napi_env env, napi_callback_info info) {
 }
 
 napi_value initializeWrapped(napi_env env, napi_callback_info info) {
-    size_t argc = 0;
+    size_t argc = 1;
+    napi_value args[1];
 
-    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to read function arguments");
         return nullptr;
     }
 
-    if (argc != 0) {
-        throwTypeError(env, "initialize expects no arguments");
+    if (argc > 1) {
+        throwTypeError(env, "initialize expects zero or one argument");
         return nullptr;
     }
 
-    qodex::threadui::native::initialize();
+    qodex::threadui::native::LaunchConfig launchConfig;
+    if (argc == 1 && !readLaunchConfig(env, args[0], &launchConfig)) {
+        return nullptr;
+    }
+
+    qodex::threadui::native::initialize(launchConfig);
     return getUndefined(env);
 }
 

@@ -9,6 +9,10 @@
 
 class QProcess;
 
+namespace qodex::threadui {
+class ThreadUiIpcServer;
+}
+
 namespace qodex::app {
 
 struct ThreadUiProcessInfo {
@@ -21,7 +25,7 @@ class ThreadUiProcessManager final : public QObject {
     Q_OBJECT
 
 public:
-    explicit ThreadUiProcessManager(QObject *parent = nullptr);
+    explicit ThreadUiProcessManager(qodex::threadui::ThreadUiIpcServer *threadUiIpcServer, QObject *parent = nullptr);
     ~ThreadUiProcessManager() override;
 
     [[nodiscard]] QList<ThreadUiProcessInfo> activeProcesses() const;
@@ -38,6 +42,7 @@ private:
     struct ProcessRecord {
         int instanceId = 0;
         QString title;
+        QString launchToken;
         QString lastStandardError;
         QProcess *process = nullptr;
     };
@@ -55,6 +60,7 @@ private:
     QString m_threadUiAppDir;
     QString m_threadUiStartScriptPath;
     QString m_nodeProgram;
+    qodex::threadui::ThreadUiIpcServer *m_threadUiIpcServer = nullptr;
     std::vector<std::unique_ptr<ProcessRecord>> m_processes;
     int m_nextInstanceId = 1;
 };

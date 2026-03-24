@@ -9,6 +9,7 @@
 #include "app/AppPaths.h"
 #include "app/SingleInstanceManager.h"
 #include "storage/DatabaseManager.h"
+#include "threadui/ThreadUiIpcServer.h"
 #include "ui/ProgressSplashScreen.h"
 
 int main(int argc, char *argv[]) {
@@ -73,8 +74,21 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    startupSplash.setStatus(QStringLiteral("Restoring workspace..."), 50);
-    qodex::app::AppBootstrap bootstrap(appPaths, &databaseManager);
+    startupSplash.setStatus(QStringLiteral("Starting Thread UI IPC server..."), 50);
+    qodex::threadui::ThreadUiIpcServer threadUiIpcServer;
+    QString threadUiIpcError;
+    if (!threadUiIpcServer.listen(&threadUiIpcError)) {
+        startupSplash.close();
+        QMessageBox::critical(
+            nullptr,
+            QStringLiteral("Qodex"),
+            QStringLiteral("Failed to start Thread UI IPC server:\n%1").arg(threadUiIpcError)
+        );
+        return 1;
+    }
+
+    startupSplash.setStatus(QStringLiteral("Restoring workspace..."), 60);
+    qodex::app::AppBootstrap bootstrap(appPaths, &databaseManager, &threadUiIpcServer);
     QObject::connect(
         &bootstrap,
         &qodex::app::AppBootstrap::startupProgressChanged,
@@ -96,7 +110,7 @@ int main(int argc, char *argv[]) {
     if (singleInstanceManager.takePendingActivation()) {
         bootstrap.activate();
     }
-    startupSplash.setStatus(QStringLiteral("Showing workspace..."), 60);
+    startupSplash.setStatus(QStringLiteral("Showing workspace..."), 68);
     bootstrap.hideAllWindows();
     bootstrap.start();
 

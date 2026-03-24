@@ -9,6 +9,7 @@ namespace {
 
 bool initialized = false;
 std::int64_t frameCount = 0;
+qodex::threadui::native::LaunchConfig currentLaunchConfig;
 FrameCountDisplayCallback frameCountDisplayCallback;
 
 bool isPowerOfTwo(const std::int64_t value) {
@@ -17,14 +18,22 @@ bool isPowerOfTwo(const std::int64_t value) {
 
 }  // namespace
 
-void initialize() {
+void initialize(const LaunchConfig &launchConfig) {
     if (initialized) {
         return;
     }
 
     initialized = true;
     frameCount = 0;
-    std::cout << "Qodex thread UI engine initialized." << std::endl;
+    currentLaunchConfig = launchConfig;
+
+    std::cout << "Qodex thread UI engine initialized.";
+    if (!currentLaunchConfig.host.empty() && currentLaunchConfig.port != 0) {
+        std::cout << " Qodex IPC target: " << currentLaunchConfig.host << ':' << currentLaunchConfig.port << '.';
+    } else {
+        std::cout << " Qodex IPC target is not configured.";
+    }
+    std::cout << std::endl;
 }
 
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback) {
@@ -53,6 +62,7 @@ void shutdown() {
     }
 
     initialized = false;
+    currentLaunchConfig = {};
     frameCountDisplayCallback = nullptr;
     std::cout << "Qodex thread UI engine shutdown." << std::endl;
 }

@@ -84,6 +84,16 @@ function applyInstanceInfo(instanceInfo) {
   }
 }
 
+function normalizeLaunchConfig(launchConfig) {
+  return {
+    host: typeof launchConfig?.host === 'string' ? launchConfig.host : '',
+    port: Number.isInteger(launchConfig?.port) && launchConfig.port >= 0 && launchConfig.port <= 65535
+      ? launchConfig.port
+      : 0,
+    token: typeof launchConfig?.token === 'string' ? launchConfig.token : '',
+  };
+}
+
 async function initialize() {
   if (running) {
     return;
@@ -97,7 +107,7 @@ async function initialize() {
 
   running = true;
   native.setFrameCountDisplayCallback(setFrameCountDisplay);
-  native.initialize();
+  native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
 
   const result = native.add(2, 3);
   document.getElementById('native-result').textContent = `2 + 3 = ${result}`;
