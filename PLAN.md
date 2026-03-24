@@ -7,7 +7,7 @@
 - Avoid repeating the main Wodex debt pattern:
   one large backend file and one large frontend file that each absorb unrelated responsibilities.
 - Preserve a clean separation between:
-  transport, domain state, UI orchestration, and transcript rendering.
+  transport, domain state, native shell orchestration, and thread-ui rendering.
 
 ## Lessons From Wodex
 
@@ -22,21 +22,46 @@ The main things to avoid repeating:
 
 ## Chosen UI Strategy
 
-Use **Qt Widgets** for the native shell and **QWebEngineView** only for the transcript/document surface.
+Use **Qt Widgets** for the native shell and a separate **Electron** app for per-thread chat and transcript windows.
 
 Why:
 
-- Wodex already proved that markdown + KaTeX rendering is valuable.
-- Reimplementing rich markdown + math layout natively in Qt widgets would be more work and lower quality.
-- A web view is a good fit for transcript rendering, links, code blocks, images, and math.
-- The rest of the app should still be native Qt:
-  window, splitters, thread list, toolbar, prompt composer, menus, settings, status.
+- qodex should stay focused on Codex session ownership, persistence, logging, and the native desktop shell.
+- The per-thread UI wants web technologies, Chromium rendering, and direct JavaScript/native bindings.
+- Launching one Electron window per active thread is a cleaner fit than embedding a second browser stack inside the Qt process.
+- Removing the in-process transcript surface keeps the Qt app simpler and reduces cross-layer coupling.
 
 So the architecture is:
 
-- Native Qt shell around the outside
-- Embedded web transcript view inside
-- Thin bridge between C++ state and the web transcript
+- Native Qt shell for workspace-level UI:
+  thread list, API log, menus, window management, status
+- qodex as the source of truth for Codex transport, persistence, and thread metadata
+- External Electron thread-ui windows launched and supervised by qodex
+- Explicit local IPC between qodex and each thread-ui process
+
+## Current Implemented State
+
+Implemented today:
+
+- Qt application bootstrap and shutdown flow
+- persistent multi-window shell state using `KDDockWidgets`
+- `codex app-server` transport and generated protocol/client bindings
+- SQLite-backed storage, migrations, and API traffic logging
+- in-memory thread summary store and Qt models/panes for thread list and API log
+- shell actions for refresh, rename, fork, archive, unarchive, and close thread subscriptions
+- automated tests covering transport, generated client wiring, storage, models, and single-instance behavior
+
+Removed on purpose:
+
+- the in-process `QWebEngineView` transcript surface
+- transcript HTML formatting in qodex
+- transcript dock widgets inside the Qt shell
+- the shell-level `Resume Thread` action that belonged to the old transcript path
+
+Current gap:
+
+- qodex does not yet provide a per-thread chat/transcript window
+- that responsibility moves to the planned Electron-based thread-ui component
 
 ## Top-Level Module Layout
 
@@ -47,15 +72,18 @@ qodex/
   README.md
   src/
     main.cpp
-    app/
-    codex/
-    domain/
-    ui/
-    transcript/
-    util/
-  resources/
-    transcript/
+    app/        # implemented Qt-side composition and orchestration
+    codex/      # implemented transport and client base
+    domain/     # implemented thread summaries/store; more live-thread state planned
+    storage/    # implemented persistence and migrations
+    ui/         # implemented native shell widgets and models
+    threadui/   # planned qodex-side Electron host / IPC layer
+  frontend/
+    thread-ui/  # planned Electron app source
+  cmake/        # planned Electron build/staging helpers
+  resources/    # implemented Qt resources
   tests/
+  build/generated/protocol/  # generated Codex protocol bindings
 ```
 
 ## File and Class Plan
@@ -70,10 +98,11 @@ Responsibilities:
 
 - Create long-lived services in the right order
 - Load config and paths
-- Build the main window
+- Build and restore the native shell windows
 - Own application-wide singletons without making them global
+- Stage application startup/shutdown cleanly
 
-Likely members:
+Current members already include:
 
 - `AppPaths`
 - `AppConfig`
@@ -89,21 +118,24 @@ Likely members:
 Responsibilities:
 
 - Act as the main application coordinator
-- Own selected-thread state
+- Own shell-level selected-thread state
 - Translate UI intent into Codex actions
 - Translate Codex updates into store mutations and UI refreshes
+- Coordinate thread-ui launch/focus requests once the Electron host layer exists
 
-Examples of responsibilities:
+Current responsibilities:
 
 - refresh thread list
-- load a thread
-- start a new thread
-- send prompt
-- steer active turn
-- handle turn completion/error
+- rename/fork/archive/unarchive/close threads
+- react to Codex notifications and keep `ThreadStore` current
+- update shell status text
+
+Future responsibilities:
+
+- hand thread-open / prompt / steer intent to the Electron thread-ui side through a narrow host API
 
 This is the main orchestrator, but it must stay narrow.
-It should not parse raw JSON-RPC and should not render transcript HTML.
+It should not parse raw JSON-RPC, render transcript HTML, or directly own Electron child-process details once a dedicated host class exists.
 
 ### 2. Config and app paths
 
@@ -113,11 +145,10 @@ Responsibilities:
 
 - Resolve standard app directories
 - Expose paths for:
-  - `~/.qodex`
-  - config file
-  - logs directory
-  - cache directory
-  - bundled resources
+  - app data
+  - app state
+  - database
+  - staged thread-ui/runtime assets later
 
 #### `src/app/AppConfig.h` / `src/app/AppConfig.cpp`
 
@@ -125,16 +156,15 @@ Responsibilities:
 
 - Load and validate qodex config
 - Provide typed config access instead of raw JSON lookups
+- Keep startup defaults explicit and inspectable
 
-Keep config data in small structs, for example:
+Current config is intentionally small:
 
-- `ServerConfig`
-- `WindowConfig`
-- `CodexConfig`
-- `UiConfig`
-- `LoggingConfig`
+- Codex executable path
+- Codex startup arguments
+- client name/version
 
-These can live in `AppConfig.h` as simple value types.
+Expand this only when Electron staging/runtime discovery actually needs more.
 
 ### 3. Codex transport layer
 
@@ -180,19 +210,23 @@ Important rule:
 
 - This class should know JSON-RPC mechanics, but not Codex thread semantics.
 
-#### `src/codex/CodexClient.h` / `src/codex/CodexClient.cpp`
+#### generated `CodexClient.h` / `CodexClient.cpp` plus `src/codex/CodexClientBase.*`
 
 Responsibilities:
 
 - High-level Codex protocol wrapper around `AppServerTransport`
-- Expose typed methods for:
+- Expose typed methods for currently used requests such as:
   - `initialize()`
-  - `listThreads()`
-  - `readThread()`
-  - `resumeThread()`
-  - `startThread()`
-  - `startTurn()`
-  - `steerTurn()`
+  - `thread/list`
+  - `thread/name/set`
+  - `thread/archive`
+  - `thread/unarchive`
+  - `thread/fork`
+  - `thread/unsubscribe`
+- Grow to cover:
+  - `thread/read`
+  - `thread/resume`
+  - turn/prompt actions needed by thread-ui
 - Convert raw JSON into typed Codex/domain objects
 
 Important rule:
@@ -201,7 +235,7 @@ Important rule:
 
 ### 4. Domain state and reducers
 
-This is where the Wodex transcript/state lessons should be captured cleanly.
+This is where thread and live-turn state should stay deterministic and UI-agnostic.
 
 #### `src/domain/CodexTypes.h`
 
@@ -210,14 +244,14 @@ Contents:
 - plain structs for domain objects, for example:
   - `ThreadSummary`
   - `ThreadDetail`
-  - `TranscriptItem`
+  - `ThreadUiItem`
   - `LiveTurnState`
   - `CommandItemData`
   - `StructuredItemData`
 
 Important rule:
 
-- `TranscriptItem` must always have a stable identity field, such as `itemId`.
+- `ThreadUiItem` must always have a stable identity field, such as `itemId`.
 - It should also have an explicit source/origin enum:
   - persisted
   - live
@@ -237,14 +271,14 @@ Responsibilities:
 
 This is the main in-memory model of the app.
 
-#### `src/domain/TranscriptProjector.h` / `src/domain/TranscriptProjector.cpp`
+#### `src/domain/ThreadUiProjector.h` / `src/domain/ThreadUiProjector.cpp`
 
 Responsibilities:
 
-- Convert persisted Codex thread items into transcript items
-- Convert command/file/tool/reasoning/plan items into a UI-facing transcript representation
+- Convert persisted Codex thread items into a structured snapshot/delta format for the Electron thread-ui
+- Convert command/file/tool/reasoning/plan items into a UI-facing representation without producing HTML in qodex
 
-This is the C++ counterpart to the useful Wodex projection layer.
+This is the C++ projection layer that replaces the old in-process transcript HTML formatter.
 
 #### `src/domain/LiveTurnReducer.h` / `src/domain/LiveTurnReducer.cpp`
 
@@ -252,7 +286,7 @@ Responsibilities:
 
 - Apply streamed notifications to the store
 - Maintain live item state during active turns
-- Merge persisted and live transcript state deterministically
+- Merge persisted and live thread-ui state deterministically
 
 This should be a pure-ish logic layer:
 
@@ -271,13 +305,14 @@ Responsibilities:
 - Compose the overall window
 - Own top-level widgets only
 - No Codex protocol logic
+- No transcript rendering
 
-Likely child widgets:
+Current child widgets:
 
 - `ThreadListPane`
-- `TranscriptPane`
-- `PromptComposer`
-- `StatusBanner`
+- `ApiLogPane`
+
+Future shell additions, if needed, should stay shell-oriented rather than per-thread conversation UI.
 
 #### `src/ui/ThreadListPane.h` / `src/ui/ThreadListPane.cpp`
 
@@ -287,104 +322,101 @@ Responsibilities:
 - Expose user intent via signals:
   - thread selected
   - refresh requested
-  - new chat requested
+  - rename requested
+  - fork requested
+  - archive/unarchive requested
+  - close requested
 
 #### `src/ui/ThreadListModel.h` / `src/ui/ThreadListModel.cpp`
 
 Responsibilities:
 
-- `QAbstractListModel` over `ThreadSummary`
-- Keep list rendering logic out of the pane widget
+- `QAbstractItemModel` over grouped `ThreadSummary` data
+- Keep tree/grouping/rendering logic out of the pane widget
 
-#### `src/ui/PromptComposer.h` / `src/ui/PromptComposer.cpp`
-
-Responsibilities:
-
-- Prompt text entry
-- Enter-to-send / Shift+Enter newline behavior
-- busy/disabled state
-
-#### `src/ui/StatusBanner.h` / `src/ui/StatusBanner.cpp`
+#### `src/ui/ApiLogModel.h` / `src/ui/ApiLogModel.cpp`
 
 Responsibilities:
 
-- Render transient status and error text
-- Keep status handling out of `MainWindow`
+- Present persisted API traffic from the database
+- Keep API log shaping out of the pane widget
 
-### 6. Transcript web surface
-
-This is where markdown, math, images, and transcript DOM updates live.
-
-#### `src/transcript/TranscriptPane.h` / `src/transcript/TranscriptPane.cpp`
+#### `src/ui/ApiLogPane.h` / `src/ui/ApiLogPane.cpp`
 
 Responsibilities:
 
-- Own `QWebEngineView`
-- Load transcript resources
-- Connect web-channel bridge
-- Expose a narrow API to the native side:
-  - `setTranscriptSnapshot(...)`
-  - `applyTranscriptDelta(...)`
-  - `setTheme(...)`
+- Render the API log table and preserve its view state
 
-#### `src/transcript/TranscriptBridge.h` / `src/transcript/TranscriptBridge.cpp`
+#### `src/ui/ProgressSplashScreen.h` / `src/ui/ProgressSplashScreen.cpp`
 
 Responsibilities:
 
-- `QObject` bridge for Qt <-> JavaScript communication
-- Send transcript updates to JS
-- Receive events back from JS, such as:
-  - link clicked
-  - local file requested
-  - maybe copy/open actions later
+- Show startup/shutdown progress without putting that logic into `MainWindow`
 
-#### `src/transcript/LocalSchemeHandler.h` / `src/transcript/LocalSchemeHandler.cpp`
+### 6. Electron thread-ui surface
 
-Responsibilities:
+This is where per-thread conversation rendering, prompt entry, and native JS/C++ integration will live.
 
-- Register and serve a custom `qodex://` URL scheme
-- Handle safe local asset and file serving inside the app
-
-This is the preferred answer to the `file://` browser restriction problem.
-Do not rely on raw `file://` links.
-
-#### `resources/transcript/index.html`
+#### `src/threadui/ThreadUiProcessManager.h` / `src/threadui/ThreadUiProcessManager.cpp`
 
 Responsibilities:
 
-- Minimal transcript document shell
+- Launch, supervise, and focus one Electron process/window per active thread
+- Know where the staged Electron app lives in the build/install tree
+- Pass thread identity and IPC connection details to the Electron side
+- Keep process-lifecycle policy out of `SessionController`
 
-#### `resources/transcript/app.js`
-
-Responsibilities:
-
-- DOM update logic for transcript rendering
-- Message patching keyed by stable item id
-- No protocol logic
-
-#### `resources/transcript/app.css`
+#### `src/threadui/ThreadUiIpcServer.h` / `src/threadui/ThreadUiIpcServer.cpp`
 
 Responsibilities:
 
-- Transcript styling only
+- Own qodex-side local IPC for thread-ui windows
+- Send initial thread snapshots and incremental updates
+- Receive user intents back from Electron:
+  - prompt send
+  - steer/cancel
+  - open file/link requests
+  - window lifecycle notifications
 
-#### `resources/transcript/markdown.js`
+Important rules:
+
+- qodex remains the source of truth for Codex session state and persistence
+- Electron owns DOM, renderer timing, prompt UX, and transcript presentation
+- communication must be explicit and versioned; no temp-file HTML handoff
+- qodex CMake should build and stage the Electron app and any native addon; normal builds should not depend on `npm start`
+
+#### `frontend/thread-ui/`
 
 Responsibilities:
 
-- Reuse the CommonMark-based markdown renderer idea from Wodex
-- Keep this as a standalone module, not inline in HTML
+- Electron app source:
+  - `package.json`
+  - `main.js`
+  - `preload.js`
+  - `index.html`
+  - renderer JS/CSS assets
+- Render one thread conversation window
+- Connect to qodex over local IPC
+- Keep prompt composition and transcript DOM logic out of the Qt shell
 
-#### `resources/transcript/math/`
+#### `src/threadui_native/`
 
-Contents:
+Responsibilities:
 
-- KaTeX runtime and styles
+- Optional CMake-built N-API addon for the Electron side
+- Link external native libraries cleanly through the main qodex build
+- Avoid a separate `node-gyp` build graph once integrated into qodex
 
-Important rule:
+#### `cmake/QodexElectron.cmake`
 
-- No large inline HTML/CSS/JS blobs inside C++ string literals.
-- Ship transcript assets as resource files through `.qrc`.
+Responsibilities:
+
+- Encapsulate Electron dependency staging
+- Build the native addon with CMake
+- Copy/stage the Electron app into a deterministic runtime location
+- Support both build-tree execution and install-tree packaging
+
+The old `QWebEngineView` / transcript-resource plan has been retired.
 
 ### 7. Utility classes
 
@@ -430,47 +462,63 @@ The public interfaces should be designed so this move does not force a rewrite.
 ## Proposed Initial Runtime Flow
 
 1. `main.cpp` creates `QApplication`.
-2. `AppBootstrap` loads config and creates services.
+2. `AppBootstrap` loads config, database-backed state, and creates services.
 3. `AppServerTransport` starts `codex app-server`.
 4. `CodexClient` performs `initialize`.
 5. `SessionController` requests thread list.
 6. `ThreadStore` is populated.
 7. `ThreadListModel` updates.
-8. User selects a thread.
-9. `SessionController` requests `thread/read`.
-10. `TranscriptProjector` converts thread items into transcript items.
-11. `TranscriptPane` pushes a transcript snapshot to the web view.
+8. User selects a thread in the Qt shell.
+9. qodex updates shell state and, when requested, opens or focuses that thread’s Electron window.
+10. `ThreadUiProcessManager` launches the staged Electron app for the thread and connects local IPC.
+11. qodex sends a thread snapshot / delta stream to the Electron thread-ui.
 12. During active turns, streamed notifications go:
-    `AppServerTransport -> CodexClient -> LiveTurnReducer -> ThreadStore -> TranscriptPane`
+    `AppServerTransport -> CodexClient -> LiveTurnReducer -> ThreadStore -> ThreadUiProjector -> ThreadUiIpcServer`
+13. User intents from the Electron window flow back to qodex over the same IPC channel.
 
 ## Testing Plan
 
-Add tests early. Wodex’s bugs were mostly state/reconciliation bugs, which are testable.
+Keep adding tests early. Wodex’s bugs were mostly state/reconciliation bugs, which are testable.
+
+Current automated coverage already includes:
+
+- `AppServerTransportTest`
+- `TrafficLoggerTest`
+- `CodexClientGeneratedTest`
+- `ThreadStoreTest`
+- `SingleInstanceManagerTest`
+- `MigrationRunnerTest`
+- `DatabaseManagerTest`
+- `ThreadListModelTest`
+- `ApiLogModelTest`
 
 ### `tests/codex/`
 
 - `AppServerTransportTest`
-- `CodexClientTest`
+- generated client binding tests
+- future thread-read / turn-action coverage
 
 Use fake process output where practical.
 
 ### `tests/domain/`
 
-- `TranscriptProjectorTest`
 - `LiveTurnReducerTest`
 - `ThreadStoreTest`
+- `ThreadUiProjectorTest`
 
 This is the highest-value test area.
 
 ### `tests/ui/`
 
-- lightweight widget construction tests
+- lightweight widget/model construction tests
+- shell interaction tests where signals/selection behavior matter
 - no heavy golden-image UI testing initially
 
-### `tests/transcript/`
+### `tests/threadui/`
 
-- keep markdown/math tests close to the web assets
-- if we reuse the Wodex CommonMark harness, preserve that as a standalone runner
+- IPC protocol tests
+- Electron staging/addon smoke tests
+- optional end-to-end launch smoke tests against the staged thread-ui bundle
 
 ## File Size and Responsibility Guardrails
 
@@ -486,45 +534,52 @@ To prevent another "single huge file" outcome:
 
 ## Suggested Implementation Order
 
-### Phase 1. Foundation
+### Phase 1. Foundation `[implemented]`
 
 - `AppPaths`
 - `AppConfig`
 - `TrafficLogger`
 - `AppServerTransport`
-- `CodexClient`
+- generated `CodexClient`
 
-### Phase 2. Domain model
+### Phase 2. Domain model `[partially implemented]`
 
 - `CodexTypes`
 - `ThreadStore`
-- `TranscriptProjector`
+- `ThreadUiProjector`
 - `LiveTurnReducer`
 
-### Phase 3. Native shell
+### Phase 3. Native shell `[mostly implemented]`
 
 - `MainWindow`
 - `ThreadListPane`
 - `ThreadListModel`
-- `PromptComposer`
-- `StatusBanner`
+- `ApiLogPane`
+- `ApiLogModel`
+- `ProgressSplashScreen`
 
-### Phase 4. Transcript surface
+### Phase 4. Electron build/staging `[next]`
 
-- `TranscriptPane`
-- `TranscriptBridge`
-- `LocalSchemeHandler`
-- transcript web assets in resources
+- `cmake/QodexElectron.cmake`
+- staged Electron app bundle in the build tree
+- CMake-built native addon support
 
-### Phase 5. End-to-end interactions
+### Phase 5. qodex <-> Electron thread-ui boundary `[next]`
 
-- thread list loading
+- `ThreadUiProcessManager`
+- `ThreadUiIpcServer`
+- structured thread snapshot/delta model
+- initial thread-open / focus lifecycle
+
+### Phase 6. End-to-end interactions `[later]`
+
 - thread reading
+- thread resume/open from the new thread-ui flow
 - prompt sending
 - streaming assistant updates
 - steer while active
 
-### Phase 6. Advanced item rendering
+### Phase 7. Advanced item rendering `[later]`
 
 - reasoning
 - plan
@@ -537,13 +592,13 @@ To prevent another "single huge file" outcome:
 
 These can wait:
 
-- multi-window session restoration
+- embedding transcript rendering back into the Qt process
 - plugin system
 - full theme editor
 - review mode UI
 - advanced settings editor
 
-The initial goal is a clean, maintainable single-window desktop client.
+The near-term goal is a clean, maintainable Qt shell plus a separately staged Electron thread-ui.
 
 ## Summary
 
@@ -552,6 +607,6 @@ qodex should be built around four clean layers:
 1. transport
 2. domain state
 3. native shell
-4. transcript rendering
+4. external thread-ui rendering
 
 If we keep those boundaries, qodex can grow into a serious desktop client without repeating the Wodex "2000-line file" pattern.
