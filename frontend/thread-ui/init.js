@@ -21,6 +21,8 @@ const native = require(resolveNativeModulePath());
 
 let animationFrameId = null;
 let running = false;
+let displayStartTimeMs = 0;
+let latestFrameCount = 0n;
 
 function updateWindowState(state) {
   const maximizeButton = document.getElementById('window-maximize');
@@ -67,14 +69,26 @@ async function initializeWindowChrome() {
   updateWindowState(await ipcRenderer.invoke('window:get-state'));
 }
 
-function setFrameCountDisplay(frameCount) {
-  document.getElementById('frame-count-display')
-    .textContent = `The current frame is ${frameCount}`;
+function formatRate(count, elapsedSeconds, unitLabel) {
+  if (elapsedSeconds <= 0) {
+    return `0.0 ${unitLabel}`;
+  }
+
+  return `${(Number(count) / elapsedSeconds).toFixed(1)} ${unitLabel}`;
 }
 
-function updateTestPingPongDisplay(highestTestPong) {
+function setFrameCountDisplay(frameCount, elapsedSeconds) {
+  document.getElementById('frame-count-display')
+    .textContent = `The current frame is ${frameCount} (${formatRate(frameCount, elapsedSeconds, 'FPS')})`;
+}
+
+function captureFrameCount(frameCount) {
+  latestFrameCount = frameCount;
+}
+
+function updateTestPingPongDisplay(highestTestPong, elapsedSeconds) {
   document.getElementById('test-ping-pong-display')
-    .textContent = `Test ping/pong is up to ${highestTestPong}`;
+    .textContent = `Test ping/pong is up to ${highestTestPong} (${formatRate(highestTestPong, elapsedSeconds, 'RPC')})`;
 }
 
 function applyInstanceInfo(instanceInfo) {
@@ -111,12 +125,15 @@ async function initialize() {
   });
 
   running = true;
-  native.setFrameCountDisplayCallback(setFrameCountDisplay);
+  displayStartTimeMs = performance.now();
+  latestFrameCount = 0n;
+  native.setFrameCountDisplayCallback(captureFrameCount);
   native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
 
   const result = native.add(2, 3);
   document.getElementById('native-result').textContent = `2 + 3 = ${result}`;
-  updateTestPingPongDisplay(native.highestTestPong());
+  setFrameCountDisplay(latestFrameCount, 0);
+  updateTestPingPongDisplay(native.highestTestPong(), 0);
   await ipcRenderer.invoke('thread-ui:notify-ready');
 
   function frame() {
@@ -124,8 +141,10 @@ async function initialize() {
       return;
     }
 
+    const elapsedSeconds = Math.max((performance.now() - displayStartTimeMs) / 1000, 0);
     native.tick();
-    updateTestPingPongDisplay(native.highestTestPong());
+    setFrameCountDisplay(latestFrameCount, elapsedSeconds);
+    updateTestPingPongDisplay(native.highestTestPong(), elapsedSeconds);
     animationFrameId = window.requestAnimationFrame(frame);
   }
 
