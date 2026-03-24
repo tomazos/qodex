@@ -101,6 +101,7 @@ async function initialize() {
 
   const result = native.add(2, 3);
   document.getElementById('native-result').textContent = `2 + 3 = ${result}`;
+  await ipcRenderer.invoke('thread-ui:notify-ready');
 
   function frame() {
     if (!running) {

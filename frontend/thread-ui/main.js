@@ -11,12 +11,18 @@ function readCommandLineValue(name) {
   return matchingArgument ? matchingArgument.slice(prefix.length) : null;
 }
 
+function hasCommandLineSwitch(name) {
+  return process.argv.includes(`--${name}`);
+}
+
 const instanceInfo = {
   title: readCommandLineValue('qodex-title') || 'Qodex Thread UI',
+  smokeTest: hasCommandLineSwitch('smoke-test'),
 };
 
 let mainWindow = null;
 let pendingActivationRequest = false;
+let smokeTestFinished = false;
 
 function getWindowState(window) {
   return {
@@ -123,6 +129,7 @@ function createWindow() {
     frame: false,
     autoHideMenuBar: true,
     icon: windowIconPath,
+    show: !instanceInfo.smokeTest,
     title: instanceInfo.title,
     webPreferences: {
       contextIsolation: false,
@@ -135,6 +142,26 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.removeMenu();
   installExternalNavigationPolicy(mainWindow);
+
+  if (instanceInfo.smokeTest) {
+    const failSmokeTest = (message) => {
+      if (smokeTestFinished) {
+        return;
+      }
+
+      smokeTestFinished = true;
+      console.error(message);
+      app.exit(1);
+    };
+
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+      failSmokeTest(`Thread UI smoke test failed to load: ${errorCode} ${errorDescription}`);
+    });
+
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      failSmokeTest(`Thread UI smoke test renderer exited unexpectedly: ${details.reason}`);
+    });
+  }
 
   mainWindow.on('maximize', () => {
     sendWindowState(mainWindow);
@@ -188,6 +215,15 @@ ipcMain.handle('window:close', (event) => {
 });
 
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
+
+ipcMain.handle('thread-ui:notify-ready', () => {
+  if (instanceInfo.smokeTest && !smokeTestFinished) {
+    smokeTestFinished = true;
+    setImmediate(() => {
+      app.exit(0);
+    });
+  }
+});
 
 app.whenReady().then(() => {
   app.setName('Qodex');
