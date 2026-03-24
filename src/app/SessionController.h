@@ -13,6 +13,7 @@
 #include "codex/AppServerTransport.h"
 #include "CodexClient.h"
 #include "codex/JsonRpcMessage.h"
+#include "qodex_to_ui.pb.h"
 
 namespace qodex::domain {
 struct ThreadSummary;
@@ -25,6 +26,8 @@ class MainWindow;
 
 namespace qodex::app {
 
+class ThreadUiProcessManager;
+
 class SessionController final : public QObject {
     Q_OBJECT
 
@@ -34,6 +37,7 @@ public:
         codex::AppServerTransport *transport,
         codex::CodexClient *client,
         domain::ThreadStore *threadStore,
+        ThreadUiProcessManager *threadUiProcessManager,
         ui::MainWindow *mainWindow,
         QObject *parent = nullptr
     );
@@ -51,8 +55,11 @@ private slots:
     void onInitializeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadListSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadListResponse &response);
     void onThreadListFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
+    void onThreadResumeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response);
+    void onThreadResumeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onRefreshRequested();
     void onThreadSelected(const QString &threadId);
+    void onResumeThreadRequested(const QString &threadId);
     void onRenameThreadRequested(const QString &threadId);
     void onCloseThreadsRequested(const QStringList &threadIds);
     void onForkThreadRequested(const QString &threadId);
@@ -89,6 +96,11 @@ private:
     [[nodiscard]] QString threadStatusText(const qodex::codex::ThreadStatus &status) const;
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
     [[nodiscard]] QString threadSourceText(const qodex::codex::SessionSource &source) const;
+    [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest(
+        const qodex::codex::ThreadResumeResponse &response
+    ) const;
+    [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)
+        const;
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
@@ -102,6 +114,7 @@ private:
     codex::AppServerTransport *m_transport = nullptr;
     codex::CodexClient *m_client = nullptr;
     domain::ThreadStore *m_threadStore = nullptr;
+    ThreadUiProcessManager *m_threadUiProcessManager = nullptr;
     ui::MainWindow *m_mainWindow = nullptr;
     QList<ui::MainWindow *> m_windows;
     bool m_startRequested = false;
@@ -110,6 +123,7 @@ private:
     bool m_archivedThreadListRequestInFlight = false;
     QString m_activeThreadListRequestKey;
     QString m_archivedThreadListRequestKey;
+    QHash<QString, QString> m_pendingThreadResumeRequests;
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;
     QHash<QString, QString> m_pendingUnsubscribeRequests;

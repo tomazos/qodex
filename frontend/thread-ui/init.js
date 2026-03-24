@@ -21,8 +21,8 @@ const native = require(resolveNativeModulePath());
 
 let animationFrameId = null;
 let running = false;
-let displayStartTimeMs = 0;
-let latestFrameCount = 0n;
+let threadItemsContainer = null;
+let emptyStateElement = null;
 
 function updateWindowState(state) {
   const maximizeButton = document.getElementById('window-maximize');
@@ -69,23 +69,6 @@ async function initializeWindowChrome() {
   updateWindowState(await ipcRenderer.invoke('window:get-state'));
 }
 
-function formatRate(count, elapsedSeconds, unitLabel) {
-  if (elapsedSeconds <= 0) {
-    return `0.0 ${unitLabel}`;
-  }
-
-  return `${(Number(count) / elapsedSeconds).toFixed(1)} ${unitLabel}`;
-}
-
-function setFrameCountDisplay(frameCount, elapsedSeconds) {
-  document.getElementById('frame-count-display')
-    .textContent = `The current frame is ${frameCount} (${formatRate(frameCount, elapsedSeconds, 'FPS')})`;
-}
-
-function captureFrameCount(frameCount) {
-  latestFrameCount = frameCount;
-}
-
 function applyInstanceInfo(instanceInfo) {
   if (!instanceInfo || typeof instanceInfo.title !== 'string' || instanceInfo.title.trim() === '') {
     return;
@@ -108,6 +91,36 @@ function normalizeLaunchConfig(launchConfig) {
   };
 }
 
+function appendThreadItems(items) {
+  if (!threadItemsContainer || !Array.isArray(items) || items.length === 0) {
+    return;
+  }
+
+  if (emptyStateElement) {
+    emptyStateElement.remove();
+    emptyStateElement = null;
+  }
+
+  for (const item of items) {
+    const element = document.createElement('article');
+    const kind = item?.kind === 'user' ? 'user' : 'agent';
+    element.className = `thread-item thread-item--${kind}`;
+
+    const label = document.createElement('div');
+    label.className = 'thread-item__label';
+    label.textContent = kind === 'user' ? 'User' : 'Agent';
+
+    const body = document.createElement('pre');
+    body.className = 'thread-item__body';
+    body.textContent = typeof item?.text === 'string' ? item.text : '';
+
+    element.append(label, body);
+    threadItemsContainer.appendChild(element);
+  }
+
+  threadItemsContainer.scrollTop = threadItemsContainer.scrollHeight;
+}
+
 async function initialize() {
   if (running) {
     return;
@@ -120,14 +133,9 @@ async function initialize() {
   });
 
   running = true;
-  displayStartTimeMs = performance.now();
-  latestFrameCount = 0n;
-  native.setFrameCountDisplayCallback(captureFrameCount);
+  threadItemsContainer = document.getElementById('thread-items');
+  emptyStateElement = document.getElementById('thread-empty-state');
   native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
-
-  const result = native.add(2, 3);
-  document.getElementById('native-result').textContent = `2 + 3 = ${result}`;
-  setFrameCountDisplay(latestFrameCount, 0);
   await ipcRenderer.invoke('thread-ui:notify-ready');
 
   function frame() {
@@ -135,9 +143,8 @@ async function initialize() {
       return;
     }
 
-    const elapsedSeconds = Math.max((performance.now() - displayStartTimeMs) / 1000, 0);
     native.tick();
-    setFrameCountDisplay(latestFrameCount, elapsedSeconds);
+    appendThreadItems(native.takePendingItems());
     animationFrameId = window.requestAnimationFrame(frame);
   }
 

@@ -2,5 +2,17 @@ syntax = "proto3";
 
 package qodex.threadui.ipc.qodex_to_ui;
 
+import "common.proto";
+
 service QodexToUi {
+  rpc AddItems(AddItemsRequest) returns (AddItemsResponse);
+}
+
+message AddItemsRequest {
+  repeated qodex.threadui.ipc.common.Item items = 1;
+}
+
+message AddItemsResponse {
+  qodex.threadui.ipc.common.ResultStatus status = 1;
+  string message = 2;
 }

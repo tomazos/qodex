@@ -292,6 +292,7 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
 
     QMenu menu(this);
     QAction *refreshAction = menu.addAction(QStringLiteral("Refresh Thread List"));
+    QAction *resumeAction = nullptr;
     QAction *renameAction = nullptr;
     QAction *closeAction = nullptr;
     QAction *forkAction = nullptr;
@@ -302,6 +303,8 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     if (!clickedThreadId.isEmpty()) {
         menu.addSeparator();
 
+        resumeAction = menu.addAction(QStringLiteral("Resume Thread"));
+        resumeAction->setEnabled(selectedThreadIds.size() == 1);
         renameAction = menu.addAction(QStringLiteral("Rename..."));
         renameAction->setEnabled(selectedThreadIds.size() == 1);
         for (const QString &threadId : selectedThreadIds) {
@@ -351,6 +354,10 @@ void ThreadListPane::showContextMenu(const QPoint &position) {
     }
     if (selectedAction == refreshAction) {
         emit refreshRequested();
+        return;
+    }
+    if (selectedAction == resumeAction && selectedThreadIds.size() == 1) {
+        emit resumeThreadRequested(selectedThreadIds.constFirst());
         return;
     }
     if (selectedAction == renameAction && selectedThreadIds.size() == 1) {

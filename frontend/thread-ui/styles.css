@@ -7,9 +7,7 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, canvastext 10%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, canvas 94%, canvastext 6%), canvas);
+  background: linear-gradient(180deg, color-mix(in srgb, canvas 96%, canvastext 4%), canvas);
   color: canvastext;
 }
 
@@ -25,7 +23,7 @@ body {
   align-items: stretch;
   justify-content: space-between;
   border-bottom: 1px solid color-mix(in srgb, canvastext 15%, transparent);
-  background: color-mix(in srgb, canvas 90%, canvastext 10%);
+  background: color-mix(in srgb, canvas 92%, canvastext 8%);
   user-select: none;
 }
 
@@ -80,58 +78,54 @@ body {
 
 main {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  place-items: center;
-  gap: 1.5rem;
-  padding: 2rem;
-  text-align: center;
+  min-height: 0;
+  padding: 1rem;
 }
 
-.hero,
-.links,
-.native-status {
-  width: min(42rem, 100%);
+.thread-view {
+  height: 100%;
 }
 
-.hero {
+.thread-view__items {
+  height: 100%;
+  overflow-y: auto;
   display: grid;
   gap: 0.75rem;
+  align-content: start;
 }
 
-.eyebrow {
-  margin: 0;
-  font-size: 0.8rem;
+.thread-view__empty {
+  margin: auto;
+  opacity: 0.65;
+}
+
+.thread-item {
+  border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, canvas 92%, canvastext 8%);
+}
+
+.thread-item--user {
+  background: color-mix(in srgb, #2b6cb0 12%, canvas);
+}
+
+.thread-item--agent {
+  background: color-mix(in srgb, #2f855a 12%, canvas);
+}
+
+.thread-item__label {
+  margin-bottom: 0.45rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
-h1 {
+.thread-item__body {
   margin: 0;
-  font-size: clamp(2.5rem, 7vw, 4.5rem);
-  line-height: 0.96;
-}
-
-.lede {
-  margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.5;
-  opacity: 0.82;
-}
-
-.links,
-.native-status {
-  display: grid;
-  gap: 0.4rem;
-}
-
-p {
-  margin: 0;
-  opacity: 0.8;
-}
-
-a {
-  color: inherit;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

@@ -51,7 +51,6 @@ public:
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
 signals:
-    void launchThreadUiRequested();
     void activateThreadUiRequested(int instanceId);
     void createNewWindowRequested();
     void quitRequested();

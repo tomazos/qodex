@@ -1,12 +1,14 @@
 #include "threadui/ThreadUiIpcServer.h"
 
 #include <algorithm>
+#include <functional>
 #include <QByteArray>
 #include <QHostAddress>
 #include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
 
+#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "ui_to_qodex.qodex_rpc.h"
 
@@ -17,6 +19,7 @@ namespace {
 using qodex::threadui::ipc::FrameDecodeResult;
 using qodex::threadui::ipc::common::RESULT_STATUS_ERROR;
 using qodex::threadui::ipc::common::RESULT_STATUS_OK;
+namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
 
 qodex::threadui::ipc::common::RpcEnvelope makeResponseEnvelope(
@@ -36,6 +39,13 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     response.set_message(message.toStdString());
 
     return makeResponseEnvelope(requestId, response);
+}
+
+qodex::threadui::ipc::common::RpcEnvelope makeAddItemsRequestEnvelope(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request
+) {
+    return qodex::threadui::ipc::makeRequestEnvelope<QodexToUiRpc::AddItems>(requestId, request);
 }
 
 bool sendEnvelope(
@@ -136,6 +146,42 @@ int ThreadUiIpcServer::authenticatedConnectionCount() const {
     return m_authenticatedConnectionsByToken.size();
 }
 
+bool ThreadUiIpcServer::sendAddItems(
+    const QString &token,
+    const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request,
+    QString *errorMessage
+) {
+    QTcpSocket *socket = m_authenticatedConnectionsByToken.value(token, nullptr);
+    if (socket == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection is not authenticated yet.");
+        }
+        return false;
+    }
+
+    auto connectionStateIt = m_connectionStates.find(socket);
+    if (connectionStateIt == m_connectionStates.end()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection state was not found.");
+        }
+        return false;
+    }
+
+    auto &connectionState = connectionStateIt.value();
+    const std::uint64_t requestId = connectionState.nextOutgoingRequestId++;
+    connectionState.pendingAddItemsRequestIds.insert(requestId);
+
+    if (!sendEnvelope(socket, makeAddItemsRequestEnvelope(requestId, request))) {
+        connectionState.pendingAddItemsRequestIds.remove(requestId);
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to send QodexToUi.AddItems request.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void ThreadUiIpcServer::onNewConnection() {
     if (m_server == nullptr) {
         return;
@@ -196,6 +242,41 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
         auto &connectionState = connectionStateIt.value();
 
         if (!connectionStateIt->authenticatedToken.isEmpty()) {
+            if (envelope.is_response()) {
+                struct QodexToUiResponseHandler final {
+                    ConnectionState &connectionState;
+
+                    bool onAddItemsResponse(
+                        const std::uint64_t requestId,
+                        const qodex::threadui::ipc::qodex_to_ui::AddItemsResponse &response,
+                        std::string *errorMessage
+                    ) {
+                        if (!connectionState.pendingAddItemsRequestIds.contains(requestId)) {
+                            if (errorMessage != nullptr) {
+                                *errorMessage =
+                                    "Received an AddItems response for unknown request id " +
+                                    std::to_string(requestId) + '.';
+                            }
+                            return false;
+                        }
+
+                        connectionState.pendingAddItemsRequestIds.remove(requestId);
+                        if (response.status() != RESULT_STATUS_OK) {
+                            qWarning("Thread UI rejected AddItems request: %s", response.message().c_str());
+                        }
+                        return true;
+                    }
+                } handler{connectionState};
+
+                std::string dispatchErrorMessage;
+                if (!QodexToUiRpc::dispatchResponseEnvelope(envelope, handler, &dispatchErrorMessage)) {
+                    qWarning("Thread UI IPC protocol error: %s", dispatchErrorMessage.c_str());
+                    socket->disconnectFromHost();
+                    return;
+                }
+                continue;
+            }
+
             struct UiToQodexRequestHandler final {
                 QTcpSocket *socket;
 
@@ -289,14 +370,20 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                     return false;
                 }
 
+                emitAuthenticated(token);
                 return true;
             }
+
+            std::function<void(const QString &)> emitAuthenticated;
         } handler{
             socket,
             connectionState,
             m_issuedLaunchTokens,
             m_authenticatedConnectionsByToken,
             m_unauthenticatedConnections,
+            [this](const QString &token) {
+                emit threadUiAuthenticated(token);
+            },
         };
 
         std::string dispatchErrorMessage;
@@ -316,7 +403,9 @@ void ThreadUiIpcServer::removeConnection(QTcpSocket *socket) {
     const auto connectionStateIt = m_connectionStates.find(socket);
     if (connectionStateIt != m_connectionStates.end()) {
         if (!connectionStateIt->authenticatedToken.isEmpty()) {
-            m_authenticatedConnectionsByToken.remove(connectionStateIt->authenticatedToken);
+            const QString token = connectionStateIt->authenticatedToken;
+            m_authenticatedConnectionsByToken.remove(token);
+            emit threadUiDisconnected(token);
         }
         m_connectionStates.erase(connectionStateIt);
     }

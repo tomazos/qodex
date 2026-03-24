@@ -102,8 +102,6 @@ void MainWindow::rebuildThreadMenu(const QList<ThreadUiMenuEntry> &entries) {
     }
 
     m_threadMenu->clear();
-    m_threadMenu->addAction(QStringLiteral("Launch Thread UI"), this, &MainWindow::launchThreadUiRequested);
-    m_threadMenu->addSeparator();
 
     if (entries.isEmpty()) {
         QAction *placeholderAction = m_threadMenu->addAction(QStringLiteral("No Active Thread UI Windows"));

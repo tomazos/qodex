@@ -7,9 +7,11 @@
 #include <deque>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <utility>
 
+#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "ui_to_qodex.qodex_rpc.h"
 
@@ -21,8 +23,11 @@ bool initialized = false;
 std::int64_t frameCount = 0;
 qodex::threadui::native::LaunchConfig currentLaunchConfig;
 FrameCountDisplayCallback frameCountDisplayCallback;
+std::mutex pendingItemsMutex;
+std::vector<qodex::threadui::native::DisplayItem> pendingItems;
 struct IpcClientState;
 std::unique_ptr<IpcClientState> ipcClientState;
+namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
 
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
@@ -158,6 +163,49 @@ void stopClientOnProtocolFailure(IpcClientState *state, const std::string &messa
 
 void beginReadFromSocket(IpcClientState *state);
 
+void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request) {
+    std::lock_guard lock(pendingItemsMutex);
+    pendingItems.reserve(pendingItems.size() + static_cast<std::size_t>(request.items_size()));
+
+    for (const auto &item : request.items()) {
+        switch (item.kind_case()) {
+        case qodex::threadui::ipc::common::Item::kUserMessage:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = qodex::threadui::native::DisplayItemKind::UserMessage,
+                .text = item.user_message().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kAgentMessage:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = qodex::threadui::native::DisplayItemKind::AgentMessage,
+                .text = item.agent_message().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::KIND_NOT_SET:
+            break;
+        }
+    }
+}
+
+void sendAddItemsResponse(
+    IpcClientState *state,
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const std::string &message
+) {
+    if (state == nullptr || state->stopRequested) {
+        return;
+    }
+
+    qodex::threadui::ipc::qodex_to_ui::AddItemsResponse response;
+    response.set_status(status);
+    response.set_message(message);
+    queueEnvelopeForWrite(
+        state,
+        qodex::threadui::ipc::makeResponseEnvelope<QodexToUiRpc::AddItems>(requestId, response)
+    );
+}
+
 void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     if (state == nullptr || state->stopRequested) {
         return;
@@ -200,7 +248,37 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
         return;
     }
 
-    stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC request envelope.");
+    struct QodexToUiRequestHandler final {
+        IpcClientState *state;
+
+        bool onAddItemsRequest(
+            const std::uint64_t requestId,
+            const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request,
+            std::string *
+        ) {
+            queueDisplayItems(request);
+            sendAddItemsResponse(
+                state,
+                requestId,
+                qodex::threadui::ipc::common::RESULT_STATUS_OK,
+                "Items added."
+            );
+            return true;
+        }
+    } handler{state};
+
+    std::string dispatchErrorMessage;
+    if (!QodexToUiRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
+        if (envelope.method() == QodexToUiRpc::AddItems::kMethodName) {
+            sendAddItemsResponse(
+                state,
+                envelope.request_id(),
+                qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+                dispatchErrorMessage
+            );
+        }
+        stopClientOnProtocolFailure(state, dispatchErrorMessage);
+    }
 }
 
 void beginReadFromSocket(IpcClientState *state) {
@@ -374,6 +452,10 @@ void initialize(const LaunchConfig &launchConfig) {
     initialized = true;
     frameCount = 0;
     currentLaunchConfig = launchConfig;
+    {
+        std::lock_guard lock(pendingItemsMutex);
+        pendingItems.clear();
+    }
 
     std::cout << "Qodex thread UI engine initialized.";
     if (hasIpcTarget(currentLaunchConfig)) {
@@ -387,6 +469,13 @@ void initialize(const LaunchConfig &launchConfig) {
 
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback) {
     frameCountDisplayCallback = std::move(callback);
+}
+
+std::vector<DisplayItem> takePendingItems() {
+    std::lock_guard lock(pendingItemsMutex);
+    std::vector<DisplayItem> items = std::move(pendingItems);
+    pendingItems.clear();
+    return items;
 }
 
 void tick() {
@@ -414,6 +503,10 @@ void shutdown() {
     stopIpcClient();
     currentLaunchConfig = {};
     frameCountDisplayCallback = nullptr;
+    {
+        std::lock_guard lock(pendingItemsMutex);
+        pendingItems.clear();
+    }
     std::cout << "Qodex thread UI engine shutdown." << std::endl;
 }
 

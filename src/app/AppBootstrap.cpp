@@ -35,10 +35,16 @@ AppBootstrap::AppBootstrap(
           &m_apiLogModel
       ),
       m_threadUiProcessManager(threadUiIpcServer, this),
-      m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
+      m_sessionController(
+          m_config,
+          &m_transport,
+          &m_client,
+          &m_threadStore,
+          &m_threadUiProcessManager,
+          &m_mainWindow
+      ) {
     m_mainWindow.move(80, 80);
     m_mainWindow.installEventFilter(this);
-    QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::launchThreadUiRequested, &m_threadUiProcessManager, &ThreadUiProcessManager::launchThreadUi);
     QObject::connect(
         &m_mainWindow,
         &qodex::ui::MainWindow::activateThreadUiRequested,
@@ -391,7 +397,6 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, nullptr, nullptr);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     window->installEventFilter(this);
-    QObject::connect(window.get(), &qodex::ui::MainWindow::launchThreadUiRequested, &m_threadUiProcessManager, &ThreadUiProcessManager::launchThreadUi);
     QObject::connect(
         window.get(),
         &qodex::ui::MainWindow::activateThreadUiRequested,

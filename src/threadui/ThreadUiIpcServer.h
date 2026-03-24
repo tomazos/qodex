@@ -5,10 +5,15 @@
 #include <QSet>
 #include <QString>
 
+#include <cstdint>
 #include <string>
 
 class QTcpServer;
 class QTcpSocket;
+
+namespace qodex::threadui::ipc::qodex_to_ui {
+class AddItemsRequest;
+}
 
 namespace qodex::threadui {
 
@@ -32,11 +37,22 @@ public:
     [[nodiscard]] ThreadUiLaunchConfig allocateLaunchConfig();
     [[nodiscard]] int unauthenticatedConnectionCount() const;
     [[nodiscard]] int authenticatedConnectionCount() const;
+    [[nodiscard]] bool sendAddItems(
+        const QString &token,
+        const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request,
+        QString *errorMessage = nullptr
+    );
+
+signals:
+    void threadUiAuthenticated(const QString &token);
+    void threadUiDisconnected(const QString &token);
 
 private:
     struct ConnectionState {
         std::string inputBuffer;
         QString authenticatedToken;
+        std::uint64_t nextOutgoingRequestId = 1;
+        QSet<quint64> pendingAddItemsRequestIds;
     };
 
     void onNewConnection();

@@ -8,6 +8,21 @@ enum ResultStatus {
   RESULT_STATUS_ERROR = 2;
 }
 
+message UserMessage {
+  string text = 1;
+}
+
+message AgentMessage {
+  string text = 1;
+}
+
+message Item {
+  oneof kind {
+    UserMessage user_message = 1;
+    AgentMessage agent_message = 2;
+  }
+}
+
 message RpcEnvelope {
   uint64 request_id = 1;
   bool is_response = 2;

@@ -43,22 +43,10 @@
         </div>
       </header>
       <main>
-        <section class="hero">
-          <p class="eyebrow">Staged From qodex CMake</p>
-          <h1>Thread UI Scaffold</h1>
-          <p class="lede">
-            This is the build-staged Electron shell that will later host one thread conversation window per active
-            Codex thread.
-          </p>
-        </section>
-        <section class="links">
-          <p><a href="https://www.electronjs.org/docs/latest/">Open Electron docs</a></p>
-          <p><a href="https://github.com/tomazos/qodex">Open qodex on GitHub</a></p>
-          <p><a href="./test-links/local-page.html">Open local HTML test page</a></p>
-        </section>
-        <section class="native-status">
-          <p id="native-result">Calling native add...</p>
-          <p id="frame-count-display">The current frame is ...</p>
+        <section class="thread-view">
+          <div class="thread-view__items" id="thread-items">
+            <p class="thread-view__empty" id="thread-empty-state">Resume a thread to load its history.</p>
+          </div>
         </section>
       </main>
     </div>

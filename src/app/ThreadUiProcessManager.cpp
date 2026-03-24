@@ -9,6 +9,7 @@
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 
+#include "qodex_to_ui.pb.h"
 #include "threadui/ThreadUiIpcServer.h"
 
 namespace qodex::app {
@@ -41,6 +42,18 @@ ThreadUiProcessManager::ThreadUiProcessManager(qodex::threadui::ThreadUiIpcServe
       m_nodeProgram(resolveNodeProgram()),
       m_threadUiIpcServer(threadUiIpcServer) {
     Q_ASSERT(m_threadUiIpcServer != nullptr);
+    QObject::connect(
+        m_threadUiIpcServer,
+        &qodex::threadui::ThreadUiIpcServer::threadUiAuthenticated,
+        this,
+        &ThreadUiProcessManager::onThreadUiAuthenticated
+    );
+    QObject::connect(
+        m_threadUiIpcServer,
+        &qodex::threadui::ThreadUiIpcServer::threadUiDisconnected,
+        this,
+        &ThreadUiProcessManager::onThreadUiDisconnected
+    );
 }
 
 ThreadUiProcessManager::~ThreadUiProcessManager() {
@@ -71,7 +84,33 @@ QList<ThreadUiProcessInfo> ThreadUiProcessManager::activeProcesses() const {
     return processes;
 }
 
-void ThreadUiProcessManager::launchThreadUi() {
+void ThreadUiProcessManager::showResumedThread(
+    const QString &threadId,
+    const QString &title,
+    const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &addItemsRequest
+) {
+    if (threadId.trimmed().isEmpty()) {
+        emit statusMessageRequested(QStringLiteral("Unable to resume thread: thread id is empty."));
+        return;
+    }
+
+    ProcessRecord *existingRecord = recordForThreadId(threadId);
+    if (existingRecord != nullptr) {
+        terminateRecord(existingRecord);
+    }
+
+    relaunchThreadUiForThread(threadId, title);
+
+    ProcessRecord *record = recordForThreadId(threadId);
+    if (record == nullptr) {
+        return;
+    }
+
+    record->pendingAddItemsRequest = addItemsRequest;
+    flushPendingAddItems(record);
+}
+
+void ThreadUiProcessManager::relaunchThreadUiForThread(const QString &threadId, const QString &title) {
     if (m_threadUiIpcServer == nullptr || !m_threadUiIpcServer->isListening()) {
         emit statusMessageRequested(QStringLiteral("Unable to launch Thread UI: IPC server is not listening."));
         return;
@@ -91,19 +130,20 @@ void ThreadUiProcessManager::launchThreadUi() {
     }
 
     const int instanceId = m_nextInstanceId++;
-    const QString title = QStringLiteral("Thread UI %1").arg(instanceId);
+    const QString displayTitle = title.trimmed().isEmpty() ? threadId : title.trimmed();
     const qodex::threadui::ThreadUiLaunchConfig launchConfig = m_threadUiIpcServer->allocateLaunchConfig();
 
     auto record = std::make_unique<ProcessRecord>();
     record->instanceId = instanceId;
-    record->title = title;
+    record->threadId = threadId;
+    record->title = displayTitle;
     record->launchToken = launchConfig.token;
     record->process = new QProcess(this);
     record->process->setWorkingDirectory(m_threadUiAppDir);
     record->process->setProgram(m_nodeProgram);
     record->process->setArguments({
         m_threadUiStartScriptPath,
-        QStringLiteral("--qodex-title=%1").arg(title),
+        QStringLiteral("--qodex-title=%1").arg(displayTitle),
         QStringLiteral("--qodex-ipc-host=%1").arg(launchConfig.host),
         QStringLiteral("--qodex-ipc-port=%1").arg(launchConfig.port),
         QStringLiteral("--qodex-ipc-token=%1").arg(launchConfig.token),
@@ -156,7 +196,7 @@ void ThreadUiProcessManager::launchThreadUi() {
     m_processes.push_back(std::move(record));
     m_processes.back()->process->start();
     emit activeProcessesChanged();
-    emit statusMessageRequested(QStringLiteral("Launching %1...").arg(title));
+    emit statusMessageRequested(QStringLiteral("Launching %1...").arg(displayTitle));
 }
 
 void ThreadUiProcessManager::activateThreadUi(const int instanceId) {
@@ -239,6 +279,44 @@ const ThreadUiProcessManager::ProcessRecord *ThreadUiProcessManager::recordForIn
     return it != m_processes.cend() ? it->get() : nullptr;
 }
 
+ThreadUiProcessManager::ProcessRecord *ThreadUiProcessManager::recordForThreadId(const QString &threadId) {
+    const auto it = std::find_if(
+        m_processes.begin(),
+        m_processes.end(),
+        [&threadId](const std::unique_ptr<ProcessRecord> &record) {
+            return record != nullptr && record->threadId == threadId;
+        }
+    );
+    return it != m_processes.end() ? it->get() : nullptr;
+}
+
+ThreadUiProcessManager::ProcessRecord *ThreadUiProcessManager::recordForLaunchToken(const QString &launchToken) {
+    const auto it = std::find_if(
+        m_processes.begin(),
+        m_processes.end(),
+        [&launchToken](const std::unique_ptr<ProcessRecord> &record) {
+            return record != nullptr && record->launchToken == launchToken;
+        }
+    );
+    return it != m_processes.end() ? it->get() : nullptr;
+}
+
+void ThreadUiProcessManager::flushPendingAddItems(ProcessRecord *record) {
+    if (record == nullptr || !record->authenticated || !record->pendingAddItemsRequest.has_value()) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!m_threadUiIpcServer->sendAddItems(record->launchToken, *record->pendingAddItemsRequest, &errorMessage)) {
+        emit statusMessageRequested(
+            QStringLiteral("Failed to deliver thread history to %1: %2").arg(record->title, errorMessage)
+        );
+        return;
+    }
+
+    record->pendingAddItemsRequest.reset();
+}
+
 void ThreadUiProcessManager::removeRecord(const int instanceId) {
     const auto it = std::find_if(
         m_processes.begin(),
@@ -257,6 +335,23 @@ void ThreadUiProcessManager::removeRecord(const int instanceId) {
 
     m_processes.erase(it);
     emit activeProcessesChanged();
+}
+
+void ThreadUiProcessManager::terminateRecord(ProcessRecord *record) {
+    if (record == nullptr) {
+        return;
+    }
+
+    const int instanceId = record->instanceId;
+    if (record->process != nullptr && record->process->state() != QProcess::NotRunning) {
+        record->process->terminate();
+        if (!record->process->waitForFinished(2000)) {
+            record->process->kill();
+            record->process->waitForFinished(2000);
+        }
+    }
+
+    removeRecord(instanceId);
 }
 
 void ThreadUiProcessManager::drainStandardOutput(ProcessRecord *record) {
@@ -314,6 +409,25 @@ void ThreadUiProcessManager::terminateAllProcesses() {
             process->waitForFinished(2000);
         }
     }
+}
+
+void ThreadUiProcessManager::onThreadUiAuthenticated(const QString &token) {
+    ProcessRecord *record = recordForLaunchToken(token);
+    if (record == nullptr) {
+        return;
+    }
+
+    record->authenticated = true;
+    flushPendingAddItems(record);
+}
+
+void ThreadUiProcessManager::onThreadUiDisconnected(const QString &token) {
+    ProcessRecord *record = recordForLaunchToken(token);
+    if (record == nullptr) {
+        return;
+    }
+
+    record->authenticated = false;
 }
 
 }  // namespace qodex::app

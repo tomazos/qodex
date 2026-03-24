@@ -276,6 +276,50 @@ napi_value tickWrapped(napi_env env, napi_callback_info info) {
     return getUndefined(env);
 }
 
+napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "takePendingItems expects no arguments");
+        return nullptr;
+    }
+
+    const std::vector<qodex::threadui::native::DisplayItem> items = qodex::threadui::native::takePendingItems();
+    napi_value array = nullptr;
+    if (napi_create_array_with_length(env, items.size(), &array) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create pending items array");
+        return nullptr;
+    }
+
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        napi_value itemObject = nullptr;
+        napi_value kindValue = nullptr;
+        napi_value textValue = nullptr;
+
+        if (napi_create_object(env, &itemObject) != napi_ok ||
+            napi_create_string_utf8(
+                env,
+                items[index].kind == qodex::threadui::native::DisplayItemKind::UserMessage ? "user" : "agent",
+                NAPI_AUTO_LENGTH,
+                &kindValue
+            ) != napi_ok ||
+            napi_create_string_utf8(env, items[index].text.c_str(), NAPI_AUTO_LENGTH, &textValue) != napi_ok ||
+            napi_set_named_property(env, itemObject, "kind", kindValue) != napi_ok ||
+            napi_set_named_property(env, itemObject, "text", textValue) != napi_ok ||
+            napi_set_element(env, array, index, itemObject) != napi_ok) {
+            napi_throw_error(env, nullptr, "Failed to create pending item value");
+            return nullptr;
+        }
+    }
+
+    return array;
+}
+
 napi_value shutdownWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -314,6 +358,7 @@ napi_value init(napi_env env, napi_value exports) {
         exportFunction(env, exports, "initialize", initializeWrapped) != napi_ok ||
         exportFunction(env, exports, "setFrameCountDisplayCallback", setFrameCountDisplayCallbackWrapped) != napi_ok ||
         exportFunction(env, exports, "tick", tickWrapped) != napi_ok ||
+        exportFunction(env, exports, "takePendingItems", takePendingItemsWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");
         return nullptr;

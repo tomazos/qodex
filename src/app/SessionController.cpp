@@ -13,6 +13,7 @@
 #include "CodexClient.h"
 #include "CodexProtocol.h"
 #include "app/AppConfig.h"
+#include "app/ThreadUiProcessManager.h"
 #include "codex/AppServerTransport.h"
 #include "domain/ThreadStore.h"
 #include "ui/MainWindow.h"
@@ -52,6 +53,7 @@ SessionController::SessionController(
     qodex::codex::AppServerTransport *transport,
     CodexClient *client,
     qodex::domain::ThreadStore *threadStore,
+    ThreadUiProcessManager *threadUiProcessManager,
     qodex::ui::MainWindow *mainWindow,
     QObject *parent
 )
@@ -60,10 +62,12 @@ SessionController::SessionController(
       m_transport(transport),
       m_client(client),
       m_threadStore(threadStore),
+      m_threadUiProcessManager(threadUiProcessManager),
       m_mainWindow(mainWindow) {
     Q_ASSERT(m_transport != nullptr);
     Q_ASSERT(m_client != nullptr);
     Q_ASSERT(m_threadStore != nullptr);
+    Q_ASSERT(m_threadUiProcessManager != nullptr);
     Q_ASSERT(m_mainWindow != nullptr);
 
     connect(m_transport, &qodex::codex::AppServerTransport::started, this, &SessionController::onTransportStarted);
@@ -72,6 +76,8 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::initializeFailed, this, &SessionController::onInitializeFailed);
     connect(m_client, &CodexClient::threadListSucceeded, this, &SessionController::onThreadListSucceeded);
     connect(m_client, &CodexClient::threadListFailed, this, &SessionController::onThreadListFailed);
+    connect(m_client, &CodexClient::threadResumeSucceeded, this, &SessionController::onThreadResumeSucceeded);
+    connect(m_client, &CodexClient::threadResumeFailed, this, &SessionController::onThreadResumeFailed);
     connect(m_client, &CodexClient::threadNameSetSucceeded, this, &SessionController::onThreadNameSetSucceeded);
     connect(m_client, &CodexClient::threadNameSetFailed, this, &SessionController::onThreadNameSetFailed);
     connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
@@ -165,6 +171,12 @@ void SessionController::attachWindow(qodex::ui::MainWindow *window) {
             &qodex::ui::ThreadListPane::threadSelected,
             this,
             &SessionController::onThreadSelected
+        );
+        connect(
+            pane,
+            &qodex::ui::ThreadListPane::resumeThreadRequested,
+            this,
+            &SessionController::onResumeThreadRequested
         );
         connect(
             pane,
@@ -326,12 +338,63 @@ void SessionController::onThreadListFailed(const JsonRpcId &id, const JsonRpcErr
     }
 }
 
+void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response) {
+    const QString threadId = m_pendingThreadResumeRequests.take(id.toKey());
+    if (threadId.isEmpty() || !response.thread) {
+        return;
+    }
+
+    const QString title = threadDisplayTitle(*response.thread);
+    m_threadUiProcessManager->showResumedThread(threadId, title, buildThreadUiAddItemsRequest(response));
+    m_mainWindow->setStatusMessage(QStringLiteral("Resumed thread %1.").arg(title));
+}
+
+void SessionController::onThreadResumeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    if (m_pendingThreadResumeRequests.remove(id.toKey()) == 0) {
+        return;
+    }
+
+    m_mainWindow->setStatusMessage(QStringLiteral("thread/resume failed: %1").arg(error.message));
+}
+
 void SessionController::onRefreshRequested() {
     requestThreadLists();
 }
 
 void SessionController::onThreadSelected(const QString &threadId) {
     m_threadStore->setSelectedThreadId(threadId);
+}
+
+void SessionController::onResumeThreadRequested(const QString &threadId) {
+    const auto summary = m_threadStore->threadSummaryById(threadId);
+    if (!summary.has_value()) {
+        return;
+    }
+
+    const JsonRpcId requestId = m_client->sendThreadResumeRequest(
+        missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
+        missing<qodex::codex::ApprovalsReviewer>(),
+        missing<QString>(),
+        missing<QMap<QString, QJsonValue>>(),
+        missing<QString>(),
+        missing<QString>(),
+        missing<QList<Ref<qodex::codex::ResponseItem>>>(),
+        missing<QString>(),
+        missing<QString>(),
+        missing<QString>(),
+        std::nullopt,
+        missing<qodex::codex::Personality>(),
+        missing<qodex::codex::SandboxMode>(),
+        missing<qodex::codex::ServiceTier>(),
+        threadId
+    );
+    if (!requestId.isValid()) {
+        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/resume request."));
+        return;
+    }
+
+    m_pendingThreadResumeRequests.insert(requestId.toKey(), threadId);
+    m_mainWindow->setStatusMessage(QStringLiteral("Resuming thread..."));
 }
 
 void SessionController::onRenameThreadRequested(const QString &threadId) {
@@ -716,6 +779,117 @@ void SessionController::refreshSelectedThreadUi() {
         }
         window->threadListPane()->setCurrentThreadId(m_threadStore->selectedThreadId());
     }
+}
+
+qodex::threadui::ipc::qodex_to_ui::AddItemsRequest SessionController::buildThreadUiAddItemsRequest(
+    const qodex::codex::ThreadResumeResponse &response
+) const {
+    qodex::threadui::ipc::qodex_to_ui::AddItemsRequest request;
+    if (!response.thread) {
+        return request;
+    }
+
+    for (const Ref<qodex::codex::Turn> &turn : response.thread->turns) {
+        if (!turn) {
+            continue;
+        }
+
+        for (const Ref<qodex::codex::ThreadItem> &item : turn->items) {
+            if (!item) {
+                continue;
+            }
+
+            switch (item->kind) {
+            case qodex::codex::ThreadItem::Kind::UserMessage: {
+                const Ref<qodex::codex::ThreadItemUserMessage> userMessage =
+                    std::get<Ref<qodex::codex::ThreadItemUserMessage>>(item->payload);
+                if (!userMessage) {
+                    break;
+                }
+
+                const QString text = flattenUserMessageContent(userMessage->content);
+                if (text.trimmed().isEmpty()) {
+                    break;
+                }
+
+                request.add_items()->mutable_user_message()->set_text(text.toStdString());
+                break;
+            }
+            case qodex::codex::ThreadItem::Kind::AgentMessage: {
+                const Ref<qodex::codex::ThreadItemAgentMessage> agentMessage =
+                    std::get<Ref<qodex::codex::ThreadItemAgentMessage>>(item->payload);
+                if (agentMessage == nullptr || agentMessage->text.trimmed().isEmpty()) {
+                    break;
+                }
+
+                request.add_items()->mutable_agent_message()->set_text(agentMessage->text.toStdString());
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+
+    return request;
+}
+
+QString SessionController::flattenUserMessageContent(
+    const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content
+) const {
+    QStringList parts;
+    parts.reserve(content.size());
+
+    for (const Ref<qodex::codex::UserInput> &input : content) {
+        if (!input) {
+            continue;
+        }
+
+        switch (input->kind) {
+        case qodex::codex::UserInput::Kind::Text: {
+            const Ref<qodex::codex::UserInputText> textInput =
+                std::get<Ref<qodex::codex::UserInputText>>(input->payload);
+            if (textInput && !textInput->text.isEmpty()) {
+                parts.append(textInput->text);
+            }
+            break;
+        }
+        case qodex::codex::UserInput::Kind::Image: {
+            const Ref<qodex::codex::UserInputImage> imageInput =
+                std::get<Ref<qodex::codex::UserInputImage>>(input->payload);
+            if (imageInput && !imageInput->url.isEmpty()) {
+                parts.append(QStringLiteral("[Image] %1").arg(imageInput->url));
+            }
+            break;
+        }
+        case qodex::codex::UserInput::Kind::LocalImage: {
+            const Ref<qodex::codex::UserInputLocalImage> localImageInput =
+                std::get<Ref<qodex::codex::UserInputLocalImage>>(input->payload);
+            if (localImageInput && !localImageInput->path.isEmpty()) {
+                parts.append(QStringLiteral("[Local Image] %1").arg(localImageInput->path));
+            }
+            break;
+        }
+        case qodex::codex::UserInput::Kind::Skill: {
+            const Ref<qodex::codex::UserInputSkill> skillInput =
+                std::get<Ref<qodex::codex::UserInputSkill>>(input->payload);
+            if (skillInput && !skillInput->name.isEmpty()) {
+                parts.append(QStringLiteral("[Skill] %1").arg(skillInput->name));
+            }
+            break;
+        }
+        case qodex::codex::UserInput::Kind::Mention: {
+            const Ref<qodex::codex::UserInputMention> mentionInput =
+                std::get<Ref<qodex::codex::UserInputMention>>(input->payload);
+            if (mentionInput && !mentionInput->name.isEmpty()) {
+                parts.append(QStringLiteral("@%1").arg(mentionInput->name));
+            }
+            break;
+        }
+        }
+    }
+
+    return parts.join(QStringLiteral("\n"));
 }
 
 qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {

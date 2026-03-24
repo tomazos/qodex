@@ -1,11 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <QList>
 #include <QObject>
 #include <QString>
+
+#include "qodex_to_ui.pb.h"
 
 class QProcess;
 
@@ -29,9 +32,13 @@ public:
     ~ThreadUiProcessManager() override;
 
     [[nodiscard]] QList<ThreadUiProcessInfo> activeProcesses() const;
+    void showResumedThread(
+        const QString &threadId,
+        const QString &title,
+        const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &addItemsRequest
+    );
 
 public slots:
-    void launchThreadUi();
     void activateThreadUi(int instanceId);
 
 signals:
@@ -41,10 +48,13 @@ signals:
 private:
     struct ProcessRecord {
         int instanceId = 0;
+        QString threadId;
         QString title;
         QString launchToken;
         QString lastStandardError;
+        bool authenticated = false;
         QProcess *process = nullptr;
+        std::optional<qodex::threadui::ipc::qodex_to_ui::AddItemsRequest> pendingAddItemsRequest;
     };
 
     [[nodiscard]] static QString resolveThreadUiAppDir();
@@ -52,10 +62,17 @@ private:
     [[nodiscard]] static QString resolveNodeProgram();
     [[nodiscard]] ProcessRecord *recordForInstanceId(int instanceId);
     [[nodiscard]] const ProcessRecord *recordForInstanceId(int instanceId) const;
+    [[nodiscard]] ProcessRecord *recordForThreadId(const QString &threadId);
+    [[nodiscard]] ProcessRecord *recordForLaunchToken(const QString &launchToken);
+    void relaunchThreadUiForThread(const QString &threadId, const QString &title);
+    void flushPendingAddItems(ProcessRecord *record);
     void removeRecord(int instanceId);
     void drainStandardOutput(ProcessRecord *record);
     void drainStandardError(ProcessRecord *record);
     void terminateAllProcesses();
+    void terminateRecord(ProcessRecord *record);
+    void onThreadUiAuthenticated(const QString &token);
+    void onThreadUiDisconnected(const QString &token);
 
     QString m_threadUiAppDir;
     QString m_threadUiStartScriptPath;
