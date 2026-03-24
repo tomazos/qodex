@@ -28,8 +28,10 @@ struct LaunchConfig {
 void initialize(const LaunchConfig &launchConfig = {});
 void tick();
 void shutdown();
+void sendUserInput(const std::string &text);
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback);
 [[nodiscard]] std::vector<DisplayItem> takePendingItems();
 [[nodiscard]] std::string takeFatalError();
+[[nodiscard]] std::string takePendingError();
 
 }  // namespace qodex::threadui::native

@@ -37,6 +37,12 @@ public:
         const QString &title,
         const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &addItemsRequest
     );
+    void replyToUserInputRequest(
+        int instanceId,
+        std::uint64_t requestId,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message
+    );
 
 public slots:
     void activateThreadUi(int instanceId);
@@ -44,6 +50,7 @@ public slots:
 signals:
     void activeProcessesChanged();
     void statusMessageRequested(const QString &message);
+    void userInputRequested(int instanceId, const QString &threadId, std::uint64_t requestId, const QString &text);
 
 private:
     struct ProcessRecord {
@@ -73,7 +80,9 @@ private:
     void terminateRecord(ProcessRecord *record);
     void onThreadUiAuthenticated(const QString &token);
     void onThreadUiDisconnected(const QString &token);
+    void onSendUserInputRequested(const QString &token, std::uint64_t requestId, const QString &text);
 
+private:
     QString m_threadUiAppDir;
     QString m_threadUiStartScriptPath;
     QString m_nodeProgram;

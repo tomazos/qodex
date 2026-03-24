@@ -24,6 +24,9 @@ let running = false;
 let fatalErrorReported = false;
 let threadItemsContainer = null;
 let emptyStateElement = null;
+let composerForm = null;
+let composerInput = null;
+let pendingErrorDialogOpen = false;
 
 function describeError(error) {
   if (error instanceof Error) {
@@ -146,6 +149,81 @@ function appendThreadItems(items) {
   threadItemsContainer.scrollTop = threadItemsContainer.scrollHeight;
 }
 
+function resizeComposerInput() {
+  if (!composerInput) {
+    return;
+  }
+
+  composerInput.style.height = '0px';
+  composerInput.style.height = `${composerInput.scrollHeight}px`;
+}
+
+async function showPendingError(message) {
+  if (fatalErrorReported || pendingErrorDialogOpen || typeof message !== 'string' || message.length === 0) {
+    return;
+  }
+
+  pendingErrorDialogOpen = true;
+  try {
+    await ipcRenderer.invoke('thread-ui:show-error', message);
+  } catch (error) {
+    await reportFatalError(error);
+    return;
+  } finally {
+    pendingErrorDialogOpen = false;
+  }
+
+  if (composerInput) {
+    composerInput.focus();
+  }
+}
+
+function submitComposerInput() {
+  if (!composerInput) {
+    return;
+  }
+
+  const text = composerInput.value;
+  if (text.trim().length === 0) {
+    composerInput.focus();
+    resizeComposerInput();
+    return;
+  }
+
+  native.sendUserInput(text);
+  composerInput.value = '';
+  resizeComposerInput();
+  composerInput.focus();
+}
+
+function initializeComposer() {
+  composerForm = document.getElementById('composer-form');
+  composerInput = document.getElementById('composer-input');
+  if (!composerForm || !composerInput) {
+    throw new Error('Thread UI composer controls were not found.');
+  }
+
+  composerForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitComposerInput();
+  });
+
+  composerInput.addEventListener('input', () => {
+    resizeComposerInput();
+  });
+
+  composerInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    submitComposerInput();
+  });
+
+  resizeComposerInput();
+}
+
 async function initialize() {
   if (running) {
     return;
@@ -161,6 +239,7 @@ async function initialize() {
     running = true;
     threadItemsContainer = document.getElementById('thread-items');
     emptyStateElement = document.getElementById('thread-empty-state');
+    initializeComposer();
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');
 
@@ -178,6 +257,12 @@ async function initialize() {
         }
 
         appendThreadItems(native.takePendingItems());
+        if (!pendingErrorDialogOpen) {
+          const pendingError = native.takePendingError();
+          if (typeof pendingError === 'string' && pendingError.length > 0) {
+            void showPendingError(pendingError);
+          }
+        }
         animationFrameId = window.requestAnimationFrame(frame);
       } catch (error) {
         void reportFatalError(error);
@@ -196,6 +281,7 @@ function shutdown() {
   }
 
   running = false;
+  pendingErrorDialogOpen = false;
 
   if (animationFrameId !== null) {
     window.cancelAnimationFrame(animationFrameId);

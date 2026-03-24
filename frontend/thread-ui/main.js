@@ -95,6 +95,32 @@ async function showFatalErrorAndExit(message) {
   app.exit(1);
 }
 
+async function showErrorDialog(message) {
+  const detail = describeError(message);
+  console.error(detail);
+
+  if (instanceInfo.smokeTest) {
+    return;
+  }
+
+  const options = {
+    type: 'error',
+    buttons: ['OK'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: instanceInfo.title,
+    message: 'Error',
+    detail,
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await dialog.showMessageBox(mainWindow, options);
+  } else {
+    await dialog.showMessageBox(options);
+  }
+}
+
 function getWindowState(window) {
   return {
     isMaximized: window.isMaximized(),
@@ -295,6 +321,9 @@ ipcMain.handle('window:close', (event) => {
 
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
 ipcMain.handle('thread-ui:get-launch-config', () => launchConfig);
+ipcMain.handle('thread-ui:show-error', async (_event, message) => {
+  await showErrorDialog(message);
+});
 ipcMain.handle('thread-ui:fatal-error', async (_event, message) => {
   await showFatalErrorAndExit(message);
 });

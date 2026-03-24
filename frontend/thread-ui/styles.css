@@ -79,15 +79,18 @@ body {
 
 main {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   padding: 1rem;
+  gap: 1rem;
   overflow: hidden;
 }
 
 .thread-view {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .thread-view__items {
@@ -133,4 +136,54 @@ main {
   font: inherit;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+}
+
+.composer__input {
+  flex: 1;
+  min-height: calc(1lh + 1.25rem);
+  padding: 0.625rem 0.75rem;
+  border: 1px solid color-mix(in srgb, canvastext 16%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, canvas 94%, canvastext 6%);
+  color: inherit;
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.composer__send {
+  min-width: 6rem;
+  min-height: calc(1lh + 1.25rem);
+  padding: 0.625rem 1rem;
+  border: 1px solid color-mix(in srgb, canvastext 18%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, #2563eb 70%, canvas);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.composer__send:hover {
+  background: color-mix(in srgb, #1d4ed8 78%, canvas);
+}
+
+.composer__send:active {
+  background: color-mix(in srgb, #1e40af 82%, canvas);
+}
+
+.composer__input:focus-visible,
+.composer__send:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
 }

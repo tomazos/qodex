@@ -277,6 +277,38 @@ napi_value tickWrapped(napi_env env, napi_callback_info info) {
     return getUndefined(env);
 }
 
+napi_value sendUserInputWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 1) {
+        throwTypeError(env, "sendUserInput expects exactly 1 argument");
+        return nullptr;
+    }
+
+    size_t textLength = 0;
+    if (napi_get_value_string_utf8(env, args[0], nullptr, 0, &textLength) != napi_ok) {
+        throwTypeError(env, "sendUserInput expects a string");
+        return nullptr;
+    }
+
+    std::string text(textLength + 1, '\0');
+    size_t copiedLength = 0;
+    if (napi_get_value_string_utf8(env, args[0], text.data(), text.size(), &copiedLength) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read sendUserInput text");
+        return nullptr;
+    }
+
+    text.resize(copiedLength);
+    qodex::threadui::native::sendUserInput(text);
+    return getUndefined(env);
+}
+
 napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -348,6 +380,33 @@ napi_value takeFatalErrorWrapped(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value takePendingErrorWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "takePendingError expects no arguments");
+        return nullptr;
+    }
+
+    const std::string pendingError = qodex::threadui::native::takePendingError();
+    if (pendingError.empty()) {
+        return getUndefined(env);
+    }
+
+    napi_value result = nullptr;
+    if (napi_create_string_utf8(env, pendingError.c_str(), NAPI_AUTO_LENGTH, &result) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create pending error string");
+        return nullptr;
+    }
+
+    return result;
+}
+
 napi_value shutdownWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -385,8 +444,10 @@ napi_value init(napi_env env, napi_value exports) {
     if (exportFunction(env, exports, "add", addWrapped) != napi_ok ||
         exportFunction(env, exports, "initialize", initializeWrapped) != napi_ok ||
         exportFunction(env, exports, "setFrameCountDisplayCallback", setFrameCountDisplayCallbackWrapped) != napi_ok ||
+        exportFunction(env, exports, "sendUserInput", sendUserInputWrapped) != napi_ok ||
         exportFunction(env, exports, "tick", tickWrapped) != napi_ok ||
         exportFunction(env, exports, "takeFatalError", takeFatalErrorWrapped) != napi_ok ||
+        exportFunction(env, exports, "takePendingError", takePendingErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingItems", takePendingItemsWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");

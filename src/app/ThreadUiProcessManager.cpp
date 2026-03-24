@@ -54,6 +54,12 @@ ThreadUiProcessManager::ThreadUiProcessManager(qodex::threadui::ThreadUiIpcServe
         this,
         &ThreadUiProcessManager::onThreadUiDisconnected
     );
+    QObject::connect(
+        m_threadUiIpcServer,
+        &qodex::threadui::ThreadUiIpcServer::sendUserInputRequested,
+        this,
+        &ThreadUiProcessManager::onSendUserInputRequested
+    );
 }
 
 ThreadUiProcessManager::~ThreadUiProcessManager() {
@@ -214,6 +220,25 @@ void ThreadUiProcessManager::activateThreadUi(const int instanceId) {
     }
 
     emit statusMessageRequested(QStringLiteral("Activating %1...").arg(record->title));
+}
+
+void ThreadUiProcessManager::replyToUserInputRequest(
+    const int instanceId,
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message
+) {
+    ProcessRecord *record = recordForInstanceId(instanceId);
+    if (record == nullptr) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!m_threadUiIpcServer->sendUserInputResponse(record->launchToken, requestId, status, message, &errorMessage)) {
+        emit statusMessageRequested(
+            QStringLiteral("Failed to reply to %1 input request: %2").arg(record->title, errorMessage)
+        );
+    }
 }
 
 QString ThreadUiProcessManager::resolveThreadUiAppDir() {
@@ -428,6 +453,19 @@ void ThreadUiProcessManager::onThreadUiDisconnected(const QString &token) {
     }
 
     record->authenticated = false;
+}
+
+void ThreadUiProcessManager::onSendUserInputRequested(
+    const QString &token,
+    const std::uint64_t requestId,
+    const QString &text
+) {
+    ProcessRecord *record = recordForLaunchToken(token);
+    if (record == nullptr) {
+        return;
+    }
+
+    emit userInputRequested(record->instanceId, record->threadId, requestId, text);
 }
 
 }  // namespace qodex::app

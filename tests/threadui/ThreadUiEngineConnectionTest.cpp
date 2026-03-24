@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 
+#include "common.pb.h"
 #include "qodex_to_ui.pb.h"
 #include "threadui/ThreadUiIpcServer.h"
 #include "threadui_native/ThreadUiEngine.h"
@@ -15,6 +16,7 @@ class ThreadUiEngineConnectionTest final : public QObject {
 
 private slots:
     void establishesTcpConnectionToQodexListener();
+    void sendsUserInputRequestsAndReportsErrors();
 };
 
 void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
@@ -62,6 +64,100 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     qodex::threadui::native::shutdown();
 
     QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
+}
+
+void ThreadUiEngineConnectionTest::sendsUserInputRequestsAndReportsErrors() {
+    ThreadUiIpcServer server;
+
+    QString errorMessage;
+    QVERIFY2(server.listen(&errorMessage), qPrintable(errorMessage));
+
+    const qodex::threadui::ThreadUiLaunchConfig launchConfig = server.allocateLaunchConfig();
+
+    qodex::threadui::native::initialize(LaunchConfig{
+        .host = launchConfig.host.toStdString(),
+        .port = launchConfig.port,
+        .token = launchConfig.token.toStdString(),
+    });
+
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
+
+    int requestCount = 0;
+    QString lastToken;
+    std::uint64_t lastRequestId = 0;
+    QString lastText;
+    QObject::connect(
+        &server,
+        &ThreadUiIpcServer::sendUserInputRequested,
+        this,
+        [&requestCount, &lastToken, &lastRequestId, &lastText](
+            const QString &token,
+            const std::uint64_t requestId,
+            const QString &text
+        ) {
+            ++requestCount;
+            lastToken = token;
+            lastRequestId = requestId;
+            lastText = text;
+        }
+    );
+
+    qodex::threadui::native::sendUserInput("Hello from renderer");
+
+    QTRY_COMPARE(requestCount, 1);
+    QCOMPARE(lastToken, launchConfig.token);
+    QCOMPARE(lastText, QStringLiteral("Hello from renderer"));
+    QVERIFY(lastRequestId != 0);
+
+    QVERIFY2(
+        server.sendUserInputResponse(
+            launchConfig.token,
+            lastRequestId,
+            qodex::threadui::ipc::common::RESULT_STATUS_OK,
+            QStringLiteral("Accepted."),
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    QCOMPARE(qodex::threadui::native::takePendingError(), std::string{});
+
+    const std::uint64_t firstRequestId = lastRequestId;
+    qodex::threadui::native::sendUserInput("This should fail");
+
+    QTRY_COMPARE(requestCount, 2);
+    QCOMPARE(lastToken, launchConfig.token);
+    QCOMPARE(lastText, QStringLiteral("This should fail"));
+    QVERIFY(lastRequestId > firstRequestId);
+
+    QVERIFY2(
+        server.sendUserInputResponse(
+            launchConfig.token,
+            lastRequestId,
+            qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+            QStringLiteral("Rejected."),
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    std::string pendingError;
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 1000 && pendingError.empty()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        pendingError = qodex::threadui::native::takePendingError();
+        if (pendingError.empty()) {
+            QTest::qWait(20);
+        }
+    }
+
+    QCOMPARE(pendingError, std::string("SendUserInput failed: Rejected."));
+
+    qodex::threadui::native::shutdown();
+
     QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
 }
 

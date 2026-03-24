@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 
 #include "qodex_to_ui.qodex_rpc.h"
@@ -25,6 +26,8 @@ qodex::threadui::native::LaunchConfig currentLaunchConfig;
 FrameCountDisplayCallback frameCountDisplayCallback;
 std::mutex fatalErrorMutex;
 std::string pendingFatalError;
+std::mutex pendingErrorMutex;
+std::string pendingError;
 std::mutex pendingItemsMutex;
 std::vector<qodex::threadui::native::DisplayItem> pendingItems;
 struct IpcClientState;
@@ -55,6 +58,8 @@ struct IpcClientState final {
     std::array<char, 4096> readChunk{};
     std::string inputBuffer;
     std::deque<std::string> writeQueue;
+    std::deque<std::string> queuedUserInputTexts;
+    std::unordered_set<std::uint64_t> pendingSendUserInputRequestIds;
     std::uint64_t nextRequestId = 1;
     std::uint64_t pendingLoginRequestId = 0;
     bool stopRequested = false;
@@ -80,6 +85,17 @@ void recordFatalError(const std::string &message) {
     std::lock_guard lock(fatalErrorMutex);
     if (pendingFatalError.empty()) {
         pendingFatalError = message;
+    }
+}
+
+void recordPendingError(const std::string &message) {
+    if (message.empty()) {
+        return;
+    }
+
+    std::lock_guard lock(pendingErrorMutex);
+    if (pendingError.empty()) {
+        pendingError = message;
     }
 }
 
@@ -128,6 +144,25 @@ void beginWriteQueuedFrames(IpcClientState *state) {
 
 void queueEnvelopeForWrite(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     queueFrameForWrite(state, qodex::threadui::ipc::encodeEnvelopeFrame(envelope));
+}
+
+void flushQueuedUserInput(IpcClientState *state) {
+    if (state == nullptr || state->stopRequested || !state->authenticated) {
+        return;
+    }
+
+    while (!state->queuedUserInputTexts.empty()) {
+        qodex::threadui::ipc::ui_to_qodex::SendUserInputRequest request;
+        request.set_text(state->queuedUserInputTexts.front());
+
+        const std::uint64_t requestId = state->nextRequestId++;
+        state->pendingSendUserInputRequestIds.insert(requestId);
+        queueEnvelopeForWrite(
+            state,
+            qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::SendUserInput>(requestId, request)
+        );
+        state->queuedUserInputTexts.pop_front();
+    }
 }
 
 void scheduleReconnect(IpcClientState *state, const asio::error_code &errorCode) {
@@ -251,6 +286,26 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
 
                 state->authenticated = true;
                 std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
+                flushQueuedUserInput(state);
+                return true;
+            }
+
+            bool onSendUserInputResponse(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::SendUserInputResponse &response,
+                std::string *errorMessage
+            ) {
+                if (!state->pendingSendUserInputRequestIds.contains(requestId)) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Received a SendUserInput response for an unknown request id.";
+                    }
+                    return false;
+                }
+
+                state->pendingSendUserInputRequestIds.erase(requestId);
+                if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
+                    recordPendingError("SendUserInput failed: " + response.message());
+                }
                 return true;
             }
         } handler{state};
@@ -399,6 +454,7 @@ void scheduleConnect(IpcClientState *state) {
                     state->connected = true;
                     state->authenticated = false;
                     state->pendingLoginRequestId = 0;
+                    state->pendingSendUserInputRequestIds.clear();
                     state->inputBuffer.clear();
                     state->writeQueue.clear();
                     state->writeInProgress = false;
@@ -471,6 +527,10 @@ void initialize(const LaunchConfig &launchConfig) {
         pendingFatalError.clear();
     }
     {
+        std::lock_guard lock(pendingErrorMutex);
+        pendingError.clear();
+    }
+    {
         std::lock_guard lock(pendingItemsMutex);
         pendingItems.clear();
     }
@@ -503,6 +563,34 @@ std::string takeFatalError() {
     return message;
 }
 
+std::string takePendingError() {
+    std::lock_guard lock(pendingErrorMutex);
+    std::string message = std::move(pendingError);
+    pendingError.clear();
+    return message;
+}
+
+void sendUserInput(const std::string &text) {
+    if (!initialized || text.empty() || !ipcClientState) {
+        if (initialized && text.empty()) {
+            recordPendingError("Input must not be empty.");
+        } else if (!initialized || !ipcClientState) {
+            recordPendingError("Thread UI is not connected.");
+        }
+        return;
+    }
+
+    IpcClientState *state = ipcClientState.get();
+    asio::post(state->ioContext, [state, text] {
+        if (state->stopRequested) {
+            return;
+        }
+
+        state->queuedUserInputTexts.push_back(text);
+        flushQueuedUserInput(state);
+    });
+}
+
 void tick() {
     if (!initialized) {
         return;
@@ -531,6 +619,10 @@ void shutdown() {
     {
         std::lock_guard lock(fatalErrorMutex);
         pendingFatalError.clear();
+    }
+    {
+        std::lock_guard lock(pendingErrorMutex);
+        pendingError.clear();
     }
     {
         std::lock_guard lock(pendingItemsMutex);

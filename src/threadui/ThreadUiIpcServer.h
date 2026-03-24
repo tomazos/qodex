@@ -8,12 +8,11 @@
 #include <cstdint>
 #include <string>
 
+#include "common.pb.h"
+#include "qodex_to_ui.pb.h"
+
 class QTcpServer;
 class QTcpSocket;
-
-namespace qodex::threadui::ipc::qodex_to_ui {
-class AddItemsRequest;
-}
 
 namespace qodex::threadui {
 
@@ -42,10 +41,18 @@ public:
         const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request,
         QString *errorMessage = nullptr
     );
+    [[nodiscard]] bool sendUserInputResponse(
+        const QString &token,
+        std::uint64_t requestId,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message,
+        QString *errorMessage = nullptr
+    );
 
 signals:
     void threadUiAuthenticated(const QString &token);
     void threadUiDisconnected(const QString &token);
+    void sendUserInputRequested(const QString &token, std::uint64_t requestId, const QString &text);
 
 private:
     struct ConnectionState {

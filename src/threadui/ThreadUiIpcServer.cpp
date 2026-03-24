@@ -41,6 +41,18 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     return makeResponseEnvelope(requestId, response);
 }
 
+qodex::threadui::ipc::common::RpcEnvelope makeSendUserInputResponseEnvelope(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message
+) {
+    qodex::threadui::ipc::ui_to_qodex::SendUserInputResponse response;
+    response.set_status(status);
+    response.set_message(message.toStdString());
+
+    return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::SendUserInput>(requestId, response);
+}
+
 qodex::threadui::ipc::common::RpcEnvelope makeAddItemsRequestEnvelope(
     const std::uint64_t requestId,
     const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request
@@ -182,6 +194,31 @@ bool ThreadUiIpcServer::sendAddItems(
     return true;
 }
 
+bool ThreadUiIpcServer::sendUserInputResponse(
+    const QString &token,
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message,
+    QString *errorMessage
+) {
+    QTcpSocket *socket = m_authenticatedConnectionsByToken.value(token, nullptr);
+    if (socket == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection is not authenticated yet.");
+        }
+        return false;
+    }
+
+    if (!sendEnvelope(socket, makeSendUserInputResponseEnvelope(requestId, status, message))) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to send UiToQodex.SendUserInput response.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void ThreadUiIpcServer::onNewConnection() {
     if (m_server == nullptr) {
         return;
@@ -279,6 +316,8 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
 
             struct UiToQodexRequestHandler final {
                 QTcpSocket *socket;
+                const QString &token;
+                std::function<void(const QString &, std::uint64_t, const QString &)> emitSendUserInputRequested;
 
                 bool onLoginRequest(
                     const std::uint64_t requestId,
@@ -299,7 +338,22 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                     );
                     return false;
                 }
-            } handler{socket};
+
+                bool onSendUserInputRequest(
+                    const std::uint64_t requestId,
+                    const qodex::threadui::ipc::ui_to_qodex::SendUserInputRequest &request,
+                    std::string *
+                ) {
+                    emitSendUserInputRequested(token, requestId, QString::fromStdString(request.text()));
+                    return true;
+                }
+            } handler{
+                socket,
+                connectionState.authenticatedToken,
+                [this](const QString &token, const std::uint64_t requestId, const QString &text) {
+                    emit sendUserInputRequested(token, requestId, text);
+                },
+            };
 
             std::string dispatchErrorMessage;
             if (!UiToQodexRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
@@ -372,6 +426,25 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
 
                 emitAuthenticated(token);
                 return true;
+            }
+
+            bool onSendUserInputRequest(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::SendUserInputRequest &,
+                std::string *errorMessage
+            ) {
+                sendEnvelope(
+                    socket,
+                    makeSendUserInputResponseEnvelope(
+                        requestId,
+                        RESULT_STATUS_ERROR,
+                        QStringLiteral("UiToQodex.SendUserInput is only valid after authentication.")
+                    )
+                );
+                if (errorMessage != nullptr) {
+                    *errorMessage = "UiToQodex.SendUserInput is only valid after authentication.";
+                }
+                return false;
             }
 
             std::function<void(const QString &)> emitAuthenticated;

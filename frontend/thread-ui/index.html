@@ -42,12 +42,28 @@
           </button>
         </div>
       </header>
-      <main>
+      <main class="thread-ui">
         <section class="thread-view">
           <div class="thread-view__items" id="thread-items">
             <p class="thread-view__empty" id="thread-empty-state">Resume a thread to load its history.</p>
           </div>
         </section>
+        <form class="composer" id="composer-form">
+          <textarea
+            class="composer__input"
+            id="composer-input"
+            rows="1"
+            placeholder="Send a message"
+            aria-label="Send a message"
+          ></textarea>
+          <button
+            class="composer__send"
+            id="composer-send"
+            type="submit"
+          >
+            Send
+          </button>
+        </form>
       </main>
     </div>
     <script src="./init.js"></script>

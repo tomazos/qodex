@@ -47,6 +47,13 @@ using qodex::codex::ThreadUnarchiveResponse;
 using qodex::codex::ThreadUnsubscribeResponse;
 using qodex::codex::ThreadUnsubscribeStatus;
 using qodex::codex::ThreadUnarchivedNotificationParams;
+using qodex::codex::TurnCompletedNotificationParams;
+using qodex::codex::TurnStartResponse;
+using qodex::codex::TurnStartedNotificationParams;
+using qodex::codex::TurnStatus;
+using qodex::codex::TurnSteerResponse;
+using qodex::codex::UserInput;
+using qodex::codex::UserInputText;
 
 SessionController::SessionController(
     const AppConfig &config,
@@ -78,6 +85,10 @@ SessionController::SessionController(
     connect(m_client, &CodexClient::threadListFailed, this, &SessionController::onThreadListFailed);
     connect(m_client, &CodexClient::threadResumeSucceeded, this, &SessionController::onThreadResumeSucceeded);
     connect(m_client, &CodexClient::threadResumeFailed, this, &SessionController::onThreadResumeFailed);
+    connect(m_client, &CodexClient::turnStartSucceeded, this, &SessionController::onTurnStartSucceeded);
+    connect(m_client, &CodexClient::turnStartFailed, this, &SessionController::onTurnStartFailed);
+    connect(m_client, &CodexClient::turnSteerSucceeded, this, &SessionController::onTurnSteerSucceeded);
+    connect(m_client, &CodexClient::turnSteerFailed, this, &SessionController::onTurnSteerFailed);
     connect(m_client, &CodexClient::threadNameSetSucceeded, this, &SessionController::onThreadNameSetSucceeded);
     connect(m_client, &CodexClient::threadNameSetFailed, this, &SessionController::onThreadNameSetFailed);
     connect(m_client, &CodexClient::threadArchiveSucceeded, this, &SessionController::onThreadArchiveSucceeded);
@@ -126,6 +137,18 @@ SessionController::SessionController(
     );
     connect(
         m_client,
+        &CodexClient::turnStartedNotificationReceived,
+        this,
+        &SessionController::onTurnStartedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::turnCompletedNotificationReceived,
+        this,
+        &SessionController::onTurnCompletedNotificationReceived
+    );
+    connect(
+        m_client,
         &CodexClient::transportErrorOccurred,
         this,
         &SessionController::onTransportErrorOccurred
@@ -149,6 +172,12 @@ SessionController::SessionController(
         &qodex::domain::ThreadStore::selectedThreadChanged,
         this,
         &SessionController::refreshSelectedThreadUi
+    );
+    connect(
+        m_threadUiProcessManager,
+        &ThreadUiProcessManager::userInputRequested,
+        this,
+        &SessionController::onThreadUiUserInputRequested
     );
 }
 
@@ -344,6 +373,13 @@ void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const qodex
         return;
     }
 
+    const QString activeTurnId = activeTurnIdForThread(*response.thread);
+    if (activeTurnId.isEmpty()) {
+        m_activeTurnIdsByThreadId.remove(threadId);
+    } else {
+        m_activeTurnIdsByThreadId.insert(threadId, activeTurnId);
+    }
+
     const QString title = threadDisplayTitle(*response.thread);
     m_threadUiProcessManager->showResumedThread(threadId, title, buildThreadUiAddItemsRequest(response));
     m_mainWindow->setStatusMessage(QStringLiteral("Resumed thread %1.").arg(title));
@@ -355,6 +391,131 @@ void SessionController::onThreadResumeFailed(const JsonRpcId &id, const JsonRpcE
     }
 
     m_mainWindow->setStatusMessage(QStringLiteral("thread/resume failed: %1").arg(error.message));
+}
+
+void SessionController::onThreadUiUserInputRequested(
+    const int instanceId,
+    const QString &threadId,
+    const std::uint64_t requestId,
+    const QString &text
+) {
+    const QString trimmedText = text.trimmed();
+    if (trimmedText.isEmpty()) {
+        m_threadUiProcessManager->replyToUserInputRequest(
+            instanceId,
+            requestId,
+            qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+            QStringLiteral("Input must not be empty.")
+        );
+        return;
+    }
+
+    const QList<Ref<UserInput>> input = buildTextUserInput(trimmedText);
+    const QString activeTurnId = m_activeTurnIdsByThreadId.value(threadId);
+
+    JsonRpcId transportRequestId;
+    if (activeTurnId.isEmpty()) {
+        transportRequestId = m_client->sendTurnStartRequest(
+            missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
+            missing<qodex::codex::ApprovalsReviewer>(),
+            missing<Ref<qodex::codex::CollaborationMode>>(),
+            missing<QString>(),
+            missing<qodex::codex::ReasoningEffort>(),
+            input,
+            missing<QString>(),
+            std::nullopt,
+            missing<qodex::codex::Personality>(),
+            missing<Ref<qodex::codex::SandboxPolicy>>(),
+            missing<qodex::codex::ServiceTier>(),
+            missing<qodex::codex::ReasoningSummary>(),
+            threadId
+        );
+    } else {
+        transportRequestId = m_client->sendTurnSteerRequest(activeTurnId, input, threadId);
+    }
+
+    if (!transportRequestId.isValid()) {
+        m_threadUiProcessManager->replyToUserInputRequest(
+            instanceId,
+            requestId,
+            qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+            QStringLiteral("Failed to send turn request.")
+        );
+        return;
+    }
+
+    m_pendingThreadUiUserInputRequests.insert(
+        transportRequestId.toKey(),
+        PendingThreadUiUserInputRequest{
+            .instanceId = instanceId,
+            .requestId = requestId,
+            .threadId = threadId,
+        }
+    );
+}
+
+void SessionController::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResponse &response) {
+    const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
+    if (pendingRequest.threadId.isEmpty()) {
+        return;
+    }
+
+    if (response.turn && !response.turn->id.isEmpty()) {
+        m_activeTurnIdsByThreadId.insert(pendingRequest.threadId, response.turn->id);
+    }
+
+    m_threadUiProcessManager->replyToUserInputRequest(
+        pendingRequest.instanceId,
+        pendingRequest.requestId,
+        qodex::threadui::ipc::common::RESULT_STATUS_OK,
+        QStringLiteral("Turn started.")
+    );
+}
+
+void SessionController::onTurnStartFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
+    if (pendingRequest.threadId.isEmpty()) {
+        return;
+    }
+
+    m_threadUiProcessManager->replyToUserInputRequest(
+        pendingRequest.instanceId,
+        pendingRequest.requestId,
+        qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+        error.message
+    );
+}
+
+void SessionController::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResponse &response) {
+    const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
+    if (pendingRequest.threadId.isEmpty()) {
+        return;
+    }
+
+    if (!response.turnId.isEmpty()) {
+        m_activeTurnIdsByThreadId.insert(pendingRequest.threadId, response.turnId);
+    }
+
+    m_threadUiProcessManager->replyToUserInputRequest(
+        pendingRequest.instanceId,
+        pendingRequest.requestId,
+        qodex::threadui::ipc::common::RESULT_STATUS_OK,
+        QStringLiteral("Turn steered.")
+    );
+}
+
+void SessionController::onTurnSteerFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
+    if (pendingRequest.threadId.isEmpty()) {
+        return;
+    }
+
+    m_threadUiProcessManager->replyToUserInputRequest(
+        pendingRequest.instanceId,
+        pendingRequest.requestId,
+        qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+        error.message
+    );
 }
 
 void SessionController::onRefreshRequested() {
@@ -732,6 +893,7 @@ void SessionController::onThreadStartedNotificationReceived(const ThreadStartedN
 }
 
 void SessionController::onThreadClosedNotificationReceived(const ThreadClosedNotificationParams &params) {
+    m_activeTurnIdsByThreadId.remove(params.threadId);
     if (!m_threadStore->updateThreadStatusText(params.threadId, QStringLiteral("Not Loaded"))) {
         return;
     }
@@ -757,6 +919,9 @@ void SessionController::onThreadStatusChangedNotificationReceived(const ThreadSt
     if (!params.status) {
         return;
     }
+    if (params.status->kind != ThreadStatus::Kind::Active) {
+        m_activeTurnIdsByThreadId.remove(params.threadId);
+    }
     m_threadStore->updateThreadStatusText(params.threadId, threadStatusText(*params.status));
 }
 
@@ -770,6 +935,26 @@ void SessionController::onThreadUnarchivedNotificationReceived(const ThreadUnarc
     if (!m_threadStore->setThreadArchived(params.threadId, false)) {
         requestThreadList(false);
     }
+}
+
+void SessionController::onTurnStartedNotificationReceived(const TurnStartedNotificationParams &params) {
+    if (!params.turn || params.turn->id.isEmpty()) {
+        return;
+    }
+
+    m_activeTurnIdsByThreadId.insert(params.threadId, params.turn->id);
+}
+
+void SessionController::onTurnCompletedNotificationReceived(const TurnCompletedNotificationParams &params) {
+    if (params.turn && !params.turn->id.isEmpty()) {
+        const QString activeTurnId = m_activeTurnIdsByThreadId.value(params.threadId);
+        if (activeTurnId.isEmpty() || activeTurnId == params.turn->id) {
+            m_activeTurnIdsByThreadId.remove(params.threadId);
+        }
+        return;
+    }
+
+    m_activeTurnIdsByThreadId.remove(params.threadId);
 }
 
 void SessionController::refreshSelectedThreadUi() {
@@ -832,6 +1017,35 @@ qodex::threadui::ipc::qodex_to_ui::AddItemsRequest SessionController::buildThrea
     }
 
     return request;
+}
+
+QString SessionController::activeTurnIdForThread(const Thread &thread) const {
+    for (auto it = thread.turns.crbegin(); it != thread.turns.crend(); ++it) {
+        const Ref<qodex::codex::Turn> &turn = *it;
+        if (!turn || turn->id.isEmpty()) {
+            continue;
+        }
+
+        if (turn->status == TurnStatus::InProgress) {
+            return turn->id;
+        }
+    }
+
+    return {};
+}
+
+QList<Ref<UserInput>> SessionController::buildTextUserInput(const QString &text) const {
+    QList<Ref<UserInput>> input;
+
+    auto textInput = Ref<UserInputText>::create();
+    textInput->text = text;
+
+    auto userInput = Ref<UserInput>::create();
+    userInput->kind = UserInput::Kind::Text;
+    userInput->payload = textInput;
+
+    input.append(userInput);
+    return input;
 }
 
 QString SessionController::flattenUserMessageContent(
