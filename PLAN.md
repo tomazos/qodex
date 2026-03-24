@@ -37,7 +37,8 @@ So the architecture is:
   thread list, API log, menus, window management, status
 - qodex as the source of truth for Codex transport, persistence, and thread metadata
 - External Electron thread-ui windows launched and supervised by qodex
-- Explicit local IPC between qodex and each thread-ui process
+- Explicit versioned local IPC between qodex and each thread-ui process
+- One loopback TCP connection per thread-ui, initiated by the thread-ui process back to qodex
 
 ## Current Implemented State
 
@@ -70,6 +71,7 @@ qodex/
   CMakeLists.txt
   PLAN.md
   README.md
+  ipc/         # planned thread-ui IPC .proto definitions and codegen inputs
   src/
     main.cpp
     app/        # implemented Qt-side composition and orchestration
@@ -84,6 +86,7 @@ qodex/
   resources/    # implemented Qt resources
   tests/
   build/generated/protocol/  # generated Codex protocol bindings
+  build/generated/threadui-ipc/  # planned generated qodex <-> thread-ui IPC bindings
 ```
 
 ## File and Class Plan
@@ -363,14 +366,17 @@ Responsibilities:
 
 - Launch, supervise, and focus one Electron process/window per active thread
 - Know where the staged Electron app lives in the build/install tree
-- Pass thread identity and IPC connection details to the Electron side
+- Start or coordinate the qodex-side IPC listener for each launched thread-ui
+- Pass thread identity and qodex IPC endpoint details to the Electron side
 - Keep process-lifecycle policy out of `SessionController`
 
 #### `src/threadui/ThreadUiIpcServer.h` / `src/threadui/ThreadUiIpcServer.cpp`
 
 Responsibilities:
 
-- Own qodex-side local IPC for thread-ui windows
+- Own the qodex-side loopback TCP server for thread-ui windows
+- Accept one authenticated bidirectional connection per launched thread-ui
+- Validate the launch token / instance nonce during handshake
 - Send initial thread snapshots and incremental updates
 - Receive user intents back from Electron:
   - prompt send
@@ -378,12 +384,39 @@ Responsibilities:
   - open file/link requests
   - window lifecycle notifications
 
+Important transport rules:
+
+- qodex listens; thread-ui connects back
+- only one full-duplex socket is used per thread-ui window
+- the transport is local-only and bound to loopback
+- handshake happens over that socket; thread-ui does not expose its own listener address
+- request/response and notification traffic share the same framed transport
+- authentication is via a launch token / instance nonce passed on the command line and echoed in the handshake
+
 Important rules:
 
 - qodex remains the source of truth for Codex session state and persistence
 - Electron owns DOM, renderer timing, prompt UX, and transcript presentation
 - communication must be explicit and versioned; no temp-file HTML handoff
 - qodex CMake should build and stage the Electron app and any native addon; normal builds should not depend on `npm start`
+
+#### `ipc/`
+
+Responsibilities:
+
+- Define the qodex <-> thread-ui IPC schema in `.proto` files
+- Separate common transport/handshake messages from the two RPC surfaces:
+  - `UiToQodex`
+  - `QodexToUi`
+- Treat `.proto service` definitions as qodex-owned IDL, not as a commitment to gRPC
+- Generate typed client stubs, dispatchers, and message descriptors via a custom `protoc` plugin
+
+Important rules:
+
+- generated code should target qodex’s chosen transport, not assume gRPC
+- the service IDL should be transport-agnostic
+- framing, socket I/O, and connection lifecycle stay outside the generated service layer
+- protocol versioning starts with the handshake and is explicit
 
 #### `frontend/thread-ui/`
 
@@ -396,8 +429,18 @@ Responsibilities:
   - `index.html`
   - renderer JS/CSS assets
 - Render one thread conversation window
-- Connect to qodex over local IPC
+- Connect back to qodex over the loopback TCP endpoint passed on the command line
 - Keep prompt composition and transcript DOM logic out of the Qt shell
+
+Expected startup flow:
+
+- qodex launches thread-ui with:
+  - thread identity
+  - qodex IPC host/port
+  - launch token / instance nonce
+- thread-ui native code connects to qodex
+- thread-ui sends the first handshake request over the connected socket
+- once qodex accepts the handshake, normal bidirectional RPC begins
 
 #### `src/threadui_native/`
 
@@ -406,6 +449,7 @@ Responsibilities:
 - Optional CMake-built N-API addon for the Electron side
 - Link external native libraries cleanly through the main qodex build
 - Avoid a separate `node-gyp` build graph once integrated into qodex
+- Host the thread-ui side of the IPC connection on the native side rather than in renderer JS when practical
 
 #### `cmake/QodexElectron.cmake`
 
@@ -470,11 +514,12 @@ The public interfaces should be designed so this move does not force a rewrite.
 7. `ThreadListModel` updates.
 8. User selects a thread in the Qt shell.
 9. qodex updates shell state and, when requested, opens or focuses that thread’s Electron window.
-10. `ThreadUiProcessManager` launches the staged Electron app for the thread and connects local IPC.
-11. qodex sends a thread snapshot / delta stream to the Electron thread-ui.
-12. During active turns, streamed notifications go:
+10. `ThreadUiProcessManager` allocates a launch token, ensures the qodex-side loopback TCP server is listening, and launches the staged Electron app with the endpoint details.
+11. thread-ui connects back to qodex over that socket and sends a handshake request.
+12. qodex validates the handshake, binds the connection to the launched process, and sends a thread snapshot / delta stream to the Electron thread-ui.
+13. During active turns, streamed notifications go:
     `AppServerTransport -> CodexClient -> LiveTurnReducer -> ThreadStore -> ThreadUiProjector -> ThreadUiIpcServer`
-13. User intents from the Electron window flow back to qodex over the same IPC channel.
+14. User intents from the Electron window flow back to qodex over the same bidirectional IPC channel.
 
 ## Testing Plan
 
@@ -516,7 +561,8 @@ This is the highest-value test area.
 
 ### `tests/threadui/`
 
-- IPC protocol tests
+- IPC transport and handshake tests
+- generated service / dispatcher tests from the thread-ui `.proto` definitions
 - Electron staging/addon smoke tests
 - optional end-to-end launch smoke tests against the staged thread-ui bundle
 
@@ -568,8 +614,10 @@ To prevent another "single huge file" outcome:
 
 - `ThreadUiProcessManager`
 - `ThreadUiIpcServer`
+- thread-ui `.proto` service definitions and custom `protoc` plugin integration
 - structured thread snapshot/delta model
 - initial thread-open / focus lifecycle
+- loopback TCP handshake and bidirectional request/response plumbing
 
 ### Phase 6. End-to-end interactions `[later]`
 
