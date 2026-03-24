@@ -9,7 +9,6 @@
 
 #include "threadui/ThreadUiIpcFraming.h"
 #include "ui_to_qodex.qodex_rpc.h"
-#include "qodex_to_ui.qodex_rpc.h"
 
 namespace qodex::threadui {
 
@@ -19,7 +18,6 @@ using qodex::threadui::ipc::FrameDecodeResult;
 using qodex::threadui::ipc::common::RESULT_STATUS_ERROR;
 using qodex::threadui::ipc::common::RESULT_STATUS_OK;
 namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
-namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 
 qodex::threadui::ipc::common::RpcEnvelope makeResponseEnvelope(
     const std::uint64_t requestId,
@@ -38,28 +36,6 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     response.set_message(message.toStdString());
 
     return makeResponseEnvelope(requestId, response);
-}
-
-qodex::threadui::ipc::common::RpcEnvelope makeTestPingResponseEnvelope(
-    const std::uint64_t requestId,
-    const qodex::threadui::ipc::common::ResultStatus status,
-    const QString &message
-) {
-    qodex::threadui::ipc::ui_to_qodex::TestPingResponse response;
-    response.set_status(status);
-    response.set_message(message.toStdString());
-
-    return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::TestPing>(requestId, response);
-}
-
-qodex::threadui::ipc::common::RpcEnvelope makeTestPongRequestEnvelope(
-    const std::uint64_t requestId,
-    const std::int64_t value
-) {
-    qodex::threadui::ipc::qodex_to_ui::TestPongRequest request;
-    request.set_value(value);
-
-    return qodex::threadui::ipc::makeRequestEnvelope<QodexToUiRpc::TestPong>(requestId, request);
 }
 
 bool sendEnvelope(
@@ -160,10 +136,6 @@ int ThreadUiIpcServer::authenticatedConnectionCount() const {
     return m_authenticatedConnectionsByToken.size();
 }
 
-std::int64_t ThreadUiIpcServer::highestReceivedTestPing() const {
-    return m_highestReceivedTestPing;
-}
-
 void ThreadUiIpcServer::onNewConnection() {
     if (m_server == nullptr) {
         return;
@@ -224,46 +196,8 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
         auto &connectionState = connectionStateIt.value();
 
         if (!connectionStateIt->authenticatedToken.isEmpty()) {
-            if (envelope.is_response()) {
-                struct QodexToUiResponseHandler final {
-                    ConnectionState &connectionState;
-
-                    bool onTestPongResponse(
-                        const std::uint64_t requestId,
-                        const qodex::threadui::ipc::qodex_to_ui::TestPongResponse &response,
-                        std::string *errorMessage
-                    ) {
-                        const auto pendingRequestIt = connectionState.pendingTestPongValuesByRequestId.find(requestId);
-                        if (pendingRequestIt == connectionState.pendingTestPongValuesByRequestId.end()) {
-                            if (errorMessage != nullptr) {
-                                *errorMessage =
-                                    "Received a TestPong response for unknown request id " + std::to_string(requestId) +
-                                    '.';
-                            }
-                            return false;
-                        }
-
-                        connectionState.pendingTestPongValuesByRequestId.erase(pendingRequestIt);
-                        if (response.status() != RESULT_STATUS_OK) {
-                            qWarning("Thread UI rejected TestPong request: %s", response.message().c_str());
-                        }
-                        return true;
-                    }
-                } handler{connectionState};
-
-                std::string dispatchErrorMessage;
-                if (!QodexToUiRpc::dispatchResponseEnvelope(envelope, handler, &dispatchErrorMessage)) {
-                    qWarning("Thread UI IPC protocol error: %s", dispatchErrorMessage.c_str());
-                    socket->disconnectFromHost();
-                    return;
-                }
-                continue;
-            }
-
             struct UiToQodexRequestHandler final {
                 QTcpSocket *socket;
-                ConnectionState &connectionState;
-                std::int64_t &highestReceivedTestPing;
 
                 bool onLoginRequest(
                     const std::uint64_t requestId,
@@ -284,40 +218,7 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                     );
                     return false;
                 }
-
-                bool onTestPingRequest(
-                    const std::uint64_t requestId,
-                    const qodex::threadui::ipc::ui_to_qodex::TestPingRequest &request,
-                    std::string *errorMessage
-                ) {
-                    highestReceivedTestPing = std::max(highestReceivedTestPing, static_cast<std::int64_t>(request.value()));
-
-                    if (!sendEnvelope(
-                            socket,
-                            makeTestPingResponseEnvelope(
-                                requestId,
-                                RESULT_STATUS_OK,
-                                QStringLiteral("Test ping received.")
-                            ))) {
-                        if (errorMessage != nullptr) {
-                            *errorMessage = "Failed to send UiToQodex.TestPing response.";
-                        }
-                        return false;
-                    }
-
-                    const std::uint64_t outgoingRequestId = connectionState.nextOutgoingRequestId++;
-                    connectionState.pendingTestPongValuesByRequestId.insert({outgoingRequestId, request.value()});
-                    if (!sendEnvelope(socket, makeTestPongRequestEnvelope(outgoingRequestId, request.value()))) {
-                        connectionState.pendingTestPongValuesByRequestId.erase(outgoingRequestId);
-                        if (errorMessage != nullptr) {
-                            *errorMessage = "Failed to send QodexToUi.TestPong request.";
-                        }
-                        return false;
-                    }
-
-                    return true;
-                }
-            } handler{socket, connectionState, m_highestReceivedTestPing};
+            } handler{socket};
 
             std::string dispatchErrorMessage;
             if (!UiToQodexRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
@@ -389,25 +290,6 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                 }
 
                 return true;
-            }
-
-            bool onTestPingRequest(
-                const std::uint64_t requestId,
-                const qodex::threadui::ipc::ui_to_qodex::TestPingRequest &,
-                std::string *errorMessage
-            ) {
-                sendEnvelope(
-                    socket,
-                    makeTestPingResponseEnvelope(
-                        requestId,
-                        RESULT_STATUS_ERROR,
-                        QStringLiteral("Expected UiToQodex.Login as the first request.")
-                    )
-                );
-                if (errorMessage != nullptr) {
-                    *errorMessage = "Expected UiToQodex.Login as the first request.";
-                }
-                return false;
             }
         } handler{
             socket,

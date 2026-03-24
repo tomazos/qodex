@@ -5,7 +5,6 @@
 #include <QRegularExpression>
 #include <QTcpSocket>
 
-#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "threadui/ThreadUiIpcServer.h"
 #include "ui_to_qodex.qodex_rpc.h"
@@ -67,7 +66,6 @@ class ThreadUiIpcServerTest final : public QObject {
 private slots:
     void listensOnLoopbackAndAllocatesDistinctLaunchConfigs();
     void acceptsValidLoginAndRepliesOk();
-    void acceptsTestPingAndRepliesOk();
 };
 
 void ThreadUiIpcServerTest::listensOnLoopbackAndAllocatesDistinctLaunchConfigs() {
@@ -136,70 +134,6 @@ void ThreadUiIpcServerTest::acceptsValidLoginAndRepliesOk() {
 
     QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
     QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
-
-    socket.abort();
-    QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
-}
-
-void ThreadUiIpcServerTest::acceptsTestPingAndRepliesOk() {
-    ThreadUiIpcServer server;
-
-    QString errorMessage;
-    QVERIFY2(server.listen(&errorMessage), qPrintable(errorMessage));
-    const ThreadUiLaunchConfig launchConfig = server.allocateLaunchConfig();
-
-    QTcpSocket socket;
-    socket.connectToHost(launchConfig.host, launchConfig.port);
-    QVERIFY2(socket.waitForConnected(1000), qPrintable(socket.errorString()));
-
-    qodex::threadui::ipc::ui_to_qodex::LoginRequest loginRequest;
-    loginRequest.set_token(launchConfig.token.toStdString());
-
-    const qodex::threadui::ipc::common::RpcEnvelope loginEnvelope =
-        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::Login>(1, loginRequest);
-
-    const std::string loginFrame = qodex::threadui::ipc::encodeEnvelopeFrame(loginEnvelope);
-    QCOMPARE(socket.write(loginFrame.data(), static_cast<qint64>(loginFrame.size())), static_cast<qint64>(loginFrame.size()));
-    QVERIFY(socket.waitForBytesWritten(1000));
-
-    std::string inputBuffer;
-    qodex::threadui::ipc::common::RpcEnvelope loginResponseEnvelope;
-    std::string readErrorMessage;
-    QVERIFY2(
-        readNextEnvelope(&socket, &inputBuffer, &loginResponseEnvelope, &readErrorMessage),
-        readErrorMessage.c_str()
-    );
-    QVERIFY(loginResponseEnvelope.is_response());
-    QCOMPARE(loginResponseEnvelope.method(), std::string(UiToQodexRpc::Login::kMethodName));
-
-    qodex::threadui::ipc::ui_to_qodex::TestPingRequest testPingRequest;
-    testPingRequest.set_value(7);
-
-    const qodex::threadui::ipc::common::RpcEnvelope testPingEnvelope =
-        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::TestPing>(2, testPingRequest);
-
-    const std::string testPingFrame = qodex::threadui::ipc::encodeEnvelopeFrame(testPingEnvelope);
-    QCOMPARE(
-        socket.write(testPingFrame.data(), static_cast<qint64>(testPingFrame.size())),
-        static_cast<qint64>(testPingFrame.size())
-    );
-    QVERIFY(socket.waitForBytesWritten(1000));
-
-    qodex::threadui::ipc::common::RpcEnvelope testPingResponseEnvelope;
-    QVERIFY2(
-        readNextEnvelope(&socket, &inputBuffer, &testPingResponseEnvelope, &readErrorMessage),
-        readErrorMessage.c_str()
-    );
-    QVERIFY(testPingResponseEnvelope.is_response());
-    QCOMPARE(testPingResponseEnvelope.request_id(), 2U);
-    QCOMPARE(testPingResponseEnvelope.method(), std::string(UiToQodexRpc::TestPing::kMethodName));
-
-    qodex::threadui::ipc::ui_to_qodex::TestPingResponse testPingResponse;
-    QVERIFY(testPingResponse.ParseFromString(testPingResponseEnvelope.payload()));
-    QCOMPARE(testPingResponse.status(), qodex::threadui::ipc::common::RESULT_STATUS_OK);
-    QCOMPARE(testPingResponse.message(), std::string("Test ping received."));
-
-    QCOMPARE(server.highestReceivedTestPing(), 7);
 
     socket.abort();
     QTRY_COMPARE(server.authenticatedConnectionCount(), 0);

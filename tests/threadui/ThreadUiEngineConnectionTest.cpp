@@ -31,8 +31,6 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
 
     QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
     QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
-    QTRY_VERIFY(server.highestReceivedTestPing() >= 2);
-    QTRY_VERIFY(qodex::threadui::native::highestTestPong() >= 1);
 
     qodex::threadui::native::shutdown();
 

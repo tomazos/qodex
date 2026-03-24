@@ -2,7 +2,6 @@
 
 #include <asio.hpp>
 
-#include <atomic>
 #include <array>
 #include <chrono>
 #include <deque>
@@ -11,7 +10,6 @@
 #include <thread>
 #include <utility>
 
-#include "qodex_to_ui.qodex_rpc.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "ui_to_qodex.qodex_rpc.h"
 
@@ -23,11 +21,9 @@ bool initialized = false;
 std::int64_t frameCount = 0;
 qodex::threadui::native::LaunchConfig currentLaunchConfig;
 FrameCountDisplayCallback frameCountDisplayCallback;
-std::atomic<std::int64_t> highestTestPongValue{0};
 struct IpcClientState;
 std::unique_ptr<IpcClientState> ipcClientState;
 namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
-namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
     return !launchConfig.host.empty() && launchConfig.port != 0;
@@ -54,8 +50,6 @@ struct IpcClientState final {
     std::deque<std::string> writeQueue;
     std::uint64_t nextRequestId = 1;
     std::uint64_t pendingLoginRequestId = 0;
-    std::uint64_t pendingTestPingRequestId = 0;
-    std::int64_t pendingTestPingValue = 0;
     bool stopRequested = false;
     bool connected = false;
     bool authenticated = false;
@@ -118,18 +112,6 @@ void queueEnvelopeForWrite(IpcClientState *state, const qodex::threadui::ipc::co
     queueFrameForWrite(state, qodex::threadui::ipc::encodeEnvelopeFrame(envelope));
 }
 
-void updateHighestTestPong(const std::int64_t value) {
-    auto currentHighest = highestTestPongValue.load(std::memory_order_relaxed);
-    while (value > currentHighest &&
-           !highestTestPongValue.compare_exchange_weak(
-               currentHighest,
-               value,
-               std::memory_order_relaxed,
-               std::memory_order_relaxed
-           )) {
-    }
-}
-
 void scheduleReconnect(IpcClientState *state, const asio::error_code &errorCode) {
     if (state == nullptr || state->stopRequested) {
         return;
@@ -146,8 +128,6 @@ void scheduleReconnect(IpcClientState *state, const asio::error_code &errorCode)
     state->connected = false;
     state->authenticated = false;
     state->pendingLoginRequestId = 0;
-    state->pendingTestPingRequestId = 0;
-    state->pendingTestPingValue = 0;
     state->inputBuffer.clear();
     state->writeQueue.clear();
     state->writeInProgress = false;
@@ -177,47 +157,6 @@ void stopClientOnProtocolFailure(IpcClientState *state, const std::string &messa
 }
 
 void beginReadFromSocket(IpcClientState *state);
-
-void sendTestPingRequest(IpcClientState *state, const std::int64_t value) {
-    if (state == nullptr || state->stopRequested) {
-        return;
-    }
-
-    if (state->pendingTestPingRequestId != 0) {
-        stopClientOnProtocolFailure(state, "Attempted to send TestPing while another TestPing is still pending.");
-        return;
-    }
-
-    qodex::threadui::ipc::ui_to_qodex::TestPingRequest request;
-    request.set_value(value);
-
-    const std::uint64_t requestId = state->nextRequestId++;
-    state->pendingTestPingRequestId = requestId;
-    state->pendingTestPingValue = value;
-    queueEnvelopeForWrite(
-        state,
-        qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::TestPing>(requestId, request)
-    );
-}
-
-void sendTestPongResponse(
-    IpcClientState *state,
-    const std::uint64_t requestId,
-    const qodex::threadui::ipc::common::ResultStatus status,
-    const std::string &message
-) {
-    if (state == nullptr || state->stopRequested) {
-        return;
-    }
-
-    qodex::threadui::ipc::qodex_to_ui::TestPongResponse response;
-    response.set_status(status);
-    response.set_message(message);
-    queueEnvelopeForWrite(
-        state,
-        qodex::threadui::ipc::makeResponseEnvelope<QodexToUiRpc::TestPong>(requestId, response)
-    );
-}
 
 void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     if (state == nullptr || state->stopRequested) {
@@ -250,33 +189,6 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
 
                 state->authenticated = true;
                 std::cout << "Thread UI Login succeeded: " << response.message() << std::endl;
-                sendTestPingRequest(state, 1);
-                return true;
-            }
-
-            bool onTestPingResponse(
-                const std::uint64_t requestId,
-                const qodex::threadui::ipc::ui_to_qodex::TestPingResponse &response,
-                std::string *errorMessage
-            ) {
-                if (requestId != state->pendingTestPingRequestId) {
-                    if (errorMessage != nullptr) {
-                        *errorMessage = "Received a TestPing response for an unknown request id.";
-                    }
-                    return false;
-                }
-
-                const std::int64_t completedPingValue = state->pendingTestPingValue;
-                state->pendingTestPingRequestId = 0;
-                state->pendingTestPingValue = 0;
-                if (response.status() != qodex::threadui::ipc::common::RESULT_STATUS_OK) {
-                    if (errorMessage != nullptr) {
-                        *errorMessage = "Thread UI TestPing failed for value " +
-                                        std::to_string(completedPingValue) + ": " + response.message();
-                    }
-                    return false;
-                }
-
                 return true;
             }
         } handler{state};
@@ -288,38 +200,7 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
         return;
     }
 
-    struct QodexToUiRequestHandler final {
-        IpcClientState *state;
-
-        bool onTestPongRequest(
-            const std::uint64_t requestId,
-            const qodex::threadui::ipc::qodex_to_ui::TestPongRequest &request,
-            std::string *
-        ) {
-            updateHighestTestPong(request.value());
-            sendTestPongResponse(
-                state,
-                requestId,
-                qodex::threadui::ipc::common::RESULT_STATUS_OK,
-                "Test pong received."
-            );
-            sendTestPingRequest(state, request.value() + 1);
-            return true;
-        }
-    } handler{state};
-
-    std::string dispatchErrorMessage;
-    if (!QodexToUiRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
-        if (envelope.method() == QodexToUiRpc::TestPong::kMethodName) {
-            sendTestPongResponse(
-                state,
-                envelope.request_id(),
-                qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-                dispatchErrorMessage
-            );
-        }
-        stopClientOnProtocolFailure(state, dispatchErrorMessage);
-    }
+    stopClientOnProtocolFailure(state, "Received an unexpected Thread UI IPC request envelope.");
 }
 
 void beginReadFromSocket(IpcClientState *state) {
@@ -426,8 +307,6 @@ void scheduleConnect(IpcClientState *state) {
                     state->connected = true;
                     state->authenticated = false;
                     state->pendingLoginRequestId = 0;
-                    state->pendingTestPingRequestId = 0;
-                    state->pendingTestPingValue = 0;
                     state->inputBuffer.clear();
                     state->writeQueue.clear();
                     state->writeInProgress = false;
@@ -495,7 +374,6 @@ void initialize(const LaunchConfig &launchConfig) {
     initialized = true;
     frameCount = 0;
     currentLaunchConfig = launchConfig;
-    highestTestPongValue.store(0, std::memory_order_relaxed);
 
     std::cout << "Qodex thread UI engine initialized.";
     if (hasIpcTarget(currentLaunchConfig)) {
@@ -509,10 +387,6 @@ void initialize(const LaunchConfig &launchConfig) {
 
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback) {
     frameCountDisplayCallback = std::move(callback);
-}
-
-std::int64_t highestTestPong() noexcept {
-    return highestTestPongValue.load(std::memory_order_relaxed);
 }
 
 void tick() {
@@ -540,7 +414,6 @@ void shutdown() {
     stopIpcClient();
     currentLaunchConfig = {};
     frameCountDisplayCallback = nullptr;
-    highestTestPongValue.store(0, std::memory_order_relaxed);
     std::cout << "Qodex thread UI engine shutdown." << std::endl;
 }
 

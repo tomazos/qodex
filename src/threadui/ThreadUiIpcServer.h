@@ -5,9 +5,7 @@
 #include <QSet>
 #include <QString>
 
-#include <cstdint>
 #include <string>
-#include <unordered_map>
 
 class QTcpServer;
 class QTcpSocket;
@@ -34,14 +32,11 @@ public:
     [[nodiscard]] ThreadUiLaunchConfig allocateLaunchConfig();
     [[nodiscard]] int unauthenticatedConnectionCount() const;
     [[nodiscard]] int authenticatedConnectionCount() const;
-    [[nodiscard]] std::int64_t highestReceivedTestPing() const;
 
 private:
     struct ConnectionState {
         std::string inputBuffer;
         QString authenticatedToken;
-        std::uint64_t nextOutgoingRequestId = 1;
-        std::unordered_map<std::uint64_t, std::int64_t> pendingTestPongValuesByRequestId;
     };
 
     void onNewConnection();
@@ -54,7 +49,6 @@ private:
     QSet<QTcpSocket *> m_unauthenticatedConnections;
     QSet<QString> m_issuedLaunchTokens;
     QHash<QString, QTcpSocket *> m_authenticatedConnectionsByToken;
-    std::int64_t m_highestReceivedTestPing = 0;
 };
 
 }  // namespace qodex::threadui

@@ -2,17 +2,5 @@ syntax = "proto3";
 
 package qodex.threadui.ipc.qodex_to_ui;
 
-import "common.proto";
-
 service QodexToUi {
-  rpc TestPong(TestPongRequest) returns (TestPongResponse);
-}
-
-message TestPongRequest {
-  int64 value = 1;
-}
-
-message TestPongResponse {
-  qodex.threadui.ipc.common.ResultStatus status = 1;
-  string message = 2;
 }

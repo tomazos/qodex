@@ -6,7 +6,6 @@ import "common.proto";
 
 service UiToQodex {
   rpc Login(LoginRequest) returns (LoginResponse);
-  rpc TestPing(TestPingRequest) returns (TestPingResponse);
 }
 
 message LoginRequest {
@@ -14,15 +13,6 @@ message LoginRequest {
 }
 
 message LoginResponse {
-  qodex.threadui.ipc.common.ResultStatus status = 1;
-  string message = 2;
-}
-
-message TestPingRequest {
-  int64 value = 1;
-}
-
-message TestPingResponse {
   qodex.threadui.ipc.common.ResultStatus status = 1;
   string message = 2;
 }
