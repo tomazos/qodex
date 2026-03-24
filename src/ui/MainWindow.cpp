@@ -36,6 +36,7 @@ MainWindow::MainWindow(
     auto *fileMenu = menuBar()->addMenu(QStringLiteral("&File"));
     fileMenu->addAction(QStringLiteral("&Quit Qodex"), QKeySequence::Quit, this, &MainWindow::quitRequested);
 
+    m_threadMenu = menuBar()->addMenu(QStringLiteral("&Thread"));
     m_viewMenu = menuBar()->addMenu(QStringLiteral("&View"));
     if (threadListModel != nullptr) {
         m_threadListPane = new ThreadListPane(threadListModel);
@@ -93,6 +94,29 @@ QList<QAction *> MainWindow::viewActions() const {
 
 void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
+}
+
+void MainWindow::rebuildThreadMenu(const QList<ThreadUiMenuEntry> &entries) {
+    if (m_threadMenu == nullptr) {
+        return;
+    }
+
+    m_threadMenu->clear();
+    m_threadMenu->addAction(QStringLiteral("Launch Thread UI"), this, &MainWindow::launchThreadUiRequested);
+    m_threadMenu->addSeparator();
+
+    if (entries.isEmpty()) {
+        QAction *placeholderAction = m_threadMenu->addAction(QStringLiteral("No Active Thread UI Windows"));
+        placeholderAction->setEnabled(false);
+        return;
+    }
+
+    for (const ThreadUiMenuEntry &entry : entries) {
+        QAction *action = m_threadMenu->addAction(entry.title);
+        connect(action, &QAction::triggered, this, [this, instanceId = entry.instanceId] {
+            emit activateThreadUiRequested(instanceId);
+        });
+    }
 }
 
 void MainWindow::rebuildViewMenu(const QList<QAction *> &actions) {

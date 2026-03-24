@@ -7,6 +7,7 @@
 
 #include "app/AppConfig.h"
 #include "app/AppPaths.h"
+#include "app/ThreadUiProcessManager.h"
 #include "domain/ThreadStore.h"
 #include "ui/ProgressSplashScreen.h"
 #include "ui/MainWindow.h"
@@ -59,6 +60,7 @@ private:
         bool showImmediately
     );
     void createNewWindow();
+    void rebuildThreadMenus();
     void rebuildViewMenus();
     void rebuildWindowMenus();
 
@@ -73,6 +75,7 @@ private:
     qodex::ui::ApiLogModel m_apiLogModel;
     qodex::ui::MainWindow m_mainWindow;
     std::vector<std::unique_ptr<qodex::ui::MainWindow>> m_additionalWindows;
+    ThreadUiProcessManager m_threadUiProcessManager;
     SessionController m_sessionController;
     std::unique_ptr<qodex::ui::ProgressSplashScreen> m_shutdownSplash;
     bool m_shutdownInProgress = false;

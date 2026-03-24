@@ -72,12 +72,28 @@ function setFrameCountDisplay(frameCount) {
     .textContent = `The current frame is ${frameCount}`;
 }
 
+function applyInstanceInfo(instanceInfo) {
+  if (!instanceInfo || typeof instanceInfo.title !== 'string' || instanceInfo.title.trim() === '') {
+    return;
+  }
+
+  document.title = instanceInfo.title;
+  const titleElement = document.querySelector('.titlebar__title');
+  if (titleElement) {
+    titleElement.textContent = instanceInfo.title;
+  }
+}
+
 async function initialize() {
   if (running) {
     return;
   }
 
   await initializeWindowChrome();
+  applyInstanceInfo(await ipcRenderer.invoke('thread-ui:get-instance-info'));
+  ipcRenderer.on('thread-ui:instance-info', (_event, instanceInfo) => {
+    applyInstanceInfo(instanceInfo);
+  });
 
   running = true;
   native.setFrameCountDisplayCallback(setFrameCountDisplay);

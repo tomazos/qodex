@@ -1,6 +1,20 @@
 const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
+const readline = require('node:readline');
 const { URL, fileURLToPath } = require('node:url');
 const path = require('path');
+
+function readCommandLineValue(name) {
+  const prefix = `--${name}=`;
+  const matchingArgument = process.argv.find((argument) => argument.startsWith(prefix));
+  return matchingArgument ? matchingArgument.slice(prefix.length) : null;
+}
+
+const instanceInfo = {
+  title: readCommandLineValue('qodex-title') || 'Qodex Thread UI',
+};
+
+let mainWindow = null;
+let pendingActivationRequest = false;
 
 function getWindowState(window) {
   return {
@@ -64,14 +78,49 @@ function installExternalNavigationPolicy(window) {
   });
 }
 
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    pendingActivationRequest = true;
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  mainWindow.show();
+  app.focus();
+  mainWindow.focus();
+}
+
+function installActivationControlChannel() {
+  if (!process.stdin || process.stdin.isTTY) {
+    return;
+  }
+
+  const commandReader = readline.createInterface({
+    input: process.stdin,
+    crlfDelay: Infinity,
+  });
+
+  commandReader.on('line', (line) => {
+    if (line.trim() === 'activate') {
+      focusMainWindow();
+    }
+  });
+
+  process.stdin.resume();
+}
+
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1000,
     height: 720,
     minWidth: 640,
     minHeight: 480,
     frame: false,
     autoHideMenuBar: true,
+    title: instanceInfo.title,
     webPreferences: {
       contextIsolation: false,
       nodeIntegration: true,
@@ -95,7 +144,16 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.once('did-finish-load', () => {
+    mainWindow.webContents.send('thread-ui:instance-info', instanceInfo);
     sendWindowState(mainWindow);
+    if (pendingActivationRequest) {
+      pendingActivationRequest = false;
+      focusMainWindow();
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 }
 
@@ -126,13 +184,18 @@ ipcMain.handle('window:close', (event) => {
   window.close();
 });
 
+ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  installActivationControlChannel();
   createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else {
+      focusMainWindow();
     }
   });
 });

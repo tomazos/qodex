@@ -2,6 +2,7 @@
 
 #include <QCloseEvent>
 #include <QList>
+#include <QString>
 #include <kddockwidgets/MainWindow.h>
 
 namespace KDDockWidgets::QtWidgets {
@@ -22,6 +23,11 @@ class MainWindow;
 
 namespace qodex::ui {
 
+struct ThreadUiMenuEntry {
+    int instanceId = 0;
+    QString title;
+};
+
 class MainWindow final : public KDDockWidgets::QtWidgets::MainWindow {
     Q_OBJECT
 
@@ -40,10 +46,13 @@ public:
     [[nodiscard]] QString windowKey() const;
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
+    void rebuildThreadMenu(const QList<ThreadUiMenuEntry> &entries);
     void rebuildViewMenu(const QList<QAction *> &actions);
     void rebuildWindowMenu(const QList<MainWindow *> &windows);
 
 signals:
+    void launchThreadUiRequested();
+    void activateThreadUiRequested(int instanceId);
     void createNewWindowRequested();
     void quitRequested();
     void aboutToClose(qodex::ui::MainWindow *window);
@@ -57,6 +66,7 @@ private:
     ThreadListPane *m_threadListPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_apiLogDock = nullptr;
     ApiLogPane *m_apiLogPane = nullptr;
+    QMenu *m_threadMenu = nullptr;
     QMenu *m_viewMenu = nullptr;
     QMenu *m_windowMenu = nullptr;
 };

@@ -353,6 +353,8 @@ qt_add_executable(qodex
     src/app/SessionController.h
     src/app/SingleInstanceManager.cpp
     src/app/SingleInstanceManager.h
+    src/app/ThreadUiProcessManager.cpp
+    src/app/ThreadUiProcessManager.h
     src/codex/AppServerTransport.cpp
     src/codex/AppServerTransport.h
     src/codex/CodexClientBase.cpp
@@ -388,7 +390,10 @@ target_include_directories(qodex PRIVATE
 )
 
 target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
-target_compile_definitions(qodex PRIVATE QODEX_APP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(qodex PRIVATE
+    QODEX_APP_VERSION="${PROJECT_VERSION}"
+    QODEX_THREAD_UI_APP_DIR="${QODEX_THREAD_UI_APP_DIR}"
+)
 
 add_dependencies(qodex qodex_protocol_artifacts)
 add_dependencies(qodex qodex_thread_ui)

@@ -30,14 +30,40 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
           &m_threadListModel,
           &m_apiLogModel
       ),
+      m_threadUiProcessManager(this),
       m_sessionController(m_config, &m_transport, &m_client, &m_threadStore, &m_mainWindow) {
     m_mainWindow.move(80, 80);
     m_mainWindow.installEventFilter(this);
+    QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::launchThreadUiRequested, &m_threadUiProcessManager, &ThreadUiProcessManager::launchThreadUi);
+    QObject::connect(
+        &m_mainWindow,
+        &qodex::ui::MainWindow::activateThreadUiRequested,
+        &m_threadUiProcessManager,
+        &ThreadUiProcessManager::activateThreadUi
+    );
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::quitRequested, this, &AppBootstrap::beginShutdown);
     QObject::connect(&m_mainWindow, &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *window) {
         onWindowAboutToClose(window);
     });
+    QObject::connect(
+        &m_threadUiProcessManager,
+        &ThreadUiProcessManager::activeProcessesChanged,
+        this,
+        &AppBootstrap::rebuildThreadMenus
+    );
+    QObject::connect(
+        &m_threadUiProcessManager,
+        &ThreadUiProcessManager::statusMessageRequested,
+        this,
+        [this](const QString &message) {
+            for (qodex::ui::MainWindow *window : windows()) {
+                if (window != nullptr) {
+                    window->setStatusMessage(message);
+                }
+            }
+        }
+    );
     QObject::connect(&m_trafficLogger, &qodex::codex::TrafficLogger::apiLogRecorded, &m_apiLogModel, &qodex::ui::ApiLogModel::scheduleRefresh);
     QObject::connect(
         &m_sessionController,
@@ -47,6 +73,7 @@ AppBootstrap::AppBootstrap(const AppPaths &paths, qodex::storage::DatabaseManage
     );
     QObject::connect(&m_sessionController, &SessionController::startupFinished, this, &AppBootstrap::startupFinished);
     restorePersistentState();
+    rebuildThreadMenus();
     rebuildViewMenus();
     rebuildWindowMenus();
 }
@@ -360,6 +387,13 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, nullptr, nullptr);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     window->installEventFilter(this);
+    QObject::connect(window.get(), &qodex::ui::MainWindow::launchThreadUiRequested, &m_threadUiProcessManager, &ThreadUiProcessManager::launchThreadUi);
+    QObject::connect(
+        window.get(),
+        &qodex::ui::MainWindow::activateThreadUiRequested,
+        &m_threadUiProcessManager,
+        &ThreadUiProcessManager::activateThreadUi
+    );
     QObject::connect(window.get(), &qodex::ui::MainWindow::createNewWindowRequested, [&] { createNewWindow(); });
     QObject::connect(window.get(), &qodex::ui::MainWindow::quitRequested, this, &AppBootstrap::beginShutdown);
     QObject::connect(window.get(), &qodex::ui::MainWindow::aboutToClose, [&](qodex::ui::MainWindow *closingWindow) {
@@ -367,6 +401,7 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     });
     m_sessionController.attachWindow(window.get());
     qodex::ui::MainWindow *windowPtr = window.get();
+    windowPtr->rebuildThreadMenu({});
     if (showImmediately) {
         windowPtr->show();
     }
@@ -381,8 +416,28 @@ void AppBootstrap::createNewWindow() {
         true
     );
     ++m_nextWindowNumber;
+    rebuildThreadMenus();
     rebuildViewMenus();
     rebuildWindowMenus();
+}
+
+void AppBootstrap::rebuildThreadMenus() {
+    QList<qodex::ui::ThreadUiMenuEntry> entries;
+    const QList<ThreadUiProcessInfo> processes = m_threadUiProcessManager.activeProcesses();
+    entries.reserve(processes.size());
+
+    for (const ThreadUiProcessInfo &process : processes) {
+        entries.append({
+            .instanceId = process.instanceId,
+            .title = process.title,
+        });
+    }
+
+    for (qodex::ui::MainWindow *window : windows()) {
+        if (window != nullptr) {
+            window->rebuildThreadMenu(entries);
+        }
+    }
 }
 
 void AppBootstrap::rebuildViewMenus() {
