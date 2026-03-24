@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-128x128.png"), QSize(128, 128));
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-256x256.png"), QSize(256, 256));
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-512x512.png"), QSize(512, 512));
-    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-1024x1024.png"), QSize(1024, 1024));
+    applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-618x618.png"), QSize(618, 618));
     app.setWindowIcon(applicationIcon);
     app.setOrganizationName(QStringLiteral("Tomazos.com"));
     app.setApplicationName(QStringLiteral("Qodex"));

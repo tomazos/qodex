@@ -22,6 +22,6 @@
         <file alias="images/qodex-icon-128x128.png">../images/qodex-icon-128x128.png</file>
         <file alias="images/qodex-icon-256x256.png">../images/qodex-icon-256x256.png</file>
         <file alias="images/qodex-icon-512x512.png">../images/qodex-icon-512x512.png</file>
-        <file alias="images/qodex-icon-1024x1024.png">../images/qodex-icon-1024x1024.png</file>
+        <file alias="images/qodex-icon-618x618.png">../images/qodex-icon-618x618.png</file>
     </qresource>
 </RCC>
