@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QStandardPaths>
 
 namespace qodex::app {
@@ -161,10 +162,28 @@ void ThreadUiProcessManager::activateThreadUi(const int instanceId) {
 }
 
 QString ThreadUiProcessManager::resolveThreadUiAppDir() {
-#ifdef QODEX_THREAD_UI_APP_DIR
-    const QString configuredPath = QString::fromLocal8Bit(QODEX_THREAD_UI_APP_DIR);
-    if (!configuredPath.isEmpty()) {
-        return QDir::cleanPath(configuredPath);
+    const QString environmentOverride = QProcessEnvironment::systemEnvironment()
+                                            .value(QStringLiteral("QODEX_THREAD_UI_APP_DIR"))
+                                            .trimmed();
+    if (!environmentOverride.isEmpty()) {
+        return QDir::cleanPath(environmentOverride);
+    }
+
+#ifdef QODEX_THREAD_UI_BUILD_APP_DIR
+    const QString configuredBuildPath = QString::fromLocal8Bit(QODEX_THREAD_UI_BUILD_APP_DIR);
+    if (!configuredBuildPath.isEmpty() && QFileInfo::exists(configuredBuildPath)) {
+        return QDir::cleanPath(configuredBuildPath);
+    }
+#endif
+
+#ifdef QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR
+    const QString installedRelativePath = QString::fromLocal8Bit(QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR);
+    if (!installedRelativePath.isEmpty()) {
+        const QString installedCandidate =
+            QDir(QCoreApplication::applicationDirPath()).filePath(installedRelativePath);
+        if (QFileInfo::exists(installedCandidate)) {
+            return QDir::cleanPath(installedCandidate);
+        }
     }
 #endif
 

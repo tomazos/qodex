@@ -1,4 +1,6 @@
 /build/
+/build-deb/
+/dist/
 /.idea/
 /.vscode/
 *.user

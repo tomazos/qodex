@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(qodex VERSION 0.1.0 LANGUAGES CXX)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" QODEX_VERSION LIMIT_COUNT 1)
+if(NOT QODEX_VERSION)
+    message(FATAL_ERROR "Unable to read qodex version from VERSION")
+endif()
+
+project(qodex VERSION "${QODEX_VERSION}" LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +40,9 @@ set(QODEX_THREAD_UI_SOURCE_DIR "${PROJECT_SOURCE_DIR}/frontend/thread-ui")
 set(QODEX_THREAD_UI_RUNTIME_ROOT "${CMAKE_BINARY_DIR}/runtime/thread-ui")
 set(QODEX_THREAD_UI_APP_DIR "${QODEX_THREAD_UI_RUNTIME_ROOT}/app")
 set(QODEX_THREAD_UI_NATIVE_DIR "${QODEX_THREAD_UI_RUNTIME_ROOT}/native")
+set(QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR "../lib/qodex/thread-ui/app")
+set(QODEX_THREAD_UI_INSTALL_APP_DIR "lib/qodex/thread-ui/app")
+set(QODEX_THREAD_UI_INSTALL_NATIVE_DIR "lib/qodex/thread-ui/native")
 
 set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/package.json"
@@ -392,7 +400,8 @@ target_include_directories(qodex PRIVATE
 target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
 target_compile_definitions(qodex PRIVATE
     QODEX_APP_VERSION="${PROJECT_VERSION}"
-    QODEX_THREAD_UI_APP_DIR="${QODEX_THREAD_UI_APP_DIR}"
+    QODEX_THREAD_UI_BUILD_APP_DIR="${QODEX_THREAD_UI_APP_DIR}"
+    QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR="${QODEX_THREAD_UI_INSTALLED_RELATIVE_APP_DIR}"
 )
 
 add_dependencies(qodex qodex_protocol_artifacts)
@@ -571,3 +580,10 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS qodex RUNTIME DESTINATION bin)
+install(TARGETS qodex_thread_ui_native LIBRARY DESTINATION "${QODEX_THREAD_UI_INSTALL_NATIVE_DIR}")
+install(
+    DIRECTORY "${QODEX_THREAD_UI_APP_DIR}/"
+    DESTINATION "${QODEX_THREAD_UI_INSTALL_APP_DIR}"
+    USE_SOURCE_PERMISSIONS
+    PATTERN ".qodex-*.stamp" EXCLUDE
+)
