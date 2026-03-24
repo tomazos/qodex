@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package qodex.threadui.ipc.ui_to_qodex;
+
+import "common.proto";
+
+service UiToQodex {
+  rpc Login(LoginRequest) returns (LoginResponse);
+}
+
+message LoginRequest {
+  string token = 1;
+}
+
+message LoginResponse {
+  qodex.threadui.ipc.common.ResultStatus status = 1;
+  string message = 2;
+}

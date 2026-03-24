@@ -19,18 +19,23 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QString errorMessage;
     QVERIFY2(server.listen(&errorMessage), qPrintable(errorMessage));
     QCOMPARE(server.unauthenticatedConnectionCount(), 0);
+    QCOMPARE(server.authenticatedConnectionCount(), 0);
+
+    const qodex::threadui::ThreadUiLaunchConfig launchConfig = server.allocateLaunchConfig();
 
     qodex::threadui::native::initialize(LaunchConfig{
-        .host = server.host().toStdString(),
-        .port = server.port(),
-        .token = "test-token",
+        .host = launchConfig.host.toStdString(),
+        .port = launchConfig.port,
+        .token = launchConfig.token.toStdString(),
     });
 
-    QTRY_COMPARE(server.unauthenticatedConnectionCount(), 1);
+    QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
 
     qodex::threadui::native::shutdown();
 
     QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
 }
 
 QTEST_GUILESS_MAIN(ThreadUiEngineConnectionTest)

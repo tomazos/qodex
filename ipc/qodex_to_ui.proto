@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+package qodex.threadui.ipc.qodex_to_ui;
+
+service QodexToUi {
+}

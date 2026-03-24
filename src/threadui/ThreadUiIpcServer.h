@@ -1,8 +1,11 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QSet>
 #include <QString>
+
+#include <string>
 
 class QTcpServer;
 class QTcpSocket;
@@ -26,16 +29,26 @@ public:
     [[nodiscard]] bool isListening() const;
     [[nodiscard]] QString host() const;
     [[nodiscard]] quint16 port() const;
-    [[nodiscard]] ThreadUiLaunchConfig allocateLaunchConfig() const;
+    [[nodiscard]] ThreadUiLaunchConfig allocateLaunchConfig();
     [[nodiscard]] int unauthenticatedConnectionCount() const;
+    [[nodiscard]] int authenticatedConnectionCount() const;
 
 private:
+    struct ConnectionState {
+        std::string inputBuffer;
+        QString authenticatedToken;
+    };
+
     void onNewConnection();
-    void removeUnauthenticatedConnection(QTcpSocket *socket);
+    void onSocketReadyRead(QTcpSocket *socket);
+    void removeConnection(QTcpSocket *socket);
     static QString generateLaunchToken();
 
     QTcpServer *m_server = nullptr;
+    QHash<QTcpSocket *, ConnectionState> m_connectionStates;
     QSet<QTcpSocket *> m_unauthenticatedConnections;
+    QSet<QString> m_issuedLaunchTokens;
+    QHash<QString, QTcpSocket *> m_authenticatedConnectionsByToken;
 };
 
 }  // namespace qodex::threadui

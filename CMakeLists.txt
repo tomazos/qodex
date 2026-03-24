@@ -16,6 +16,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets Test)
+find_package(Protobuf REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(KDDockWidgets QUIET)
@@ -37,6 +38,7 @@ set(QODEX_VENV_PYTHON "${PROJECT_SOURCE_DIR}/.venv/bin/python")
 set(QODEX_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
 set(QODEX_PROTOCOL_SCHEMA_ROOT "${QODEX_GENERATED_ROOT}/protocol/schema")
 set(QODEX_PROTOCOL_MODEL_ROOT "${QODEX_GENERATED_ROOT}/protocol/model")
+set(QODEX_THREAD_UI_IPC_GENERATED_ROOT "${QODEX_GENERATED_ROOT}/threadui-ipc")
 set(QODEX_PYTHON_ENV_STAMP "${QODEX_GENERATED_ROOT}/python-env.stamp")
 set(QODEX_THREAD_UI_SOURCE_DIR "${PROJECT_SOURCE_DIR}/frontend/thread-ui")
 set(QODEX_THREAD_UI_RUNTIME_ROOT "${CMAKE_BINARY_DIR}/runtime/thread-ui")
@@ -49,6 +51,20 @@ set(QODEX_DESKTOP_FILE_ID "com.tomazos.qodex")
 set(QODEX_DESKTOP_ENTRY_FILE "${PROJECT_SOURCE_DIR}/packaging/qodex.desktop")
 set(QODEX_METAINFO_FILE "${PROJECT_SOURCE_DIR}/packaging/qodex.metainfo.xml")
 set(QODEX_ICON_SIZES 16 20 22 24 32 48 64 128 256 512)
+set(QODEX_THREAD_UI_IPC_PROTO_DIR "${PROJECT_SOURCE_DIR}/ipc")
+set(QODEX_THREAD_UI_IPC_PROTO_FILES
+    "${QODEX_THREAD_UI_IPC_PROTO_DIR}/common.proto"
+    "${QODEX_THREAD_UI_IPC_PROTO_DIR}/ui_to_qodex.proto"
+    "${QODEX_THREAD_UI_IPC_PROTO_DIR}/qodex_to_ui.proto"
+)
+set_source_files_properties(
+    src/threadui/ThreadUiIpcFraming.cpp
+    src/threadui/ThreadUiIpcServer.cpp
+    src/threadui_native/ThreadUiEngine.cpp
+    tests/threadui/ThreadUiIpcServerTest.cpp
+    tests/threadui/ThreadUiEngineConnectionTest.cpp
+    PROPERTIES SKIP_AUTOUIC ON
+)
 
 set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/package.json"
@@ -68,6 +84,30 @@ qodex_add_staged_thread_ui(qodex_thread_ui_assets
     SOURCE_FILES ${QODEX_THREAD_UI_SOURCE_FILES}
 )
 
+add_library(qodex_thread_ui_ipc STATIC
+    src/threadui/ThreadUiIpcFraming.cpp
+    src/threadui/ThreadUiIpcFraming.h
+)
+set_target_properties(qodex_thread_ui_ipc PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+    POSITION_INDEPENDENT_CODE ON
+)
+target_include_directories(qodex_thread_ui_ipc
+    PUBLIC
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_THREAD_UI_IPC_GENERATED_ROOT}"
+)
+target_link_libraries(qodex_thread_ui_ipc PUBLIC protobuf::libprotobuf)
+protobuf_generate(
+    TARGET qodex_thread_ui_ipc
+    LANGUAGE cpp
+    IMPORT_DIRS "${QODEX_THREAD_UI_IPC_PROTO_DIR}"
+    PROTOC_OUT_DIR "${QODEX_THREAD_UI_IPC_GENERATED_ROOT}"
+    PROTOS ${QODEX_THREAD_UI_IPC_PROTO_FILES}
+)
+
 qodex_add_napi_module(qodex_thread_ui_native
     OUTPUT_DIRECTORY "${QODEX_THREAD_UI_NATIVE_DIR}"
     OUTPUT_NAME "qodex_thread_ui"
@@ -78,7 +118,7 @@ qodex_add_napi_module(qodex_thread_ui_native
 )
 target_include_directories(qodex_thread_ui_native PRIVATE "${QODEX_ASIO_INCLUDE_DIR}")
 target_compile_definitions(qodex_thread_ui_native PRIVATE ASIO_STANDALONE)
-target_link_libraries(qodex_thread_ui_native PRIVATE Threads::Threads)
+target_link_libraries(qodex_thread_ui_native PRIVATE qodex_thread_ui_ipc Threads::Threads)
 
 add_custom_target(qodex_thread_ui
     DEPENDS
@@ -408,7 +448,17 @@ target_include_directories(qodex PRIVATE
     "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
 )
 
-target_link_libraries(qodex PRIVATE Qt6::Core Qt6::Network Qt6::Sql Qt6::Widgets KDAB::kddockwidgets SQLite::SQLite3)
+target_link_libraries(
+    qodex
+    PRIVATE
+        Qt6::Core
+        Qt6::Network
+        Qt6::Sql
+        Qt6::Widgets
+        KDAB::kddockwidgets
+        SQLite::SQLite3
+        qodex_thread_ui_ipc
+)
 target_compile_definitions(qodex PRIVATE
     QODEX_APP_VERSION="${PROJECT_VERSION}"
     QODEX_THREAD_UI_BUILD_APP_DIR="${QODEX_THREAD_UI_APP_DIR}"
@@ -526,7 +576,7 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/src"
     )
 
-    target_link_libraries(ThreadUiIpcServerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    target_link_libraries(ThreadUiIpcServerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test qodex_thread_ui_ipc)
 
     add_test(NAME ThreadUiIpcServerTest COMMAND ThreadUiIpcServerTest)
 
@@ -545,7 +595,15 @@ if(BUILD_TESTING)
 
     target_compile_definitions(ThreadUiEngineConnectionTest PRIVATE ASIO_STANDALONE)
 
-    target_link_libraries(ThreadUiEngineConnectionTest PRIVATE Qt6::Core Qt6::Network Qt6::Test Threads::Threads)
+    target_link_libraries(
+        ThreadUiEngineConnectionTest
+        PRIVATE
+            Qt6::Core
+            Qt6::Network
+            Qt6::Test
+            Threads::Threads
+            qodex_thread_ui_ipc
+    )
 
     add_test(NAME ThreadUiEngineConnectionTest COMMAND ThreadUiEngineConnectionTest)
 
