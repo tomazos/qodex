@@ -120,13 +120,6 @@ FrameDecodeResult tryDecodeNextEnvelope(
         return prefixDecodeResult;
     }
 
-    if (payloadSize > kMaxEnvelopePayloadSizeBytes) {
-        if (errorMessage != nullptr) {
-            *errorMessage = "Envelope frame exceeded the maximum supported payload size.";
-        }
-        return FrameDecodeResult::InvalidFrame;
-    }
-
     const std::size_t frameSize = prefixSize + static_cast<std::size_t>(payloadSize);
     if (buffer->size() < frameSize) {
         return FrameDecodeResult::Incomplete;
