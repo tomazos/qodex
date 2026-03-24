@@ -18,5 +18,6 @@ void initialize(const LaunchConfig &launchConfig = {});
 void tick();
 void shutdown();
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback);
+[[nodiscard]] std::int64_t highestTestPong() noexcept;
 
 }  // namespace qodex::threadui::native

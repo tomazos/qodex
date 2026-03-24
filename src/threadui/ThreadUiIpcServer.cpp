@@ -1,5 +1,8 @@
 #include "threadui/ThreadUiIpcServer.h"
 
+#include <algorithm>
+#include <cinttypes>
+
 #include <QByteArray>
 #include <QHostAddress>
 #include <QRandomGenerator>
@@ -7,6 +10,7 @@
 #include <QTcpSocket>
 
 #include "common.pb.h"
+#include "qodex_to_ui.pb.h"
 #include "threadui/ThreadUiIpcFraming.h"
 #include "ui_to_qodex.pb.h"
 
@@ -18,6 +22,19 @@ using qodex::threadui::ipc::FrameDecodeResult;
 using qodex::threadui::ipc::common::RESULT_STATUS_ERROR;
 using qodex::threadui::ipc::common::RESULT_STATUS_OK;
 
+qodex::threadui::ipc::common::RpcEnvelope makeResponseEnvelope(
+    const std::uint64_t requestId,
+    const char *methodName,
+    const std::string &payload
+) {
+    qodex::threadui::ipc::common::RpcEnvelope envelope;
+    envelope.set_request_id(requestId);
+    envelope.set_is_response(true);
+    envelope.set_method(methodName);
+    envelope.set_payload(payload);
+    return envelope;
+}
+
 qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     const std::uint64_t requestId,
     const qodex::threadui::ipc::common::ResultStatus status,
@@ -27,11 +44,33 @@ qodex::threadui::ipc::common::RpcEnvelope makeLoginResponseEnvelope(
     response.set_status(status);
     response.set_message(message.toStdString());
 
+    return makeResponseEnvelope(requestId, qodex::threadui::ipc::kLoginMethodName, response.SerializeAsString());
+}
+
+qodex::threadui::ipc::common::RpcEnvelope makeTestPingResponseEnvelope(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message
+) {
+    qodex::threadui::ipc::ui_to_qodex::TestPingResponse response;
+    response.set_status(status);
+    response.set_message(message.toStdString());
+
+    return makeResponseEnvelope(requestId, qodex::threadui::ipc::kTestPingMethodName, response.SerializeAsString());
+}
+
+qodex::threadui::ipc::common::RpcEnvelope makeTestPongRequestEnvelope(
+    const std::uint64_t requestId,
+    const std::int64_t value
+) {
+    qodex::threadui::ipc::qodex_to_ui::TestPongRequest request;
+    request.set_value(value);
+
     qodex::threadui::ipc::common::RpcEnvelope envelope;
     envelope.set_request_id(requestId);
-    envelope.set_is_response(true);
-    envelope.set_method(qodex::threadui::ipc::kLoginMethodName);
-    envelope.set_payload(response.SerializeAsString());
+    envelope.set_is_response(false);
+    envelope.set_method(qodex::threadui::ipc::kTestPongMethodName);
+    envelope.set_payload(request.SerializeAsString());
     return envelope;
 }
 
@@ -133,6 +172,10 @@ int ThreadUiIpcServer::authenticatedConnectionCount() const {
     return m_authenticatedConnectionsByToken.size();
 }
 
+std::int64_t ThreadUiIpcServer::highestReceivedTestPing() const {
+    return m_highestReceivedTestPing;
+}
+
 void ThreadUiIpcServer::onNewConnection() {
     if (m_server == nullptr) {
         return;
@@ -191,7 +234,75 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
         }
 
         if (!connectionStateIt->authenticatedToken.isEmpty()) {
-            qWarning("Received an unexpected authenticated Thread UI IPC message before handlers exist.");
+            if (envelope.is_response()) {
+                if (envelope.method() != qodex::threadui::ipc::kTestPongMethodName) {
+                    qWarning("Unexpected Thread UI IPC response method: %s", envelope.method().c_str());
+                    socket->disconnectFromHost();
+                    return;
+                }
+
+                qodex::threadui::ipc::qodex_to_ui::TestPongResponse response;
+                if (!response.ParseFromString(envelope.payload())) {
+                    qWarning("Failed to parse QodexToUi.TestPong response payload.");
+                    socket->disconnectFromHost();
+                    return;
+                }
+
+                const auto pendingRequestIt =
+                    connectionStateIt->pendingTestPongValuesByRequestId.find(envelope.request_id());
+                if (pendingRequestIt == connectionStateIt->pendingTestPongValuesByRequestId.end()) {
+                    qWarning("Received a TestPong response for unknown request id %" PRIu64, envelope.request_id());
+                    socket->disconnectFromHost();
+                    return;
+                }
+
+                connectionStateIt->pendingTestPongValuesByRequestId.erase(pendingRequestIt);
+                if (response.status() != RESULT_STATUS_OK) {
+                    qWarning("Thread UI rejected TestPong request: %s", response.message().c_str());
+                }
+                continue;
+            }
+
+            if (envelope.method() != qodex::threadui::ipc::kTestPingMethodName) {
+                qWarning("Unexpected Thread UI IPC request method: %s", envelope.method().c_str());
+                socket->disconnectFromHost();
+                return;
+            }
+
+            qodex::threadui::ipc::ui_to_qodex::TestPingRequest request;
+            if (!request.ParseFromString(envelope.payload())) {
+                sendEnvelope(
+                    socket,
+                    makeTestPingResponseEnvelope(
+                        envelope.request_id(),
+                        RESULT_STATUS_ERROR,
+                        QStringLiteral("Failed to parse UiToQodex.TestPing request payload.")
+                    )
+                );
+                socket->disconnectFromHost();
+                return;
+            }
+
+            m_highestReceivedTestPing = std::max(m_highestReceivedTestPing, static_cast<std::int64_t>(request.value()));
+
+            if (!sendEnvelope(
+                    socket,
+                    makeTestPingResponseEnvelope(
+                        envelope.request_id(),
+                        RESULT_STATUS_OK,
+                        QStringLiteral("Test ping received.")
+                    ))) {
+                socket->disconnectFromHost();
+                return;
+            }
+
+            const std::uint64_t outgoingRequestId = connectionStateIt->nextOutgoingRequestId++;
+            connectionStateIt->pendingTestPongValuesByRequestId.insert({outgoingRequestId, request.value()});
+            if (!sendEnvelope(socket, makeTestPongRequestEnvelope(outgoingRequestId, request.value()))) {
+                connectionStateIt->pendingTestPongValuesByRequestId.erase(outgoingRequestId);
+                socket->disconnectFromHost();
+                return;
+            }
             continue;
         }
 

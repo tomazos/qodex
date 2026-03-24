@@ -16,6 +16,8 @@ enum class FrameDecodeResult {
 inline constexpr std::size_t kMaxEnvelopeLengthPrefixBytes = 5;
 inline constexpr std::uint32_t kMaxEnvelopePayloadSizeBytes = 1024U * 1024U;
 inline constexpr char kLoginMethodName[] = "Login";
+inline constexpr char kTestPingMethodName[] = "TestPing";
+inline constexpr char kTestPongMethodName[] = "TestPong";
 
 [[nodiscard]] std::string encodeEnvelopeFrame(const qodex::threadui::ipc::common::RpcEnvelope &envelope);
 [[nodiscard]] bool parseEnvelopePayload(

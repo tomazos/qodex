@@ -276,6 +276,28 @@ napi_value tickWrapped(napi_env env, napi_callback_info info) {
     return getUndefined(env);
 }
 
+napi_value highestTestPongWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "highestTestPong expects no arguments");
+        return nullptr;
+    }
+
+    napi_value result = nullptr;
+    if (napi_create_bigint_int64(env, qodex::threadui::native::highestTestPong(), &result) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create highestTestPong return value");
+        return nullptr;
+    }
+
+    return result;
+}
+
 napi_value shutdownWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -314,6 +336,7 @@ napi_value init(napi_env env, napi_value exports) {
         exportFunction(env, exports, "initialize", initializeWrapped) != napi_ok ||
         exportFunction(env, exports, "setFrameCountDisplayCallback", setFrameCountDisplayCallbackWrapped) != napi_ok ||
         exportFunction(env, exports, "tick", tickWrapped) != napi_ok ||
+        exportFunction(env, exports, "highestTestPong", highestTestPongWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");
         return nullptr;

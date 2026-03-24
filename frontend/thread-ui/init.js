@@ -72,6 +72,11 @@ function setFrameCountDisplay(frameCount) {
     .textContent = `The current frame is ${frameCount}`;
 }
 
+function updateTestPingPongDisplay(highestTestPong) {
+  document.getElementById('test-ping-pong-display')
+    .textContent = `Test ping/pong is up to ${highestTestPong}`;
+}
+
 function applyInstanceInfo(instanceInfo) {
   if (!instanceInfo || typeof instanceInfo.title !== 'string' || instanceInfo.title.trim() === '') {
     return;
@@ -111,6 +116,7 @@ async function initialize() {
 
   const result = native.add(2, 3);
   document.getElementById('native-result').textContent = `2 + 3 = ${result}`;
+  updateTestPingPongDisplay(native.highestTestPong());
   await ipcRenderer.invoke('thread-ui:notify-ready');
 
   function frame() {
@@ -119,6 +125,7 @@ async function initialize() {
     }
 
     native.tick();
+    updateTestPingPongDisplay(native.highestTestPong());
     animationFrameId = window.requestAnimationFrame(frame);
   }
 
