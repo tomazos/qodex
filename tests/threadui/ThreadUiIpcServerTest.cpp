@@ -34,10 +34,15 @@ void ThreadUiIpcServerTest::listensOnLoopbackAndAllocatesDistinctLaunchConfigs()
     QVERIFY(firstLaunchConfig.token != secondLaunchConfig.token);
     QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{16}$")).match(firstLaunchConfig.token).hasMatch());
     QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{16}$")).match(secondLaunchConfig.token).hasMatch());
+    QCOMPARE(server.unauthenticatedConnectionCount(), 0);
 
     QTcpSocket socket;
     socket.connectToHost(firstLaunchConfig.host, firstLaunchConfig.port);
     QVERIFY2(socket.waitForConnected(1000), qPrintable(socket.errorString()));
+    QTRY_COMPARE(server.unauthenticatedConnectionCount(), 1);
+
+    socket.abort();
+    QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
 }
 
 QTEST_GUILESS_MAIN(ThreadUiIpcServerTest)

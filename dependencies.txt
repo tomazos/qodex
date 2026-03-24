@@ -8,6 +8,7 @@ pkg-config
 python3
 python3-venv
 appstream
+libasio-dev
 qt6-base-dev
 qt6-base-dev-tools
 libkddockwidgets-qt6-dev

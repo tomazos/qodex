@@ -17,6 +17,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Network Sql Widgets Test)
 find_package(SQLite3 REQUIRED)
+find_package(Threads REQUIRED)
 find_package(KDDockWidgets QUIET)
 if(NOT KDDockWidgets_FOUND)
     find_package(KDDockWidgets-qt6 REQUIRED)
@@ -24,6 +25,7 @@ endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(BASH_EXECUTABLE bash REQUIRED)
 find_program(NPM_EXECUTABLE npm REQUIRED)
+find_path(QODEX_ASIO_INCLUDE_DIR NAMES asio.hpp REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(QodexElectron)
@@ -74,6 +76,9 @@ qodex_add_napi_module(qodex_thread_ui_native
         "${PROJECT_SOURCE_DIR}/src/threadui_native/ThreadUiAddon.cpp"
         "${PROJECT_SOURCE_DIR}/src/threadui_native/ThreadUiEngine.cpp"
 )
+target_include_directories(qodex_thread_ui_native PRIVATE "${QODEX_ASIO_INCLUDE_DIR}")
+target_compile_definitions(qodex_thread_ui_native PRIVATE ASIO_STANDALONE)
+target_link_libraries(qodex_thread_ui_native PRIVATE Threads::Threads)
 
 add_custom_target(qodex_thread_ui
     DEPENDS
@@ -524,6 +529,25 @@ if(BUILD_TESTING)
     target_link_libraries(ThreadUiIpcServerTest PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 
     add_test(NAME ThreadUiIpcServerTest COMMAND ThreadUiIpcServerTest)
+
+    qt_add_executable(ThreadUiEngineConnectionTest
+        tests/threadui/ThreadUiEngineConnectionTest.cpp
+        src/threadui/ThreadUiIpcServer.cpp
+        src/threadui/ThreadUiIpcServer.h
+        src/threadui_native/ThreadUiEngine.cpp
+        src/threadui_native/ThreadUiEngine.h
+    )
+
+    target_include_directories(ThreadUiEngineConnectionTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_ASIO_INCLUDE_DIR}"
+    )
+
+    target_compile_definitions(ThreadUiEngineConnectionTest PRIVATE ASIO_STANDALONE)
+
+    target_link_libraries(ThreadUiEngineConnectionTest PRIVATE Qt6::Core Qt6::Network Qt6::Test Threads::Threads)
+
+    add_test(NAME ThreadUiEngineConnectionTest COMMAND ThreadUiEngineConnectionTest)
 
     qt_add_executable(MigrationRunnerTest
         resources/qodex.qrc

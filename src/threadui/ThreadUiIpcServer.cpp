@@ -3,6 +3,7 @@
 #include <QHostAddress>
 #include <QRandomGenerator>
 #include <QTcpServer>
+#include <QTcpSocket>
 
 namespace qodex::threadui {
 
@@ -10,9 +11,18 @@ ThreadUiIpcServer::ThreadUiIpcServer(QObject *parent)
     : QObject(parent),
       m_server(new QTcpServer(this)) {
     Q_ASSERT(m_server != nullptr);
+    QObject::connect(m_server, &QTcpServer::newConnection, this, &ThreadUiIpcServer::onNewConnection);
 }
 
 ThreadUiIpcServer::~ThreadUiIpcServer() {
+    for (QTcpSocket *socket : std::as_const(m_unauthenticatedConnections)) {
+        if (socket != nullptr) {
+            socket->disconnectFromHost();
+            socket->deleteLater();
+        }
+    }
+    m_unauthenticatedConnections.clear();
+
     if (m_server != nullptr) {
         m_server->close();
     }
@@ -58,6 +68,42 @@ ThreadUiLaunchConfig ThreadUiIpcServer::allocateLaunchConfig() const {
         .port = port(),
         .token = generateLaunchToken(),
     };
+}
+
+int ThreadUiIpcServer::unauthenticatedConnectionCount() const {
+    return m_unauthenticatedConnections.size();
+}
+
+void ThreadUiIpcServer::onNewConnection() {
+    if (m_server == nullptr) {
+        return;
+    }
+
+    while (m_server->hasPendingConnections()) {
+        QTcpSocket *socket = m_server->nextPendingConnection();
+        if (socket == nullptr) {
+            continue;
+        }
+
+        socket->setParent(this);
+        m_unauthenticatedConnections.insert(socket);
+
+        QObject::connect(socket, &QTcpSocket::disconnected, this, [this, socket] {
+            removeUnauthenticatedConnection(socket);
+            socket->deleteLater();
+        });
+        QObject::connect(socket, &QObject::destroyed, this, [this, socket] {
+            removeUnauthenticatedConnection(socket);
+        });
+    }
+}
+
+void ThreadUiIpcServer::removeUnauthenticatedConnection(QTcpSocket *socket) {
+    if (socket == nullptr) {
+        return;
+    }
+
+    m_unauthenticatedConnections.remove(socket);
 }
 
 QString ThreadUiIpcServer::generateLaunchToken() {

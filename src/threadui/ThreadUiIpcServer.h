@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 class QTcpServer;
+class QTcpSocket;
 
 namespace qodex::threadui {
 
@@ -25,11 +27,15 @@ public:
     [[nodiscard]] QString host() const;
     [[nodiscard]] quint16 port() const;
     [[nodiscard]] ThreadUiLaunchConfig allocateLaunchConfig() const;
+    [[nodiscard]] int unauthenticatedConnectionCount() const;
 
 private:
+    void onNewConnection();
+    void removeUnauthenticatedConnection(QTcpSocket *socket);
     static QString generateLaunchToken();
 
     QTcpServer *m_server = nullptr;
+    QSet<QTcpSocket *> m_unauthenticatedConnections;
 };
 
 }  // namespace qodex::threadui
