@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "threadui_native/NativeAdd.h"
 #include "threadui_native/ThreadUiEngine.h"
@@ -320,6 +321,33 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
     return array;
 }
 
+napi_value takeFatalErrorWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "takeFatalError expects no arguments");
+        return nullptr;
+    }
+
+    const std::string fatalError = qodex::threadui::native::takeFatalError();
+    if (fatalError.empty()) {
+        return getUndefined(env);
+    }
+
+    napi_value result = nullptr;
+    if (napi_create_string_utf8(env, fatalError.c_str(), NAPI_AUTO_LENGTH, &result) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create fatal error string");
+        return nullptr;
+    }
+
+    return result;
+}
+
 napi_value shutdownWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -358,6 +386,7 @@ napi_value init(napi_env env, napi_value exports) {
         exportFunction(env, exports, "initialize", initializeWrapped) != napi_ok ||
         exportFunction(env, exports, "setFrameCountDisplayCallback", setFrameCountDisplayCallbackWrapped) != napi_ok ||
         exportFunction(env, exports, "tick", tickWrapped) != napi_ok ||
+        exportFunction(env, exports, "takeFatalError", takeFatalErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingItems", takePendingItemsWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");

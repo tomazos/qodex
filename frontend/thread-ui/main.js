@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
 const readline = require('node:readline');
 const { URL, fileURLToPath } = require('node:url');
 const path = require('path');
@@ -43,6 +43,57 @@ const launchConfig = {
 let mainWindow = null;
 let pendingActivationRequest = false;
 let smokeTestFinished = false;
+let fatalShutdownStarted = false;
+
+function describeError(error) {
+  if (error instanceof Error) {
+    return error.stack || error.message || String(error);
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+async function showFatalErrorAndExit(message) {
+  if (fatalShutdownStarted) {
+    return;
+  }
+
+  fatalShutdownStarted = true;
+  const detail = describeError(message);
+  console.error(detail);
+
+  if (instanceInfo.smokeTest) {
+    app.exit(1);
+    return;
+  }
+
+  const options = {
+    type: 'error',
+    buttons: ['Quit'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: instanceInfo.title,
+    message: 'Internal error',
+    detail,
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await dialog.showMessageBox(mainWindow, options);
+  } else {
+    await dialog.showMessageBox(options);
+  }
+
+  app.exit(1);
+}
 
 function getWindowState(window) {
   return {
@@ -183,6 +234,14 @@ function createWindow() {
     });
   }
 
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    void showFatalErrorAndExit(`Renderer process exited unexpectedly: ${details.reason}`);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    void showFatalErrorAndExit('Renderer process became unresponsive.');
+  });
+
   mainWindow.on('maximize', () => {
     sendWindowState(mainWindow);
   });
@@ -236,6 +295,9 @@ ipcMain.handle('window:close', (event) => {
 
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
 ipcMain.handle('thread-ui:get-launch-config', () => launchConfig);
+ipcMain.handle('thread-ui:fatal-error', async (_event, message) => {
+  await showFatalErrorAndExit(message);
+});
 
 ipcMain.handle('thread-ui:notify-ready', () => {
   if (instanceInfo.smokeTest && !smokeTestFinished) {
@@ -259,6 +321,14 @@ app.whenReady().then(() => {
       focusMainWindow();
     }
   });
+});
+
+process.on('uncaughtException', (error) => {
+  void showFatalErrorAndExit(error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  void showFatalErrorAndExit(reason);
 });
 
 app.on('window-all-closed', () => {

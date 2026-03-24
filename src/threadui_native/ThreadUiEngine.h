@@ -30,5 +30,6 @@ void tick();
 void shutdown();
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback);
 [[nodiscard]] std::vector<DisplayItem> takePendingItems();
+[[nodiscard]] std::string takeFatalError();
 
 }  // namespace qodex::threadui::native

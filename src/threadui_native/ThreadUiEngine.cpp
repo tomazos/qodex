@@ -23,6 +23,8 @@ bool initialized = false;
 std::int64_t frameCount = 0;
 qodex::threadui::native::LaunchConfig currentLaunchConfig;
 FrameCountDisplayCallback frameCountDisplayCallback;
+std::mutex fatalErrorMutex;
+std::string pendingFatalError;
 std::mutex pendingItemsMutex;
 std::vector<qodex::threadui::native::DisplayItem> pendingItems;
 struct IpcClientState;
@@ -69,6 +71,17 @@ void scheduleConnect(IpcClientState *state);
 void scheduleReconnect(IpcClientState *state, const asio::error_code &errorCode);
 
 void stopIpcClient();
+
+void recordFatalError(const std::string &message) {
+    if (message.empty()) {
+        return;
+    }
+
+    std::lock_guard lock(fatalErrorMutex);
+    if (pendingFatalError.empty()) {
+        pendingFatalError = message;
+    }
+}
 
 void beginWriteQueuedFrames(IpcClientState *state);
 
@@ -152,6 +165,7 @@ void stopClientOnProtocolFailure(IpcClientState *state, const std::string &messa
     }
 
     std::cerr << message << std::endl;
+    recordFatalError(message);
     state->stopRequested = true;
     asio::error_code ignoredError;
     state->reconnectTimer.cancel();
@@ -453,6 +467,10 @@ void initialize(const LaunchConfig &launchConfig) {
     frameCount = 0;
     currentLaunchConfig = launchConfig;
     {
+        std::lock_guard lock(fatalErrorMutex);
+        pendingFatalError.clear();
+    }
+    {
         std::lock_guard lock(pendingItemsMutex);
         pendingItems.clear();
     }
@@ -476,6 +494,13 @@ std::vector<DisplayItem> takePendingItems() {
     std::vector<DisplayItem> items = std::move(pendingItems);
     pendingItems.clear();
     return items;
+}
+
+std::string takeFatalError() {
+    std::lock_guard lock(fatalErrorMutex);
+    std::string message = std::move(pendingFatalError);
+    pendingFatalError.clear();
+    return message;
 }
 
 void tick() {
@@ -503,6 +528,10 @@ void shutdown() {
     stopIpcClient();
     currentLaunchConfig = {};
     frameCountDisplayCallback = nullptr;
+    {
+        std::lock_guard lock(fatalErrorMutex);
+        pendingFatalError.clear();
+    }
     {
         std::lock_guard lock(pendingItemsMutex);
         pendingItems.clear();

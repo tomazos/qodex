@@ -21,8 +21,33 @@ const native = require(resolveNativeModulePath());
 
 let animationFrameId = null;
 let running = false;
+let fatalErrorReported = false;
 let threadItemsContainer = null;
 let emptyStateElement = null;
+
+function describeError(error) {
+  if (error instanceof Error) {
+    return error.stack || error.message || String(error);
+  }
+
+  return typeof error === 'string' ? error : JSON.stringify(error);
+}
+
+async function reportFatalError(error) {
+  if (fatalErrorReported) {
+    return;
+  }
+
+  fatalErrorReported = true;
+  running = false;
+
+  if (animationFrameId !== null) {
+    window.cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  await ipcRenderer.invoke('thread-ui:fatal-error', describeError(error));
+}
 
 function updateWindowState(state) {
   const maximizeButton = document.getElementById('window-maximize');
@@ -126,29 +151,43 @@ async function initialize() {
     return;
   }
 
-  await initializeWindowChrome();
-  applyInstanceInfo(await ipcRenderer.invoke('thread-ui:get-instance-info'));
-  ipcRenderer.on('thread-ui:instance-info', (_event, instanceInfo) => {
-    applyInstanceInfo(instanceInfo);
-  });
+  try {
+    await initializeWindowChrome();
+    applyInstanceInfo(await ipcRenderer.invoke('thread-ui:get-instance-info'));
+    ipcRenderer.on('thread-ui:instance-info', (_event, instanceInfo) => {
+      applyInstanceInfo(instanceInfo);
+    });
 
-  running = true;
-  threadItemsContainer = document.getElementById('thread-items');
-  emptyStateElement = document.getElementById('thread-empty-state');
-  native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
-  await ipcRenderer.invoke('thread-ui:notify-ready');
+    running = true;
+    threadItemsContainer = document.getElementById('thread-items');
+    emptyStateElement = document.getElementById('thread-empty-state');
+    native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
+    await ipcRenderer.invoke('thread-ui:notify-ready');
 
-  function frame() {
-    if (!running) {
-      return;
+    function frame() {
+      if (!running) {
+        return;
+      }
+
+      try {
+        native.tick();
+        const fatalError = native.takeFatalError();
+        if (typeof fatalError === 'string' && fatalError.length > 0) {
+          void reportFatalError(fatalError);
+          return;
+        }
+
+        appendThreadItems(native.takePendingItems());
+        animationFrameId = window.requestAnimationFrame(frame);
+      } catch (error) {
+        void reportFatalError(error);
+      }
     }
 
-    native.tick();
-    appendThreadItems(native.takePendingItems());
     animationFrameId = window.requestAnimationFrame(frame);
+  } catch (error) {
+    await reportFatalError(error);
   }
-
-  animationFrameId = window.requestAnimationFrame(frame);
 }
 
 function shutdown() {
@@ -169,8 +208,14 @@ function shutdown() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initialize, { once: true });
 } else {
-  initialize();
+  void initialize();
 }
 
 window.addEventListener('pagehide', shutdown);
 window.addEventListener('beforeunload', shutdown);
+window.addEventListener('error', (event) => {
+  void reportFatalError(event.error || event.message || 'Unknown renderer error');
+});
+window.addEventListener('unhandledrejection', (event) => {
+  void reportFatalError(event.reason || 'Unhandled renderer promise rejection');
+});
