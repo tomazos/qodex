@@ -44,7 +44,9 @@ bool sendEnvelope(
     }
 
     const std::string frame = qodex::threadui::ipc::encodeEnvelopeFrame(envelope);
-    return socket->write(frame.data(), static_cast<qint64>(frame.size())) >= 0;
+    const bool writeQueued = socket->write(frame.data(), static_cast<qint64>(frame.size())) >= 0;
+    socket->flush();
+    return writeQueued;
 }
 
 }  // namespace
@@ -143,6 +145,7 @@ void ThreadUiIpcServer::onNewConnection() {
         }
 
         socket->setParent(this);
+        socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
         m_connectionStates.insert(socket, ConnectionState{});
         m_unauthenticatedConnections.insert(socket);
 

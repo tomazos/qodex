@@ -239,6 +239,13 @@ void scheduleConnect(IpcClientState *state) {
                         return;
                     }
 
+                    asio::error_code noDelayError;
+                    state->socket.set_option(asio::ip::tcp::no_delay(true), noDelayError);
+                    if (noDelayError) {
+                        scheduleReconnect(state, noDelayError);
+                        return;
+                    }
+
                     state->connected = true;
                     state->authenticated = false;
                     std::cout << "Connected Thread UI IPC socket to "
