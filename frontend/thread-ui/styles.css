@@ -1,6 +1,9 @@
 :root {
   color-scheme: light dark;
-  font-family: monospace;
+  --font-ui: system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Segoe UI Mono",
+    "Roboto Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 html,
@@ -137,6 +140,11 @@ main {
   word-break: break-word;
 }
 
+.thread-item--user .thread-item__body,
+.thread-item--agent .thread-item__body {
+  font-family: var(--font-ui);
+}
+
 .thread-item__body--plain {
   white-space: pre-wrap;
 }
@@ -164,12 +172,14 @@ main {
 }
 
 .thread-item__body code {
+  font-family: var(--font-mono);
   padding: 0.1rem 0.3rem;
   border-radius: 4px;
   background: color-mix(in srgb, canvastext 10%, transparent);
 }
 
 .thread-item__body pre {
+  font-family: var(--font-mono);
   overflow-x: auto;
   padding: 0.75rem;
   border-radius: 8px;
