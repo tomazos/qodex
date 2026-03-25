@@ -68,14 +68,20 @@ main {
 
 .thread-item--agent {
   --thread-item-background: var(--thread-item-background-agent);
+  border: none;
+  background: transparent;
 }
 
 .thread-item--reasoning {
+  border: none;
+  background: transparent;
   color: color-mix(in srgb, canvastext 60%, var(--thread-item-background) 40%);
 }
 
 .thread-item--file-change {
-  padding: 0.85rem;
+  border: none;
+  padding: 0;
+  background: transparent;
 }
 
 .thread-item__label {
