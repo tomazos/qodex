@@ -168,7 +168,7 @@ main {
 }
 
 .thread-item__body a {
-  color: Highlight;
+  color: LinkText;
   overflow-wrap: anywhere;
 }
 
