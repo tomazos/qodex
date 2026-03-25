@@ -258,11 +258,27 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
             });
             break;
         case qodex::threadui::ipc::common::Item::kCommandExecution:
-            pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .kind = "command_execution",
-                .text = item.command_execution().text(),
-            });
+        {
+            qodex::threadui::native::DisplayItem displayItem;
+            displayItem.kind = "command_execution";
+            displayItem.commandExecution.command = item.command_execution().command();
+            displayItem.commandExecution.cwd = item.command_execution().cwd();
+            displayItem.commandExecution.status = item.command_execution().status();
+            displayItem.commandExecution.hasExitCode = item.command_execution().has_exit_code();
+            displayItem.commandExecution.exitCode = item.command_execution().exit_code();
+            displayItem.commandExecution.hasDurationMs = item.command_execution().has_duration_ms();
+            displayItem.commandExecution.durationMs = item.command_execution().duration_ms();
+            displayItem.commandExecution.processId = item.command_execution().process_id();
+            displayItem.commandExecution.aggregatedOutput = item.command_execution().aggregated_output();
+            displayItem.commandExecution.actionLabels.reserve(
+                static_cast<std::size_t>(item.command_execution().action_labels_size())
+            );
+            for (const std::string &label : item.command_execution().action_labels()) {
+                displayItem.commandExecution.actionLabels.push_back(label);
+            }
+            pendingItems.push_back(std::move(displayItem));
             break;
+        }
         case qodex::threadui::ipc::common::Item::kFileChange:
         {
             qodex::threadui::native::DisplayItem displayItem;

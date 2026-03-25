@@ -25,7 +25,16 @@ message Reasoning {
 }
 
 message CommandExecution {
-  string text = 1;
+  string command = 1;
+  string cwd = 2;
+  string status = 3;
+  bool has_exit_code = 4;
+  int64 exit_code = 5;
+  bool has_duration_ms = 6;
+  int64 duration_ms = 7;
+  string process_id = 8;
+  string aggregated_output = 9;
+  repeated string action_labels = 10;
 }
 
 enum FileChangeKind {

@@ -84,6 +84,10 @@ main {
   background: transparent;
 }
 
+.thread-item--command-execution {
+  padding: 0.85rem;
+}
+
 .thread-item__label {
   margin-bottom: 0.45rem;
   font-size: 0.78rem;
@@ -192,6 +196,105 @@ main {
 .thread-item__file-change {
   display: grid;
   gap: 0.8rem;
+}
+
+.thread-item__command-execution {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.command-execution__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.command-execution__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.command-execution__badge--completed {
+  background: color-mix(in srgb, #2f855a 18%, transparent);
+  color: color-mix(in srgb, #2f855a 85%, canvastext 15%);
+}
+
+.command-execution__badge--failed,
+.command-execution__badge--declined {
+  background: color-mix(in srgb, #c53030 18%, transparent);
+  color: color-mix(in srgb, #c53030 85%, canvastext 15%);
+}
+
+.command-execution__badge--in_progress {
+  background: color-mix(in srgb, #2b6cb0 18%, transparent);
+  color: color-mix(in srgb, #2b6cb0 85%, canvastext 15%);
+}
+
+.command-execution__badge--unknown {
+  background: color-mix(in srgb, canvastext 12%, transparent);
+  color: canvastext;
+}
+
+.command-execution__meta {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.command-execution__command,
+.command-execution__cwd,
+.command-execution__output {
+  font-family: var(--font-mono);
+}
+
+.command-execution__command {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-weight: 700;
+}
+
+.command-execution__cwd {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.command-execution__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.command-execution__action {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, canvastext 8%, transparent);
+  font-size: 0.8rem;
+}
+
+.command-execution__output {
+  margin: 0;
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, canvas 88%, canvastext 12%);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .file-change__status {

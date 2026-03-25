@@ -79,8 +79,10 @@ set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/main.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/init.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/index.html"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/command-rendering/CommandExecutionRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/diff-rendering/FileChangeRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/message-rendering/MessageRenderer.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test/command-rendering/CommandExecutionRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/diff-rendering/FileChangeRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/MessageRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/styles.css"
@@ -755,6 +757,12 @@ if(BUILD_TESTING)
     add_test(
         NAME ThreadUiMessageRendererTest
         COMMAND "${NODE_EXECUTABLE}" --test ./test/message-rendering/MessageRenderer.test.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
+
+    add_test(
+        NAME ThreadUiCommandExecutionRendererTest
+        COMMAND "${NODE_EXECUTABLE}" --test ./test/command-rendering/CommandExecutionRenderer.test.cjs
         WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
     )
 

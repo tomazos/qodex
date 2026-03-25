@@ -41,7 +41,18 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     qodex::threadui::ipc::qodex_to_ui::AddItemsRequest addItemsRequest;
     addItemsRequest.add_items()->mutable_user_message()->set_text("Hello from user");
     addItemsRequest.add_items()->mutable_agent_message()->set_text("Hello from agent");
-    addItemsRequest.add_items()->mutable_command_execution()->set_text("{\"command\":\"date\"}");
+    qodex::threadui::ipc::common::CommandExecution *commandExecution =
+        addItemsRequest.add_items()->mutable_command_execution();
+    commandExecution->set_command("/bin/bash -lc \"date\"");
+    commandExecution->set_cwd("/home/zos");
+    commandExecution->set_status("completed");
+    commandExecution->set_has_exit_code(true);
+    commandExecution->set_exit_code(0);
+    commandExecution->set_has_duration_ms(true);
+    commandExecution->set_duration_ms(215);
+    commandExecution->set_process_id("12345");
+    commandExecution->set_aggregated_output("Wed Mar 25 19:35:16 AEST 2026\n");
+    commandExecution->add_action_labels("Read /home/zos/file.txt");
     qodex::threadui::ipc::common::FileChange *fileChange = addItemsRequest.add_items()->mutable_file_change();
     fileChange->set_status("completed");
     qodex::threadui::ipc::common::FileChangeChange *fileChangeUpdate = fileChange->add_changes();
@@ -68,7 +79,17 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QCOMPARE(items[1].kind, std::string("agent"));
     QCOMPARE(items[1].text, std::string("Hello from agent"));
     QCOMPARE(items[2].kind, std::string("command_execution"));
-    QCOMPARE(items[2].text, std::string("{\"command\":\"date\"}"));
+    QCOMPARE(items[2].commandExecution.command, std::string("/bin/bash -lc \"date\""));
+    QCOMPARE(items[2].commandExecution.cwd, std::string("/home/zos"));
+    QCOMPARE(items[2].commandExecution.status, std::string("completed"));
+    QCOMPARE(items[2].commandExecution.hasExitCode, true);
+    QCOMPARE(items[2].commandExecution.exitCode, std::int64_t(0));
+    QCOMPARE(items[2].commandExecution.hasDurationMs, true);
+    QCOMPARE(items[2].commandExecution.durationMs, std::int64_t(215));
+    QCOMPARE(items[2].commandExecution.processId, std::string("12345"));
+    QCOMPARE(items[2].commandExecution.aggregatedOutput, std::string("Wed Mar 25 19:35:16 AEST 2026\n"));
+    QCOMPARE(items[2].commandExecution.actionLabels.size(), std::size_t(1));
+    QCOMPARE(items[2].commandExecution.actionLabels[0], std::string("Read /home/zos/file.txt"));
     QCOMPARE(items[3].kind, std::string("file_change"));
     QCOMPARE(items[3].fileChange.status, std::string("completed"));
     QCOMPARE(items[3].fileChange.changes.size(), std::size_t(1));

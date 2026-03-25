@@ -5,6 +5,7 @@
 #include "app/ThreadUiProcess.h"
 #include "domain/threadmodel/AbstractItem.h"
 #include "domain/threadmodel/CompletedAgentMessage.h"
+#include "domain/threadmodel/CompletedCommandExecution.h"
 #include "domain/threadmodel/CompletedFileChange.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
@@ -67,6 +68,110 @@ qodex::threadui::ipc::common::FileChangeKind toThreadUiFileChangeKind(const qode
     return qodex::threadui::ipc::common::FILE_CHANGE_KIND_UNSPECIFIED;
 }
 
+std::string commandExecutionStatusToString(const qodex::codex::CommandExecutionStatus status) {
+    switch (status) {
+    case qodex::codex::CommandExecutionStatus::InProgress:
+        return "in_progress";
+    case qodex::codex::CommandExecutionStatus::Completed:
+        return "completed";
+    case qodex::codex::CommandExecutionStatus::Failed:
+        return "failed";
+    case qodex::codex::CommandExecutionStatus::Declined:
+        return "declined";
+    }
+
+    return "unknown";
+}
+
+QString commandActionLabel(const qodex::codex::Ref<qodex::codex::CommandAction> &action) {
+    if (!action) {
+        return {};
+    }
+
+    switch (action->kind) {
+    case qodex::codex::CommandAction::Kind::Read: {
+        const qodex::codex::Ref<qodex::codex::CommandActionRead> readAction =
+            std::get<qodex::codex::Ref<qodex::codex::CommandActionRead>>(action->payload);
+        if (!readAction) {
+            return {};
+        }
+        return readAction->path.isEmpty()
+            ? QStringLiteral("Read")
+            : QStringLiteral("Read %1").arg(readAction->path);
+    }
+    case qodex::codex::CommandAction::Kind::ListFiles: {
+        const qodex::codex::Ref<qodex::codex::CommandActionListFiles> listFilesAction =
+            std::get<qodex::codex::Ref<qodex::codex::CommandActionListFiles>>(action->payload);
+        if (!listFilesAction || !listFilesAction->path.hasValue() || listFilesAction->path.value().isEmpty()) {
+            return QStringLiteral("List files");
+        }
+        return QStringLiteral("List %1").arg(listFilesAction->path.value());
+    }
+    case qodex::codex::CommandAction::Kind::Search: {
+        const qodex::codex::Ref<qodex::codex::CommandActionSearch> searchAction =
+            std::get<qodex::codex::Ref<qodex::codex::CommandActionSearch>>(action->payload);
+        if (!searchAction) {
+            return {};
+        }
+
+        if (searchAction->query.hasValue() && !searchAction->query.value().isEmpty()) {
+            return QStringLiteral("Search %1").arg(searchAction->query.value());
+        }
+
+        if (searchAction->path.hasValue() && !searchAction->path.value().isEmpty()) {
+            return QStringLiteral("Search in %1").arg(searchAction->path.value());
+        }
+
+        return QStringLiteral("Search");
+    }
+    case qodex::codex::CommandAction::Kind::Unknown:
+        return {};
+    }
+
+    return {};
+}
+
+bool appendCommandExecutionDisplayItem(
+    qodex::threadui::ipc::common::CommandExecution *displayItem,
+    const qodex::domain::threadmodel::CompletedCommandExecution &commandExecutionItem
+) {
+    if (displayItem == nullptr) {
+        return false;
+    }
+
+    const qodex::codex::ThreadItemCommandExecution &payload = commandExecutionItem.data();
+    displayItem->set_command(payload.command.toStdString());
+    displayItem->set_cwd(payload.cwd.toStdString());
+    displayItem->set_status(commandExecutionStatusToString(payload.status));
+
+    if (payload.exitCode.hasValue()) {
+        displayItem->set_has_exit_code(true);
+        displayItem->set_exit_code(payload.exitCode.value());
+    }
+
+    if (payload.durationMs.hasValue()) {
+        displayItem->set_has_duration_ms(true);
+        displayItem->set_duration_ms(payload.durationMs.value());
+    }
+
+    if (payload.processId.hasValue() && !payload.processId.value().isEmpty()) {
+        displayItem->set_process_id(payload.processId.value().toStdString());
+    }
+
+    if (payload.aggregatedOutput.hasValue()) {
+        displayItem->set_aggregated_output(payload.aggregatedOutput.value().toStdString());
+    }
+
+    for (const qodex::codex::Ref<qodex::codex::CommandAction> &action : payload.commandActions) {
+        const QString label = commandActionLabel(action).trimmed();
+        if (!label.isEmpty()) {
+            displayItem->add_action_labels(label.toStdString());
+        }
+    }
+
+    return !payload.command.isEmpty() || payload.aggregatedOutput.hasValue();
+}
+
 bool appendFileChangeDisplayItem(
     qodex::threadui::ipc::common::FileChange *displayItem,
     const qodex::domain::threadmodel::CompletedFileChange &fileChangeItem
@@ -121,6 +226,7 @@ using qodex::codex::UserInput;
 using qodex::codex::UserInputText;
 using qodex::domain::threadmodel::AbstractItem;
 using qodex::domain::threadmodel::CompletedAgentMessage;
+using qodex::domain::threadmodel::CompletedCommandExecution;
 using qodex::domain::threadmodel::CompletedFileChange;
 using qodex::domain::threadmodel::CompletedUserMessage;
 
@@ -615,8 +721,10 @@ bool LoadedThread::appendDisplayItem(qodex::threadui::ipc::common::Item *display
         return true;
     }
     case ThreadItem::Kind::CommandExecution:
-        displayItem->mutable_command_execution()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
-        return true;
+        return appendCommandExecutionDisplayItem(
+            displayItem->mutable_command_execution(),
+            static_cast<const CompletedCommandExecution &>(item)
+        );
     case ThreadItem::Kind::FileChange:
         return appendFileChangeDisplayItem(displayItem->mutable_file_change(), static_cast<const CompletedFileChange &>(item));
     case ThreadItem::Kind::McpToolCall:

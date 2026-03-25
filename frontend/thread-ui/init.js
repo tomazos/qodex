@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+const { createCommandExecutionRenderer } = require('./command-rendering/CommandExecutionRenderer');
 const { createFileChangeRenderer } = require('./diff-rendering/FileChangeRenderer');
 const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
 
@@ -31,6 +32,7 @@ let composerForm = null;
 let composerInput = null;
 let pendingErrorDialogOpen = false;
 let messageRenderer = null;
+let commandExecutionRenderer = null;
 let fileChangeRenderer = null;
 let composerResizeFrameId = null;
 
@@ -98,13 +100,19 @@ function appendThreadItems(items) {
     const element = document.createElement('article');
     const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
     const isMarkupKind = kind === 'user' || kind === 'agent' || kind === 'reasoning';
+    const isCommandExecutionKind = kind === 'command_execution';
     const isFileChangeKind = kind === 'file_change';
     element.className = isMarkupKind ? `thread-item thread-item--${kind}` : 'thread-item';
+    if (isCommandExecutionKind) {
+      element.classList.add('thread-item--command-execution');
+    }
     if (isFileChangeKind) {
       element.classList.add('thread-item--file-change');
     }
 
-    if (isFileChangeKind && fileChangeRenderer) {
+    if (isCommandExecutionKind && commandExecutionRenderer) {
+      element.append(commandExecutionRenderer.renderToElement(item));
+    } else if (isFileChangeKind && fileChangeRenderer) {
       element.append(fileChangeRenderer.renderToElement(item));
     } else {
       const body = document.createElement('div');
@@ -235,6 +243,7 @@ async function initialize() {
     emptyStateElement = document.getElementById('thread-empty-state');
     initializeComposer();
     messageRenderer = createMessageRenderer({ domWindow: window });
+    commandExecutionRenderer = createCommandExecutionRenderer({ domWindow: window });
     fileChangeRenderer = createFileChangeRenderer({ domWindow: window });
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');

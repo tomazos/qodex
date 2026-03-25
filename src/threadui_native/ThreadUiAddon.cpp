@@ -389,6 +389,86 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
                 }
             }
         }
+
+        if (items[index].kind == "command_execution") {
+            napi_value commandValue = nullptr;
+            napi_value cwdValue = nullptr;
+            napi_value statusValue = nullptr;
+            napi_value hasExitCodeValue = nullptr;
+            napi_value exitCodeValue = nullptr;
+            napi_value hasDurationMsValue = nullptr;
+            napi_value durationMsValue = nullptr;
+            napi_value processIdValue = nullptr;
+            napi_value aggregatedOutputValue = nullptr;
+            napi_value actionLabelsArray = nullptr;
+
+            if (napi_create_string_utf8(
+                    env,
+                    items[index].commandExecution.command.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &commandValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].commandExecution.cwd.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &cwdValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].commandExecution.status.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &statusValue
+                ) != napi_ok ||
+                napi_get_boolean(env, items[index].commandExecution.hasExitCode, &hasExitCodeValue) != napi_ok ||
+                napi_create_bigint_int64(env, items[index].commandExecution.exitCode, &exitCodeValue) != napi_ok ||
+                napi_get_boolean(env, items[index].commandExecution.hasDurationMs, &hasDurationMsValue) != napi_ok ||
+                napi_create_bigint_int64(env, items[index].commandExecution.durationMs, &durationMsValue) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].commandExecution.processId.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &processIdValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].commandExecution.aggregatedOutput.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &aggregatedOutputValue
+                ) != napi_ok ||
+                napi_create_array_with_length(
+                    env,
+                    items[index].commandExecution.actionLabels.size(),
+                    &actionLabelsArray
+                ) != napi_ok ||
+                napi_set_named_property(env, itemObject, "command", commandValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "cwd", cwdValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "status", statusValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "hasExitCode", hasExitCodeValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "exitCode", exitCodeValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "hasDurationMs", hasDurationMsValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "durationMs", durationMsValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "processId", processIdValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "aggregatedOutput", aggregatedOutputValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "actionLabels", actionLabelsArray) != napi_ok) {
+                napi_throw_error(env, nullptr, "Failed to create command execution value");
+                return nullptr;
+            }
+
+            for (std::size_t actionIndex = 0; actionIndex < items[index].commandExecution.actionLabels.size(); ++actionIndex) {
+                napi_value labelValue = nullptr;
+                if (napi_create_string_utf8(
+                        env,
+                        items[index].commandExecution.actionLabels[actionIndex].c_str(),
+                        NAPI_AUTO_LENGTH,
+                        &labelValue
+                    ) != napi_ok ||
+                    napi_set_element(env, actionLabelsArray, actionIndex, labelValue) != napi_ok) {
+                    napi_throw_error(env, nullptr, "Failed to create command execution action label value");
+                    return nullptr;
+                }
+            }
+        }
     }
 
     return array;

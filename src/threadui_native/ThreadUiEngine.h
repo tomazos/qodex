@@ -21,9 +21,23 @@ struct DisplayFileChange {
     std::vector<DisplayFileChangeChange> changes;
 };
 
+struct DisplayCommandExecution {
+    std::string command;
+    std::string cwd;
+    std::string status;
+    bool hasExitCode = false;
+    std::int64_t exitCode = 0;
+    bool hasDurationMs = false;
+    std::int64_t durationMs = 0;
+    std::string processId;
+    std::string aggregatedOutput;
+    std::vector<std::string> actionLabels;
+};
+
 struct DisplayItem {
     std::string kind;
     std::string text;
+    DisplayCommandExecution commandExecution;
     DisplayFileChange fileChange;
 };
 
