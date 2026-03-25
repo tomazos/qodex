@@ -111,6 +111,7 @@ main {
 }
 
 .thread-item {
+  min-width: 0;
   border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
   border-radius: 10px;
   padding: 0.75rem 0.9rem;
@@ -138,6 +139,8 @@ main {
   margin: 0;
   font: inherit;
   word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .thread-item--user .thread-item__body,
@@ -173,6 +176,8 @@ main {
 
 .thread-item__body code {
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
   padding: 0.1rem 0.3rem;
   border-radius: 4px;
   background: color-mix(in srgb, canvastext 10%, transparent);
@@ -187,6 +192,8 @@ main {
 }
 
 .thread-item__body pre code {
+  overflow-wrap: normal;
+  word-break: normal;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -213,6 +220,7 @@ main {
 
 .thread-item__body a {
   color: Highlight;
+  overflow-wrap: anywhere;
 }
 
 .thread-item__body .katex-display {
