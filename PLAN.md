@@ -50,19 +50,33 @@ Implemented today:
 - SQLite-backed storage, migrations, and API traffic logging
 - in-memory thread summary store and Qt models/panes for thread list and API log
 - shell actions for refresh, rename, fork, archive, unarchive, and close thread subscriptions
+- `LoadedThread` and per-turn/per-item loaded-thread domain model under `src/domain/threadmodel`
+- `Loaded Threads` inspector view showing `Thread -> Turn -> Item -> properties`
+- `API Log Inspector` view with full payload inspection
+- staged Electron thread-ui app built by CMake, including native addon integration
+- qodex-side thread-ui loopback TCP server started during splash/startup
+- protobuf-defined qodex <-> thread-ui IPC with custom generated service glue
+- thread-ui launch, login handshake, and authenticated per-window connection management
+- thread resume into thread-ui with full-history `AddItems`
+- thread-ui prompt composer with `SendUserInput` routed to `turn/start` or `turn/steer`
+- basic thread-ui rendering of completed items, now including all completed item kinds
+- thread-list `Resume Thread` context menu action and double-click-to-resume behavior
 - automated tests covering transport, generated client wiring, storage, models, and single-instance behavior
+- automated thread-ui IPC tests covering listener startup, login, add-items delivery, and send-user-input routing
 
 Removed on purpose:
 
 - the in-process `QWebEngineView` transcript surface
 - transcript HTML formatting in qodex
 - transcript dock widgets inside the Qt shell
-- the shell-level `Resume Thread` action that belonged to the old transcript path
+- the temporary `Thread` menu launcher for ad hoc thread-ui windows
 
 Current gap:
 
-- qodex does not yet provide a per-thread chat/transcript window
-- that responsibility moves to the planned Electron-based thread-ui component
+- thread-ui currently renders plain text only; no markdown, KaTeX, or rich item-specific rendering yet
+- thread-ui currently receives completed items; in-progress/live streaming is modeled in qodex but not yet projected richly into Electron
+- non-message completed items are currently summarized minimally for thread-ui rather than rendered with item-specific presentation
+- qodex supervises thread-ui windows, but activation/focus behavior still needs more platform-specific work
 
 ## Top-Level Module Layout
 
@@ -76,17 +90,18 @@ qodex/
     main.cpp
     app/        # implemented Qt-side composition and orchestration
     codex/      # implemented transport and client base
-    domain/     # implemented thread summaries/store; more live-thread state planned
+    domain/     # implemented thread summaries/store and loaded-thread model
     storage/    # implemented persistence and migrations
-    ui/         # implemented native shell widgets and models
-    threadui/   # planned qodex-side Electron host / IPC layer
+    ui/         # implemented native shell widgets, models, and inspectors
+    threadui/   # implemented qodex-side thread-ui IPC transport layer
+    threadui_native/  # implemented Electron-side native addon / IPC client
   frontend/
-    thread-ui/  # planned Electron app source
-  cmake/        # planned Electron build/staging helpers
+    thread-ui/  # implemented Electron thread-ui app source
+  cmake/        # implemented Electron build/staging and protoc plugin helpers
   resources/    # implemented Qt resources
   tests/
   build/generated/protocol/  # generated Codex protocol bindings
-  build/generated/threadui-ipc/  # planned generated qodex <-> thread-ui IPC bindings
+  build/generated/threadui-ipc/  # generated qodex <-> thread-ui IPC bindings
 ```
 
 ## File and Class Plan
@@ -132,13 +147,41 @@ Current responsibilities:
 - rename/fork/archive/unarchive/close threads
 - react to Codex notifications and keep `ThreadStore` current
 - update shell status text
+- create/find `LoadedThread` instances for resumed threads
+- route turn/item notifications into the loaded-thread model
+- route thread-list and thread-ui user intent to the correct loaded thread
 
 Future responsibilities:
 
-- hand thread-open / prompt / steer intent to the Electron thread-ui side through a narrow host API
+- keep app-level orchestration narrow while pushing per-thread behavior into `LoadedThread`
 
 This is the main orchestrator, but it must stay narrow.
 It should not parse raw JSON-RPC, render transcript HTML, or directly own Electron child-process details once a dedicated host class exists.
+
+#### `src/app/LoadedThread.h` / `src/app/LoadedThread.cpp`
+
+Responsibilities:
+
+- represent one resumed/loaded Codex thread in memory
+- own that thread’s ordered `Turn` / `Item` model
+- track the active turn id for that thread
+- mutate the model from `turn/*` and `item/*` notifications
+- project completed items into thread-ui `AddItems`
+- route thread-ui prompt input into `turn/start` / `turn/steer`
+
+This is now the main per-thread runtime object and should keep growing in preference to pushing thread-local state back into `SessionController`.
+
+#### `src/app/ThreadUiProcess.h` / `src/app/ThreadUiProcess.cpp`
+
+Responsibilities:
+
+- represent one launched Electron thread-ui process
+- own its `QProcess`, launch token, authentication state, and pending requests
+- queue `AddItems` until the child is authenticated
+- route user-input requests and responses between IPC and `LoadedThread`
+- surface child stderr / fatal-process failure cleanly
+
+`ThreadUiProcessManager` owns these objects, but the per-process state no longer lives in an anonymous record struct.
 
 ### 2. Config and app paths
 
@@ -240,28 +283,6 @@ Important rule:
 
 This is where thread and live-turn state should stay deterministic and UI-agnostic.
 
-#### `src/domain/CodexTypes.h`
-
-Contents:
-
-- plain structs for domain objects, for example:
-  - `ThreadSummary`
-  - `ThreadDetail`
-  - `ThreadUiItem`
-  - `LiveTurnState`
-  - `CommandItemData`
-  - `StructuredItemData`
-
-Important rule:
-
-- `ThreadUiItem` must always have a stable identity field, such as `itemId`.
-- It should also have an explicit source/origin enum:
-  - persisted
-  - live
-  - synthetic
-
-That avoids the Wodex bug where "has item id" accidentally implied "live item".
-
 #### `src/domain/ThreadStore.h` / `src/domain/ThreadStore.cpp`
 
 Responsibilities:
@@ -274,6 +295,22 @@ Responsibilities:
 
 This is the main in-memory model of the app.
 
+#### `src/domain/threadmodel/`
+
+Contents:
+
+- `Turn`
+- `AbstractItem`
+- `CompletedItem`
+- `InprogressItem`
+- concrete completed/in-progress item subclasses for every Codex thread item kind
+
+Important rule:
+
+- item identity is explicit and stable via `itemId`
+- in-progress items are mutated by live notifications, then replaced by completed items when `item/completed` arrives
+- this model is the source of truth for loaded-thread state, not ad hoc UI projections
+
 #### `src/domain/ThreadUiProjector.h` / `src/domain/ThreadUiProjector.cpp`
 
 Responsibilities:
@@ -281,7 +318,7 @@ Responsibilities:
 - Convert persisted Codex thread items into a structured snapshot/delta format for the Electron thread-ui
 - Convert command/file/tool/reasoning/plan items into a UI-facing representation without producing HTML in qodex
 
-This is the C++ projection layer that replaces the old in-process transcript HTML formatter.
+This is still the intended direction conceptually, but today the projection logic lives mostly inside `LoadedThread` rather than a separate projector class.
 
 #### `src/domain/LiveTurnReducer.h` / `src/domain/LiveTurnReducer.cpp`
 
@@ -314,6 +351,8 @@ Current child widgets:
 
 - `ThreadListPane`
 - `ApiLogPane`
+- `LoadedThreadsPane`
+- `ApiLogInspectorPane`
 
 Future shell additions, if needed, should stay shell-oriented rather than per-thread conversation UI.
 
@@ -350,6 +389,28 @@ Responsibilities:
 
 - Render the API log table and preserve its view state
 
+#### `src/ui/LoadedThreadsModel.h` / `src/ui/LoadedThreadsModel.cpp`
+
+Responsibilities:
+
+- present the loaded-thread domain model as a tree:
+  `Thread -> Turn -> Item -> properties`
+- keep introspection and overview logic out of `LoadedThread`
+
+#### `src/ui/LoadedThreadsPane.h` / `src/ui/LoadedThreadsPane.cpp`
+
+Responsibilities:
+
+- host the loaded-thread inspector tree view
+- preserve shell-level view behavior while keeping model logic in `LoadedThreadsModel`
+
+#### `src/ui/ApiLogInspectorPane.h` / `src/ui/ApiLogInspectorPane.cpp`
+
+Responsibilities:
+
+- inspect one API log entry in full detail, including the full JSON payload
+- act as the detail companion to the API log table view
+
 #### `src/ui/ProgressSplashScreen.h` / `src/ui/ProgressSplashScreen.cpp`
 
 Responsibilities:
@@ -360,15 +421,19 @@ Responsibilities:
 
 This is where per-thread conversation rendering, prompt entry, and native JS/C++ integration will live.
 
-#### `src/threadui/ThreadUiProcessManager.h` / `src/threadui/ThreadUiProcessManager.cpp`
+#### `src/app/ThreadUiProcessManager.h` / `src/app/ThreadUiProcessManager.cpp`
 
 Responsibilities:
 
 - Launch, supervise, and focus one Electron process/window per active thread
 - Know where the staged Electron app lives in the build/install tree
-- Start or coordinate the qodex-side IPC listener for each launched thread-ui
+- Coordinate with the qodex-side IPC listener and per-process `ThreadUiProcess` objects
 - Pass thread identity and qodex IPC endpoint details to the Electron side
 - Keep process-lifecycle policy out of `SessionController`
+
+Current note:
+
+- the process manager exists and is wired, but focus/activation policy still needs more refinement, especially on Wayland
 
 #### `src/threadui/ThreadUiIpcServer.h` / `src/threadui/ThreadUiIpcServer.cpp`
 
@@ -398,7 +463,7 @@ Important rules:
 - qodex remains the source of truth for Codex session state and persistence
 - Electron owns DOM, renderer timing, prompt UX, and transcript presentation
 - communication must be explicit and versioned; no temp-file HTML handoff
-- qodex CMake should build and stage the Electron app and any native addon; normal builds should not depend on `npm start`
+- qodex CMake builds and stages the Electron app and native addon; normal builds do not depend on `npm start`
 
 #### `ipc/`
 
@@ -410,6 +475,12 @@ Responsibilities:
   - `QodexToUi`
 - Treat `.proto service` definitions as qodex-owned IDL, not as a commitment to gRPC
 - Generate typed client stubs, dispatchers, and message descriptors via a custom `protoc` plugin
+
+Current implemented surface:
+
+- `UiToQodex.Login`
+- `UiToQodex.SendUserInput`
+- `QodexToUi.AddItems`
 
 Important rules:
 
@@ -425,12 +496,19 @@ Responsibilities:
 - Electron app source:
   - `package.json`
   - `main.js`
-  - `preload.js`
   - `index.html`
   - renderer JS/CSS assets
 - Render one thread conversation window
 - Connect back to qodex over the loopback TCP endpoint passed on the command line
 - Keep prompt composition and transcript DOM logic out of the Qt shell
+
+Current implemented UI:
+
+- custom frameless window chrome
+- scrollable transcript
+- basic completed-item display
+- auto-growing composer
+- fatal-error dialog then process exit on internal errors
 
 Expected startup flow:
 
@@ -446,10 +524,19 @@ Expected startup flow:
 
 Responsibilities:
 
-- Optional CMake-built N-API addon for the Electron side
+- CMake-built N-API addon for the Electron side
 - Link external native libraries cleanly through the main qodex build
 - Avoid a separate `node-gyp` build graph once integrated into qodex
-- Host the thread-ui side of the IPC connection on the native side rather than in renderer JS when practical
+- Host the thread-ui side of the IPC connection on the native side rather than in renderer JS
+
+Current implemented state:
+
+- standalone `Asio` TCP client on its own thread
+- protobuf frame encode/decode
+- login handshake
+- `AddItems` receive path
+- `SendUserInput` request path
+- renderer polling bridge for pending items and errors
 
 #### `cmake/QodexElectron.cmake`
 
@@ -513,13 +600,15 @@ The public interfaces should be designed so this move does not force a rewrite.
 6. `ThreadStore` is populated.
 7. `ThreadListModel` updates.
 8. User selects a thread in the Qt shell.
-9. qodex updates shell state and, when requested, opens or focuses that thread’s Electron window.
-10. `ThreadUiProcessManager` allocates a launch token, ensures the qodex-side loopback TCP server is listening, and launches the staged Electron app with the endpoint details.
-11. thread-ui connects back to qodex over that socket and sends a handshake request.
-12. qodex validates the handshake, binds the connection to the launched process, and sends a thread snapshot / delta stream to the Electron thread-ui.
-13. During active turns, streamed notifications go:
-    `AppServerTransport -> CodexClient -> LiveTurnReducer -> ThreadStore -> ThreadUiProjector -> ThreadUiIpcServer`
-14. User intents from the Electron window flow back to qodex over the same bidirectional IPC channel.
+9. User resumes a thread from the thread list (context menu or double click).
+10. `SessionController` creates or reuses a `LoadedThread` and issues `thread/resume`.
+11. `ThreadUiProcessManager` allocates a launch token, reuses the already-listening loopback TCP server, and launches the staged Electron app with the endpoint details.
+12. thread-ui connects back to qodex over that socket and sends `UiToQodex.Login`.
+13. qodex validates the handshake, binds the connection to the launched process, and sends a full-history `QodexToUi.AddItems`.
+14. During active turns, Codex notifications mutate the loaded-thread model:
+    `AppServerTransport -> CodexClient -> SessionController -> LoadedThread -> domain/threadmodel`
+15. Completed items are projected from `LoadedThread` to `ThreadUiProcess -> ThreadUiIpcServer -> Electron`.
+16. User prompt input flows back from Electron over the same bidirectional IPC channel and becomes `turn/start` or `turn/steer`.
 
 ## Testing Plan
 
@@ -536,6 +625,8 @@ Current automated coverage already includes:
 - `DatabaseManagerTest`
 - `ThreadListModelTest`
 - `ApiLogModelTest`
+- `ThreadUiIpcServerTest`
+- `ThreadUiEngineConnectionTest`
 
 ### `tests/codex/`
 
@@ -551,7 +642,7 @@ Use fake process output where practical.
 - `ThreadStoreTest`
 - `ThreadUiProjectorTest`
 
-This is the highest-value test area.
+This is still the highest-value test area, but today some loaded-thread reduction logic lives under `src/app/LoadedThread.*` and deserves additional focused tests too.
 
 ### `tests/ui/`
 
@@ -590,10 +681,10 @@ To prevent another "single huge file" outcome:
 
 ### Phase 2. Domain model `[partially implemented]`
 
-- `CodexTypes`
 - `ThreadStore`
-- `ThreadUiProjector`
-- `LiveTurnReducer`
+- loaded-thread `Turn` / `Item` hierarchy
+- `LoadedThread` mutation from resume + live notifications
+- separate projector / reducer extraction still pending
 
 ### Phase 3. Native shell `[mostly implemented]`
 
@@ -602,30 +693,34 @@ To prevent another "single huge file" outcome:
 - `ThreadListModel`
 - `ApiLogPane`
 - `ApiLogModel`
+- `LoadedThreadsPane`
+- `LoadedThreadsModel`
+- `ApiLogInspectorPane`
 - `ProgressSplashScreen`
 
-### Phase 4. Electron build/staging `[next]`
+### Phase 4. Electron build/staging `[implemented]`
 
 - `cmake/QodexElectron.cmake`
 - staged Electron app bundle in the build tree
 - CMake-built native addon support
 
-### Phase 5. qodex <-> Electron thread-ui boundary `[next]`
+### Phase 5. qodex <-> Electron thread-ui boundary `[partially implemented]`
 
 - `ThreadUiProcessManager`
 - `ThreadUiIpcServer`
 - thread-ui `.proto` service definitions and custom `protoc` plugin integration
-- structured thread snapshot/delta model
-- initial thread-open / focus lifecycle
 - loopback TCP handshake and bidirectional request/response plumbing
+- initial thread-open / focus lifecycle
+- completed-item `AddItems` projection
+- richer in-progress/live projection still pending
 
-### Phase 6. End-to-end interactions `[later]`
+### Phase 6. End-to-end interactions `[partially implemented]`
 
-- thread reading
 - thread resume/open from the new thread-ui flow
 - prompt sending
-- streaming assistant updates
 - steer while active
+- live incremental renderer updates still pending
+- richer error recovery / restart policy still pending
 
 ### Phase 7. Advanced item rendering `[later]`
 
