@@ -30,6 +30,7 @@ let composerForm = null;
 let composerInput = null;
 let pendingErrorDialogOpen = false;
 let messageRenderer = null;
+let composerResizeFrameId = null;
 
 function describeError(error) {
   if (error instanceof Error) {
@@ -131,6 +132,17 @@ function resizeComposerInput() {
   composerInput.style.height = `${composerInput.scrollHeight}px`;
 }
 
+function scheduleComposerResize() {
+  if (composerResizeFrameId !== null) {
+    window.cancelAnimationFrame(composerResizeFrameId);
+  }
+
+  composerResizeFrameId = window.requestAnimationFrame(() => {
+    composerResizeFrameId = null;
+    resizeComposerInput();
+  });
+}
+
 async function showPendingError(message) {
   if (fatalErrorReported || pendingErrorDialogOpen || typeof message !== 'string' || message.length === 0) {
     return;
@@ -195,6 +207,7 @@ function initializeComposer() {
   });
 
   resizeComposerInput();
+  scheduleComposerResize();
 }
 
 async function initialize() {
@@ -261,6 +274,11 @@ function shutdown() {
     animationFrameId = null;
   }
 
+  if (composerResizeFrameId !== null) {
+    window.cancelAnimationFrame(composerResizeFrameId);
+    composerResizeFrameId = null;
+  }
+
   native.shutdown();
 }
 
@@ -272,6 +290,7 @@ if (document.readyState === 'loading') {
 
 window.addEventListener('pagehide', shutdown);
 window.addEventListener('beforeunload', shutdown);
+window.addEventListener('resize', scheduleComposerResize);
 window.addEventListener('error', (event) => {
   void reportFatalError(event.error || event.message || 'Unknown renderer error');
 });
