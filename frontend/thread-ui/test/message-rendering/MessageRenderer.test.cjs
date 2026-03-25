@@ -90,6 +90,20 @@ test('renders block math with KaTeX display output', () => {
   assertHtmlContains(html, '<math');
 });
 
+test('renders LaTeX bracket delimiters used by Codex answers', () => {
+  const html = renderMessage([
+    'For a vector \\(z = (z_1, z_2, \\dots, z_n)\\), the softmax of component \\(i\\) is:',
+    '',
+    '\\[',
+    '\\mathrm{softmax}(z_i) = \\frac{e^{z_i}}{\\sum_{j=1}^{n} e^{z_j}}',
+    '\\]',
+  ].join('\n'));
+
+  assertHtmlContains(html, 'class="katex"');
+  assertHtmlContains(html, 'class="katex-display"');
+  assertHtmlContains(html, '\\mathrm{softmax}(z_i)');
+});
+
 test('does not treat escaped dollar signs or currency values as math', () => {
   const html = renderMessage('Price is \\$5.00 and this is not math: $5.00');
 
