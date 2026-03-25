@@ -19,6 +19,8 @@ class ApiLogPane;
 class ApiLogInspectorPane;
 class LoadedThreadsModel;
 class LoadedThreadsPane;
+class ModelsModel;
+class ModelsPane;
 class ThreadListModel;
 class ThreadListPane;
 class MainWindow;
@@ -46,6 +48,7 @@ public:
         ApiLogModel *apiLogModel = nullptr,
         qodex::storage::DatabaseManager *databaseManager = nullptr,
         LoadedThreadsModel *loadedThreadsModel = nullptr,
+        ModelsModel *modelsModel = nullptr,
         QWidget *parent = nullptr
     );
     ~MainWindow() override;
@@ -54,6 +57,7 @@ public:
     [[nodiscard]] ApiLogPane *apiLogPane() const;
     [[nodiscard]] ApiLogInspectorPane *apiLogInspectorPane() const;
     [[nodiscard]] LoadedThreadsPane *loadedThreadsPane() const;
+    [[nodiscard]] ModelsPane *modelsPane() const;
     [[nodiscard]] QString windowKey() const;
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
@@ -81,6 +85,8 @@ private:
     ApiLogInspectorPane *m_apiLogInspectorPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_loadedThreadsDock = nullptr;
     LoadedThreadsPane *m_loadedThreadsPane = nullptr;
+    KDDockWidgets::QtWidgets::DockWidget *m_modelsDock = nullptr;
+    ModelsPane *m_modelsPane = nullptr;
     QMenu *m_threadMenu = nullptr;
     QMenu *m_viewMenu = nullptr;
     QMenu *m_windowMenu = nullptr;

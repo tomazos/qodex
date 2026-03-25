@@ -15,6 +15,7 @@
 #include "ui/ApiLogModel.h"
 #include "ui/LoadedThreadsModel.h"
 #include "ui/MainWindow.h"
+#include "ui/ModelsModel.h"
 #include "ui/ProgressSplashScreen.h"
 #include "ui/ThreadListModel.h"
 
@@ -56,6 +57,7 @@ private:
     [[nodiscard]] static QString apiLogViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString apiLogInspectorViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString loadedThreadsViewKeyForWindowKey(const QString &windowKey);
+    [[nodiscard]] static QString modelsViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] qodex::ui::MainWindow *windowByKey(const QString &windowKey);
     [[nodiscard]] QList<qodex::ui::MainWindow *> windows();
     [[nodiscard]] int visibleWindowCount();
@@ -85,6 +87,7 @@ private:
     qodex::ui::ThreadListModel m_threadListModel;
     qodex::ui::ApiLogModel m_apiLogModel;
     qodex::ui::LoadedThreadsModel m_loadedThreadsModel;
+    qodex::ui::ModelsModel m_modelsModel;
     qodex::ui::MainWindow m_mainWindow;
     std::vector<std::unique_ptr<qodex::ui::MainWindow>> m_additionalWindows;
     ThreadUiProcessManager m_threadUiProcessManager;

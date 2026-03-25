@@ -30,6 +30,8 @@ using qodex::codex::InitializeResponse;
 using qodex::codex::InitializeCapabilities;
 using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
+using qodex::codex::Model;
+using qodex::codex::ModelListResponse;
 using qodex::codex::Nullable;
 using qodex::codex::Ref;
 using qodex::codex::SessionSource;
@@ -89,6 +91,8 @@ SessionController::SessionController(
 
     connect(m_client, &CodexClient::initializeSucceeded, this, &SessionController::onInitializeSucceeded);
     connect(m_client, &CodexClient::initializeFailed, this, &SessionController::onInitializeFailed);
+    connect(m_client, &CodexClient::modelListSucceeded, this, &SessionController::onModelListSucceeded);
+    connect(m_client, &CodexClient::modelListFailed, this, &SessionController::onModelListFailed);
     connect(m_client, &CodexClient::threadListSucceeded, this, &SessionController::onThreadListSucceeded);
     connect(m_client, &CodexClient::threadListFailed, this, &SessionController::onThreadListFailed);
     connect(m_client, &CodexClient::threadResumeSucceeded, this, &SessionController::onThreadResumeSucceeded);
@@ -341,6 +345,10 @@ QList<const LoadedThread *> SessionController::loadedThreads() const {
     return threads;
 }
 
+QList<Ref<Model>> SessionController::models() const {
+    return m_models;
+}
+
 void SessionController::start() {
     if (m_startRequested) {
         return;
@@ -392,6 +400,7 @@ void SessionController::onInitializeSucceeded(const JsonRpcId &id, const Initial
         return;
     }
 
+    requestModels();
     emit startupProgressChanged(QStringLiteral("Loading thread list..."), 92);
     requestThreadLists();
 }
@@ -401,6 +410,40 @@ void SessionController::onInitializeFailed(const JsonRpcId &id, const JsonRpcErr
     const QString message = QStringLiteral("Initialize failed: %1").arg(error.message);
     m_mainWindow->setStatusMessage(message);
     finishStartup(message);
+}
+
+void SessionController::onModelListSucceeded(const JsonRpcId &id, const ModelListResponse &response) {
+    if (id.toKey() != m_modelListRequestKey) {
+        return;
+    }
+
+    for (const Ref<Model> &model : response.data) {
+        if (model) {
+            m_pendingModels.append(model);
+        }
+    }
+
+    if (response.nextCursor.hasValue()) {
+        requestModelListPage(Nullable<QString>::fromValue(response.nextCursor.value()));
+        return;
+    }
+
+    m_modelListRequestInFlight = false;
+    m_modelListRequestKey.clear();
+    m_models = m_pendingModels;
+    m_pendingModels.clear();
+    emit modelsChanged();
+}
+
+void SessionController::onModelListFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
+    if (id.toKey() != m_modelListRequestKey) {
+        return;
+    }
+
+    m_modelListRequestInFlight = false;
+    m_modelListRequestKey.clear();
+    m_pendingModels.clear();
+    m_mainWindow->setStatusMessage(QStringLiteral("model/list failed: %1").arg(error.message));
 }
 
 void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadListResponse &response) {
@@ -493,6 +536,7 @@ void SessionController::onThreadResumeFailed(const JsonRpcId &id, const JsonRpcE
 }
 
 void SessionController::onRefreshRequested() {
+    requestModels();
     requestThreadLists();
 }
 
@@ -1215,6 +1259,32 @@ void SessionController::finishStartup(const QString &message) {
     m_startupFinished = true;
     emit startupProgressChanged(message, 100);
     emit startupFinished();
+}
+
+void SessionController::requestModels() {
+    if (m_modelListRequestInFlight) {
+        return;
+    }
+
+    m_pendingModels.clear();
+    requestModelListPage(missing<QString>());
+}
+
+void SessionController::requestModelListPage(const Nullable<QString> &cursor) {
+    m_modelListRequestInFlight = true;
+
+    const JsonRpcId requestId = m_client->sendModelListRequest(
+        cursor,
+        Nullable<bool>::fromValue(true),
+        missing<qint64>()
+    );
+    if (!requestId.isValid()) {
+        m_modelListRequestInFlight = false;
+        m_mainWindow->setStatusMessage(QStringLiteral("Failed to send model/list request."));
+        return;
+    }
+
+    m_modelListRequestKey = requestId.toKey();
 }
 
 void SessionController::requestThreadLists() {

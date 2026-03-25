@@ -11,6 +11,7 @@
 #include "ui/ApiLogPane.h"
 #include "ui/ApiLogInspectorPane.h"
 #include "ui/LoadedThreadsPane.h"
+#include "ui/ModelsPane.h"
 #include "ui/ThreadListPane.h"
 
 namespace qodex::app {
@@ -31,13 +32,15 @@ AppBootstrap::AppBootstrap(
       m_threadListModel(&m_threadStore),
       m_apiLogModel(m_databaseManager),
       m_loadedThreadsModel(),
+      m_modelsModel(),
       m_mainWindow(
           QStringLiteral("qodex.MainWindow.Primary"),
           QStringLiteral("Qodex"),
           &m_threadListModel,
           &m_apiLogModel,
           m_databaseManager,
-          &m_loadedThreadsModel
+          &m_loadedThreadsModel,
+          &m_modelsModel
       ),
       m_threadUiProcessManager(threadUiIpcServer, this),
       m_sessionController(
@@ -49,6 +52,7 @@ AppBootstrap::AppBootstrap(
           &m_mainWindow
       ) {
     m_loadedThreadsModel.setSessionController(&m_sessionController);
+    m_modelsModel.setSessionController(&m_sessionController);
     m_mainWindow.move(80, 80);
     m_mainWindow.installEventFilter(this);
     QObject::connect(
@@ -173,6 +177,10 @@ QString AppBootstrap::apiLogInspectorViewKeyForWindowKey(const QString &windowKe
 
 QString AppBootstrap::loadedThreadsViewKeyForWindowKey(const QString &windowKey) {
     return QStringLiteral("%1/loaded-threads-header").arg(windowKey);
+}
+
+QString AppBootstrap::modelsViewKeyForWindowKey(const QString &windowKey) {
+    return QStringLiteral("%1/models-header").arg(windowKey);
 }
 
 qodex::ui::MainWindow *AppBootstrap::windowByKey(const QString &windowKey) {
@@ -360,6 +368,12 @@ void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWin
                 pane->saveHeaderState(),
             });
         }
+        if (qodex::ui::ModelsPane *pane = window->modelsPane()) {
+            viewStates.append(qodex::storage::ViewStateRecord{
+                modelsViewKeyForWindowKey(window->windowKey()),
+                pane->saveHeaderState(),
+            });
+        }
     };
 
     collectWindowState(&m_mainWindow, true);
@@ -423,6 +437,17 @@ void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
             qWarning("Failed to load loaded threads view state: %s", qPrintable(errorMessage));
         } else if (headerState.has_value()) {
             window->loadedThreadsPane()->restoreHeaderState(*headerState);
+        }
+    }
+
+    if (window->modelsPane() != nullptr) {
+        errorMessage.clear();
+        const auto headerState =
+            m_databaseManager->loadViewState(modelsViewKeyForWindowKey(window->windowKey()), &errorMessage);
+        if (!errorMessage.isEmpty()) {
+            qWarning("Failed to load models view state: %s", qPrintable(errorMessage));
+        } else if (headerState.has_value()) {
+            window->modelsPane()->restoreHeaderState(*headerState);
         }
     }
 }

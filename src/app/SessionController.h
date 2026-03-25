@@ -48,16 +48,20 @@ public:
     void attachWindow(ui::MainWindow *window);
     void start();
     [[nodiscard]] QList<const LoadedThread *> loadedThreads() const;
+    [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::Model>> models() const;
 
 signals:
     void startupProgressChanged(const QString &message, int progress);
     void startupFinished();
     void loadedThreadsChanged();
+    void modelsChanged();
 
 private slots:
     void onTransportStarted();
     void onInitializeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::InitializeResponse &response);
     void onInitializeFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
+    void onModelListSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ModelListResponse &response);
+    void onModelListFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadListSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadListResponse &response);
     void onThreadListFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onThreadResumeSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response);
@@ -137,6 +141,8 @@ private:
         return qodex::codex::Nullable<T>::missing();
     }
     void finishStartup(const QString &message);
+    void requestModels();
+    void requestModelListPage(const qodex::codex::Nullable<QString> &cursor);
     void requestThreadLists();
     void requestThreadList(bool archived);
 
@@ -149,10 +155,14 @@ private:
     QList<ui::MainWindow *> m_windows;
     bool m_startRequested = false;
     bool m_startupFinished = false;
+    bool m_modelListRequestInFlight = false;
     bool m_activeThreadListRequestInFlight = false;
     bool m_archivedThreadListRequestInFlight = false;
+    QString m_modelListRequestKey;
     QString m_activeThreadListRequestKey;
     QString m_archivedThreadListRequestKey;
+    QList<qodex::codex::Ref<qodex::codex::Model>> m_models;
+    QList<qodex::codex::Ref<qodex::codex::Model>> m_pendingModels;
     QHash<QString, QString> m_pendingThreadResumeRequests;
     QHash<QString, LoadedThread *> m_loadedThreads;
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;

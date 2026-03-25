@@ -579,6 +579,10 @@ qt_add_executable(qodex
     src/ui/LoadedThreadsPane.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    src/ui/ModelsModel.cpp
+    src/ui/ModelsModel.h
+    src/ui/ModelsPane.cpp
+    src/ui/ModelsPane.h
     src/ui/ProgressSplashScreen.cpp
     src/ui/ProgressSplashScreen.h
     src/ui/ThreadListModel.cpp

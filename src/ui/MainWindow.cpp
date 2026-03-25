@@ -11,6 +11,8 @@
 #include "ui/ApiLogPane.h"
 #include "ui/LoadedThreadsModel.h"
 #include "ui/LoadedThreadsPane.h"
+#include "ui/ModelsModel.h"
+#include "ui/ModelsPane.h"
 #include "ui/ThreadListModel.h"
 #include "ui/ThreadListPane.h"
 
@@ -23,6 +25,7 @@ MainWindow::MainWindow(
     ApiLogModel *apiLogModel,
     qodex::storage::DatabaseManager *databaseManager,
     LoadedThreadsModel *loadedThreadsModel,
+    ModelsModel *modelsModel,
     QWidget *parent
 )
     : KDDockWidgets::QtWidgets::MainWindow(
@@ -95,6 +98,26 @@ MainWindow::MainWindow(
             addDockWidgetAsTab(m_loadedThreadsDock);
         }
     }
+    if (modelsModel != nullptr) {
+        m_modelsPane = new ModelsPane(modelsModel);
+        m_modelsDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.Models"));
+        m_modelsDock->setTitle(QStringLiteral("Models"));
+        m_modelsDock->setWidget(m_modelsPane);
+        if (m_loadedThreadsDock != nullptr) {
+            m_loadedThreadsDock->addDockWidgetAsTab(
+                m_modelsDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else if (m_threadListDock != nullptr) {
+            m_threadListDock->addDockWidgetAsTab(
+                m_modelsDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else {
+            addDockWidgetAsTab(m_modelsDock);
+            m_modelsDock->close();
+        }
+    }
     if (m_apiLogPane != nullptr) {
         connect(m_apiLogPane, &ApiLogPane::inspectApiLogRequested, this, &MainWindow::inspectApiLog);
     }
@@ -103,6 +126,7 @@ MainWindow::MainWindow(
 }
 
 MainWindow::~MainWindow() {
+    delete m_modelsDock;
     delete m_loadedThreadsDock;
     delete m_apiLogInspectorDock;
     delete m_apiLogDock;
@@ -125,6 +149,10 @@ LoadedThreadsPane *MainWindow::loadedThreadsPane() const {
     return m_loadedThreadsPane;
 }
 
+ModelsPane *MainWindow::modelsPane() const {
+    return m_modelsPane;
+}
+
 QString MainWindow::windowKey() const {
     return m_windowKey;
 }
@@ -142,6 +170,9 @@ QList<QAction *> MainWindow::viewActions() const {
     }
     if (m_loadedThreadsDock != nullptr) {
         actions.append(m_loadedThreadsDock->toggleAction());
+    }
+    if (m_modelsDock != nullptr) {
+        actions.append(m_modelsDock->toggleAction());
     }
     return actions;
 }
