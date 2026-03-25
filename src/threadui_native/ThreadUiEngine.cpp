@@ -35,6 +35,21 @@ std::unique_ptr<IpcClientState> ipcClientState;
 namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
 namespace UiToQodexRpc = qodex::threadui::ipc::ui_to_qodex::rpc::UiToQodex;
 
+std::string fileChangeKindToString(const qodex::threadui::ipc::common::FileChangeKind kind) {
+    switch (kind) {
+    case qodex::threadui::ipc::common::FILE_CHANGE_KIND_ADD:
+        return "add";
+    case qodex::threadui::ipc::common::FILE_CHANGE_KIND_DELETE:
+        return "delete";
+    case qodex::threadui::ipc::common::FILE_CHANGE_KIND_UPDATE:
+        return "update";
+    case qodex::threadui::ipc::common::FILE_CHANGE_KIND_UNSPECIFIED:
+        break;
+    }
+
+    return "unknown";
+}
+
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
     return !launchConfig.host.empty() && launchConfig.port != 0;
 }
@@ -249,11 +264,22 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
             });
             break;
         case qodex::threadui::ipc::common::Item::kFileChange:
-            pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .kind = "file_change",
-                .text = item.file_change().text(),
-            });
+        {
+            qodex::threadui::native::DisplayItem displayItem;
+            displayItem.kind = "file_change";
+            displayItem.fileChange.status = item.file_change().status();
+            displayItem.fileChange.changes.reserve(static_cast<std::size_t>(item.file_change().changes_size()));
+            for (const auto &change : item.file_change().changes()) {
+                displayItem.fileChange.changes.push_back(qodex::threadui::native::DisplayFileChangeChange{
+                    .path = change.path(),
+                    .kind = fileChangeKindToString(change.kind()),
+                    .movePath = change.move_path(),
+                    .diff = change.diff(),
+                });
+            }
+            pendingItems.push_back(std::move(displayItem));
             break;
+        }
         case qodex::threadui::ipc::common::Item::kMcpToolCall:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
                 .kind = "mcp_tool_call",

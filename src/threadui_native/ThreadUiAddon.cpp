@@ -348,6 +348,47 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
             napi_throw_error(env, nullptr, "Failed to create pending item value");
             return nullptr;
         }
+
+        if (items[index].kind == "file_change") {
+            napi_value statusValue = nullptr;
+            napi_value changesArray = nullptr;
+
+            if (napi_create_string_utf8(
+                    env,
+                    items[index].fileChange.status.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &statusValue
+                ) != napi_ok ||
+                napi_create_array_with_length(env, items[index].fileChange.changes.size(), &changesArray) != napi_ok ||
+                napi_set_named_property(env, itemObject, "status", statusValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "changes", changesArray) != napi_ok) {
+                napi_throw_error(env, nullptr, "Failed to create file change metadata");
+                return nullptr;
+            }
+
+            for (std::size_t changeIndex = 0; changeIndex < items[index].fileChange.changes.size(); ++changeIndex) {
+                const qodex::threadui::native::DisplayFileChangeChange &change = items[index].fileChange.changes[changeIndex];
+                napi_value changeObject = nullptr;
+                napi_value pathValue = nullptr;
+                napi_value changeKindValue = nullptr;
+                napi_value movePathValue = nullptr;
+                napi_value diffValue = nullptr;
+
+                if (napi_create_object(env, &changeObject) != napi_ok ||
+                    napi_create_string_utf8(env, change.path.c_str(), NAPI_AUTO_LENGTH, &pathValue) != napi_ok ||
+                    napi_create_string_utf8(env, change.kind.c_str(), NAPI_AUTO_LENGTH, &changeKindValue) != napi_ok ||
+                    napi_create_string_utf8(env, change.movePath.c_str(), NAPI_AUTO_LENGTH, &movePathValue) != napi_ok ||
+                    napi_create_string_utf8(env, change.diff.c_str(), NAPI_AUTO_LENGTH, &diffValue) != napi_ok ||
+                    napi_set_named_property(env, changeObject, "path", pathValue) != napi_ok ||
+                    napi_set_named_property(env, changeObject, "kind", changeKindValue) != napi_ok ||
+                    napi_set_named_property(env, changeObject, "movePath", movePathValue) != napi_ok ||
+                    napi_set_named_property(env, changeObject, "diff", diffValue) != napi_ok ||
+                    napi_set_element(env, changesArray, changeIndex, changeObject) != napi_ok) {
+                    napi_throw_error(env, nullptr, "Failed to create file change value");
+                    return nullptr;
+                }
+            }
+        }
     }
 
     return array;

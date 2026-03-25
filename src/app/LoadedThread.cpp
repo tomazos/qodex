@@ -5,6 +5,7 @@
 #include "app/ThreadUiProcess.h"
 #include "domain/threadmodel/AbstractItem.h"
 #include "domain/threadmodel/CompletedAgentMessage.h"
+#include "domain/threadmodel/CompletedFileChange.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
 
@@ -34,6 +35,72 @@ QString flattenReasoningTextForThreadUi(const qodex::codex::ThreadItemReasoning 
     return joinSections(reasoning.content);
 }
 
+std::string patchApplyStatusToString(const qodex::codex::PatchApplyStatus status) {
+    switch (status) {
+    case qodex::codex::PatchApplyStatus::InProgress:
+        return "in_progress";
+    case qodex::codex::PatchApplyStatus::Completed:
+        return "completed";
+    case qodex::codex::PatchApplyStatus::Failed:
+        return "failed";
+    case qodex::codex::PatchApplyStatus::Declined:
+        return "declined";
+    }
+
+    return "unknown";
+}
+
+qodex::threadui::ipc::common::FileChangeKind toThreadUiFileChangeKind(const qodex::codex::Ref<qodex::codex::PatchChangeKind> &kind) {
+    if (!kind) {
+        return qodex::threadui::ipc::common::FILE_CHANGE_KIND_UNSPECIFIED;
+    }
+
+    switch (kind->kind) {
+    case qodex::codex::PatchChangeKind::Kind::Add:
+        return qodex::threadui::ipc::common::FILE_CHANGE_KIND_ADD;
+    case qodex::codex::PatchChangeKind::Kind::Delete:
+        return qodex::threadui::ipc::common::FILE_CHANGE_KIND_DELETE;
+    case qodex::codex::PatchChangeKind::Kind::Update:
+        return qodex::threadui::ipc::common::FILE_CHANGE_KIND_UPDATE;
+    }
+
+    return qodex::threadui::ipc::common::FILE_CHANGE_KIND_UNSPECIFIED;
+}
+
+bool appendFileChangeDisplayItem(
+    qodex::threadui::ipc::common::FileChange *displayItem,
+    const qodex::domain::threadmodel::CompletedFileChange &fileChangeItem
+) {
+    if (displayItem == nullptr) {
+        return false;
+    }
+
+    const qodex::codex::ThreadItemFileChange &payload = fileChangeItem.data();
+    displayItem->set_status(patchApplyStatusToString(payload.status));
+
+    for (const qodex::codex::Ref<qodex::codex::FileUpdateChange> &changeRef : payload.changes) {
+        if (!changeRef) {
+            continue;
+        }
+
+        qodex::threadui::ipc::common::FileChangeChange *displayChange = displayItem->add_changes();
+        displayChange->set_path(changeRef->path.toStdString());
+        displayChange->set_kind(toThreadUiFileChangeKind(changeRef->kind));
+        displayChange->set_diff(changeRef->diff.toStdString());
+
+        if (changeRef->kind && changeRef->kind->kind == qodex::codex::PatchChangeKind::Kind::Update &&
+            std::holds_alternative<qodex::codex::Ref<qodex::codex::PatchChangeKindUpdate>>(changeRef->kind->payload)) {
+            const qodex::codex::Ref<qodex::codex::PatchChangeKindUpdate> updateKind =
+                std::get<qodex::codex::Ref<qodex::codex::PatchChangeKindUpdate>>(changeRef->kind->payload);
+            if (updateKind && updateKind->movePath.hasValue() && !updateKind->movePath.value().isEmpty()) {
+                displayChange->set_move_path(updateKind->movePath.value().toStdString());
+            }
+        }
+    }
+
+    return displayItem->changes_size() > 0;
+}
+
 }  // namespace
 
 using qodex::codex::JsonRpcErrorObject;
@@ -54,6 +121,7 @@ using qodex::codex::UserInput;
 using qodex::codex::UserInputText;
 using qodex::domain::threadmodel::AbstractItem;
 using qodex::domain::threadmodel::CompletedAgentMessage;
+using qodex::domain::threadmodel::CompletedFileChange;
 using qodex::domain::threadmodel::CompletedUserMessage;
 
 LoadedThread::LoadedThread(
@@ -550,8 +618,7 @@ bool LoadedThread::appendDisplayItem(qodex::threadui::ipc::common::Item *display
         displayItem->mutable_command_execution()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
         return true;
     case ThreadItem::Kind::FileChange:
-        displayItem->mutable_file_change()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
-        return true;
+        return appendFileChangeDisplayItem(displayItem->mutable_file_change(), static_cast<const CompletedFileChange &>(item));
     case ThreadItem::Kind::McpToolCall:
         displayItem->mutable_mcp_tool_call()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
         return true;

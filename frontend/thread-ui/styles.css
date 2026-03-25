@@ -74,6 +74,10 @@ main {
   color: color-mix(in srgb, canvastext 60%, var(--thread-item-background) 40%);
 }
 
+.thread-item--file-change {
+  padding: 0.85rem;
+}
+
 .thread-item__label {
   margin-bottom: 0.45rem;
   font-size: 0.78rem;
@@ -177,6 +181,115 @@ main {
   overflow-y: hidden;
   margin: 0.85rem 0;
   padding: 0.2rem 0;
+}
+
+.thread-item__file-change {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.file-change__status {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.file-change__change {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, canvastext 4%, transparent);
+}
+
+.file-change__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, canvastext 10%, transparent);
+  background: color-mix(in srgb, canvastext 4%, transparent);
+}
+
+.file-change__path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.file-change__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.file-change__badge--add {
+  background: color-mix(in srgb, #2f855a 18%, transparent);
+  color: color-mix(in srgb, #2f855a 85%, canvastext 15%);
+}
+
+.file-change__badge--delete {
+  background: color-mix(in srgb, #c53030 18%, transparent);
+  color: color-mix(in srgb, #c53030 85%, canvastext 15%);
+}
+
+.file-change__badge--update {
+  background: color-mix(in srgb, #2b6cb0 18%, transparent);
+  color: color-mix(in srgb, #2b6cb0 85%, canvastext 15%);
+}
+
+.file-change__badge--unknown {
+  background: color-mix(in srgb, canvastext 12%, transparent);
+  color: canvastext;
+}
+
+.file-change__diff,
+.file-change__raw {
+  margin: 0;
+  overflow-x: auto;
+  background: color-mix(in srgb, canvas 88%, canvastext 12%);
+  font-family: var(--font-mono);
+}
+
+.file-change__line {
+  padding: 0.08rem 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.file-change__line--added {
+  background: color-mix(in srgb, #2f855a 16%, transparent);
+}
+
+.file-change__line--removed {
+  background: color-mix(in srgb, #c53030 14%, transparent);
+}
+
+.file-change__line--hunk,
+.file-change__line--meta,
+.file-change__line--file-header {
+  color: color-mix(in srgb, canvastext 74%, var(--thread-item-background) 26%);
+  background: color-mix(in srgb, canvastext 6%, transparent);
+}
+
+.file-change__line--note {
+  font-style: italic;
+  opacity: 0.86;
+  background: color-mix(in srgb, canvastext 4%, transparent);
+}
+
+.file-change__raw {
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .composer {

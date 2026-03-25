@@ -42,6 +42,12 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     addItemsRequest.add_items()->mutable_user_message()->set_text("Hello from user");
     addItemsRequest.add_items()->mutable_agent_message()->set_text("Hello from agent");
     addItemsRequest.add_items()->mutable_command_execution()->set_text("{\"command\":\"date\"}");
+    qodex::threadui::ipc::common::FileChange *fileChange = addItemsRequest.add_items()->mutable_file_change();
+    fileChange->set_status("completed");
+    qodex::threadui::ipc::common::FileChangeChange *fileChangeUpdate = fileChange->add_changes();
+    fileChangeUpdate->set_path("/tmp/styles.css");
+    fileChangeUpdate->set_kind(qodex::threadui::ipc::common::FILE_CHANGE_KIND_UPDATE);
+    fileChangeUpdate->set_diff("@@ -1 +1 @@\n-color: Highlight;\n+color: LinkText;");
 
     QVERIFY2(server.sendAddItems(launchConfig.token, addItemsRequest, &errorMessage), qPrintable(errorMessage));
 
@@ -56,13 +62,19 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
         }
     }
 
-    QCOMPARE(items.size(), std::size_t(3));
+    QCOMPARE(items.size(), std::size_t(4));
     QCOMPARE(items[0].kind, std::string("user"));
     QCOMPARE(items[0].text, std::string("Hello from user"));
     QCOMPARE(items[1].kind, std::string("agent"));
     QCOMPARE(items[1].text, std::string("Hello from agent"));
     QCOMPARE(items[2].kind, std::string("command_execution"));
     QCOMPARE(items[2].text, std::string("{\"command\":\"date\"}"));
+    QCOMPARE(items[3].kind, std::string("file_change"));
+    QCOMPARE(items[3].fileChange.status, std::string("completed"));
+    QCOMPARE(items[3].fileChange.changes.size(), std::size_t(1));
+    QCOMPARE(items[3].fileChange.changes[0].path, std::string("/tmp/styles.css"));
+    QCOMPARE(items[3].fileChange.changes[0].kind, std::string("update"));
+    QCOMPARE(items[3].fileChange.changes[0].diff, std::string("@@ -1 +1 @@\n-color: Highlight;\n+color: LinkText;"));
 
     qodex::threadui::native::shutdown();
 

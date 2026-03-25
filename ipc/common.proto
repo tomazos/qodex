@@ -28,8 +28,23 @@ message CommandExecution {
   string text = 1;
 }
 
+enum FileChangeKind {
+  FILE_CHANGE_KIND_UNSPECIFIED = 0;
+  FILE_CHANGE_KIND_ADD = 1;
+  FILE_CHANGE_KIND_DELETE = 2;
+  FILE_CHANGE_KIND_UPDATE = 3;
+}
+
+message FileChangeChange {
+  string path = 1;
+  FileChangeKind kind = 2;
+  string move_path = 3;
+  string diff = 4;
+}
+
 message FileChange {
-  string text = 1;
+  string status = 1;
+  repeated FileChangeChange changes = 2;
 }
 
 message McpToolCall {

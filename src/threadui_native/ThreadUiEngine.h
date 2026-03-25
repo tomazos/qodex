@@ -9,9 +9,22 @@ namespace qodex::threadui::native {
 
 using FrameCountDisplayCallback = std::function<void(std::int64_t)>;
 
+struct DisplayFileChangeChange {
+    std::string path;
+    std::string kind;
+    std::string movePath;
+    std::string diff;
+};
+
+struct DisplayFileChange {
+    std::string status;
+    std::vector<DisplayFileChangeChange> changes;
+};
+
 struct DisplayItem {
     std::string kind;
     std::string text;
+    DisplayFileChange fileChange;
 };
 
 struct LaunchConfig {

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+const { createFileChangeRenderer } = require('./diff-rendering/FileChangeRenderer');
 const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
 
 function resolveNativeModulePath() {
@@ -30,6 +31,7 @@ let composerForm = null;
 let composerInput = null;
 let pendingErrorDialogOpen = false;
 let messageRenderer = null;
+let fileChangeRenderer = null;
 let composerResizeFrameId = null;
 
 function describeError(error) {
@@ -96,25 +98,34 @@ function appendThreadItems(items) {
     const element = document.createElement('article');
     const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
     const isMarkupKind = kind === 'user' || kind === 'agent' || kind === 'reasoning';
+    const isFileChangeKind = kind === 'file_change';
     element.className = isMarkupKind ? `thread-item thread-item--${kind}` : 'thread-item';
+    if (isFileChangeKind) {
+      element.classList.add('thread-item--file-change');
+    }
 
-    const body = document.createElement('div');
-    body.className = 'thread-item__body';
-    if (isMarkupKind && messageRenderer) {
-      body.innerHTML = messageRenderer.renderToHtmlFragment(typeof item?.text === 'string' ? item.text : '');
+    if (isFileChangeKind && fileChangeRenderer) {
+      element.append(fileChangeRenderer.renderToElement(item));
     } else {
-      body.classList.add('thread-item__body--plain');
-      body.textContent = typeof item?.text === 'string' ? item.text : '';
+      const body = document.createElement('div');
+      body.className = 'thread-item__body';
+      if (isMarkupKind && messageRenderer) {
+        body.innerHTML = messageRenderer.renderToHtmlFragment(typeof item?.text === 'string' ? item.text : '');
+      } else {
+        body.classList.add('thread-item__body--plain');
+        body.textContent = typeof item?.text === 'string' ? item.text : '';
+      }
+
+      if (!isMarkupKind) {
+        const label = document.createElement('div');
+        label.className = 'thread-item__label';
+        label.textContent = formatItemKindLabel(kind);
+        element.append(label);
+      }
+
+      element.append(body);
     }
 
-    if (!isMarkupKind) {
-      const label = document.createElement('div');
-      label.className = 'thread-item__label';
-      label.textContent = formatItemKindLabel(kind);
-      element.append(label);
-    }
-
-    element.append(body);
     threadItemsContainer.appendChild(element);
   }
 
@@ -224,6 +235,7 @@ async function initialize() {
     emptyStateElement = document.getElementById('thread-empty-state');
     initializeComposer();
     messageRenderer = createMessageRenderer({ domWindow: window });
+    fileChangeRenderer = createFileChangeRenderer({ domWindow: window });
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');
 
