@@ -3,6 +3,8 @@
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Segoe UI Mono",
     "Roboto Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --thread-item-background-user: color-mix(in srgb, #2b6cb0 12%, canvas);
+  --thread-item-background-agent: color-mix(in srgb, #2f855a 12%, canvas);
   font-family: var(--font-mono);
 }
 
@@ -61,11 +63,11 @@ main {
 }
 
 .thread-item--user {
-  --thread-item-background: color-mix(in srgb, #2b6cb0 12%, canvas);
+  --thread-item-background: var(--thread-item-background-user);
 }
 
 .thread-item--agent {
-  --thread-item-background: color-mix(in srgb, #2f855a 12%, canvas);
+  --thread-item-background: var(--thread-item-background-agent);
 }
 
 .thread-item--reasoning {
@@ -189,9 +191,10 @@ main {
   padding: 0.625rem 0.75rem;
   border: 1px solid color-mix(in srgb, canvastext 16%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, canvas 94%, canvastext 6%);
+  background: var(--thread-item-background-user);
   color: inherit;
   font: inherit;
+  font-family: var(--font-ui);
   line-height: 1.45;
   resize: none;
   overflow: hidden;
