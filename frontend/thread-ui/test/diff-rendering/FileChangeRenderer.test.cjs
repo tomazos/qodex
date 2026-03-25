@@ -97,6 +97,33 @@ test('renders rename targets in the header for update changes', () => {
   );
 });
 
+test('renders move-style update diffs even with trailing move metadata', () => {
+  const element = renderFileChange({
+    status: 'completed',
+    changes: [
+      {
+        path: '/tmp/second-add.txt',
+        kind: 'update',
+        movePath: '/tmp/renamed-note.txt',
+        diff: [
+          '@@ -3,2 +3,2 @@',
+          ' ',
+          '-This file was added in a later batch so you can inspect another add event.',
+          '+This file was renamed in a later batch so you can inspect a move-style update event.',
+          '',
+          '',
+          'Moved to: /tmp/renamed-note.txt',
+        ].join('\n'),
+      },
+    ],
+  });
+
+  assert.ok(element.querySelector('.file-change__line--removed'));
+  assert.ok(element.querySelector('.file-change__line--added'));
+  assert.ok(element.querySelector('.file-change__line--meta'));
+  assert.equal(element.querySelector('.file-change__raw'), null);
+});
+
 test('falls back to raw rendering for malformed update diffs', () => {
   const element = renderFileChange({
     status: 'completed',

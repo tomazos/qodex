@@ -36,6 +36,8 @@ const DIFF_META_PREFIXES = [
   'similarity index ',
   'rename from ',
   'rename to ',
+  'Moved to: ',
+  'Moved from: ',
 ];
 
 function parseUnifiedDiff(diffText) {
@@ -64,6 +66,12 @@ function parseUnifiedDiff(diffText) {
 
     if (line === '\\ No newline at end of file') {
       rows.push({ type: 'note', text: line });
+      sawUnifiedDiffSyntax = true;
+      continue;
+    }
+
+    if (line === '') {
+      rows.push({ type: 'context', text: line });
       sawUnifiedDiffSyntax = true;
       continue;
     }
