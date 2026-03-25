@@ -106,6 +106,18 @@ ThreadUiProcess *ThreadUiProcessManager::threadUiProcessForThread(const QString 
     return it != m_processes.cend() ? it->get() : nullptr;
 }
 
+bool ThreadUiProcessManager::activateThreadUiForThread(const QString &threadId, QString *errorMessage) {
+    ThreadUiProcess *process = threadUiProcessForThread(threadId);
+    if (process == nullptr || !process->isRunning()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("That Thread UI subprocess is no longer running.");
+        }
+        return false;
+    }
+
+    return process->activate(errorMessage);
+}
+
 void ThreadUiProcessManager::activateThreadUi(const int instanceId) {
     ThreadUiProcess *process = processForInstanceId(instanceId);
     if (process == nullptr) {

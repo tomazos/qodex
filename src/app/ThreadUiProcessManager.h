@@ -27,6 +27,7 @@ public:
     [[nodiscard]] ThreadUiProcess *launchThreadUiForThread(const QString &threadId, const QString &title);
     void destroyThreadUiForThread(const QString &threadId);
     [[nodiscard]] ThreadUiProcess *threadUiProcessForThread(const QString &threadId) const;
+    [[nodiscard]] bool activateThreadUiForThread(const QString &threadId, QString *errorMessage = nullptr);
 
 public slots:
     void activateThreadUi(int instanceId);

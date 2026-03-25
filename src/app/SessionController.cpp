@@ -506,6 +506,20 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         return;
     }
 
+    if (loadedThreadForId(threadId) != nullptr) {
+        ThreadUiProcess *threadUiProcess = m_threadUiProcessManager->threadUiProcessForThread(threadId);
+        if (threadUiProcess != nullptr && threadUiProcess->isRunning()) {
+            QString errorMessage;
+            if (m_threadUiProcessManager->activateThreadUiForThread(threadId, &errorMessage)) {
+                m_mainWindow->setStatusMessage(QStringLiteral("Activating %1...").arg(summary->title));
+                return;
+            }
+
+            m_mainWindow->setStatusMessage(errorMessage);
+            return;
+        }
+    }
+
     const JsonRpcId requestId = m_client->sendThreadResumeRequest(
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
