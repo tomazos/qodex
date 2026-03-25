@@ -93,6 +93,27 @@ private slots:
     void onThreadUnarchivedNotificationReceived(const qodex::codex::ThreadUnarchivedNotificationParams &params);
     void onTurnStartedNotificationReceived(const qodex::codex::TurnStartedNotificationParams &params);
     void onTurnCompletedNotificationReceived(const qodex::codex::TurnCompletedNotificationParams &params);
+    void onItemStartedNotificationReceived(const qodex::codex::ItemStartedNotificationParams &params);
+    void onItemCompletedNotificationReceived(const qodex::codex::ItemCompletedNotificationParams &params);
+    void onItemAgentMessageDeltaNotificationReceived(const qodex::codex::ItemAgentMessageDeltaNotificationParams &params);
+    void onItemCommandExecutionOutputDeltaNotificationReceived(
+        const qodex::codex::ItemCommandExecutionOutputDeltaNotificationParams &params
+    );
+    void onItemCommandExecutionTerminalInteractionNotificationReceived(
+        const qodex::codex::ItemCommandExecutionTerminalInteractionNotificationParams &params
+    );
+    void onItemFileChangeOutputDeltaNotificationReceived(
+        const qodex::codex::ItemFileChangeOutputDeltaNotificationParams &params
+    );
+    void onItemMcpToolCallProgressNotificationReceived(const qodex::codex::ItemMcpToolCallProgressNotificationParams &params);
+    void onItemPlanDeltaNotificationReceived(const qodex::codex::ItemPlanDeltaNotificationParams &params);
+    void onItemReasoningSummaryPartAddedNotificationReceived(
+        const qodex::codex::ItemReasoningSummaryPartAddedNotificationParams &params
+    );
+    void onItemReasoningSummaryTextDeltaNotificationReceived(
+        const qodex::codex::ItemReasoningSummaryTextDeltaNotificationParams &params
+    );
+    void onItemReasoningTextDeltaNotificationReceived(const qodex::codex::ItemReasoningTextDeltaNotificationParams &params);
     void refreshSelectedThreadUi();
 
 private:

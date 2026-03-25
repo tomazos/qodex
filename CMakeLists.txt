@@ -83,6 +83,78 @@ set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/test-links/local-page.html"
 )
 
+set(QODEX_THREADMODEL_SOURCES
+    src/domain/threadmodel/AbstractItem.cpp
+    src/domain/threadmodel/AbstractItem.h
+    src/domain/threadmodel/CompletedAgentMessage.cpp
+    src/domain/threadmodel/CompletedAgentMessage.h
+    src/domain/threadmodel/CompletedCollabAgentToolCall.cpp
+    src/domain/threadmodel/CompletedCollabAgentToolCall.h
+    src/domain/threadmodel/CompletedCommandExecution.cpp
+    src/domain/threadmodel/CompletedCommandExecution.h
+    src/domain/threadmodel/CompletedContextCompaction.cpp
+    src/domain/threadmodel/CompletedContextCompaction.h
+    src/domain/threadmodel/CompletedDynamicToolCall.cpp
+    src/domain/threadmodel/CompletedDynamicToolCall.h
+    src/domain/threadmodel/CompletedEnteredReviewMode.cpp
+    src/domain/threadmodel/CompletedEnteredReviewMode.h
+    src/domain/threadmodel/CompletedExitedReviewMode.cpp
+    src/domain/threadmodel/CompletedExitedReviewMode.h
+    src/domain/threadmodel/CompletedFileChange.cpp
+    src/domain/threadmodel/CompletedFileChange.h
+    src/domain/threadmodel/CompletedImageGeneration.cpp
+    src/domain/threadmodel/CompletedImageGeneration.h
+    src/domain/threadmodel/CompletedImageView.cpp
+    src/domain/threadmodel/CompletedImageView.h
+    src/domain/threadmodel/CompletedItem.cpp
+    src/domain/threadmodel/CompletedItem.h
+    src/domain/threadmodel/CompletedMcpToolCall.cpp
+    src/domain/threadmodel/CompletedMcpToolCall.h
+    src/domain/threadmodel/CompletedPlan.cpp
+    src/domain/threadmodel/CompletedPlan.h
+    src/domain/threadmodel/CompletedReasoning.cpp
+    src/domain/threadmodel/CompletedReasoning.h
+    src/domain/threadmodel/CompletedUserMessage.cpp
+    src/domain/threadmodel/CompletedUserMessage.h
+    src/domain/threadmodel/CompletedWebSearch.cpp
+    src/domain/threadmodel/CompletedWebSearch.h
+    src/domain/threadmodel/InprogressAgentMessage.cpp
+    src/domain/threadmodel/InprogressAgentMessage.h
+    src/domain/threadmodel/InprogressCollabAgentToolCall.cpp
+    src/domain/threadmodel/InprogressCollabAgentToolCall.h
+    src/domain/threadmodel/InprogressCommandExecution.cpp
+    src/domain/threadmodel/InprogressCommandExecution.h
+    src/domain/threadmodel/InprogressContextCompaction.cpp
+    src/domain/threadmodel/InprogressContextCompaction.h
+    src/domain/threadmodel/InprogressDynamicToolCall.cpp
+    src/domain/threadmodel/InprogressDynamicToolCall.h
+    src/domain/threadmodel/InprogressEnteredReviewMode.cpp
+    src/domain/threadmodel/InprogressEnteredReviewMode.h
+    src/domain/threadmodel/InprogressExitedReviewMode.cpp
+    src/domain/threadmodel/InprogressExitedReviewMode.h
+    src/domain/threadmodel/InprogressFileChange.cpp
+    src/domain/threadmodel/InprogressFileChange.h
+    src/domain/threadmodel/InprogressImageGeneration.cpp
+    src/domain/threadmodel/InprogressImageGeneration.h
+    src/domain/threadmodel/InprogressImageView.cpp
+    src/domain/threadmodel/InprogressImageView.h
+    src/domain/threadmodel/InprogressItem.cpp
+    src/domain/threadmodel/InprogressItem.h
+    src/domain/threadmodel/InprogressMcpToolCall.cpp
+    src/domain/threadmodel/InprogressMcpToolCall.h
+    src/domain/threadmodel/InprogressPlan.cpp
+    src/domain/threadmodel/InprogressPlan.h
+    src/domain/threadmodel/InprogressReasoning.cpp
+    src/domain/threadmodel/InprogressReasoning.h
+    src/domain/threadmodel/InprogressUserMessage.cpp
+    src/domain/threadmodel/InprogressUserMessage.h
+    src/domain/threadmodel/InprogressWebSearch.cpp
+    src/domain/threadmodel/InprogressWebSearch.h
+    src/domain/threadmodel/PayloadItemBase.h
+    src/domain/threadmodel/Turn.cpp
+    src/domain/threadmodel/Turn.h
+)
+
 qodex_add_staged_thread_ui(qodex_thread_ui_assets
     SOURCE_DIR "${QODEX_THREAD_UI_SOURCE_DIR}"
     APP_DIR "${QODEX_THREAD_UI_APP_DIR}"
@@ -480,6 +552,7 @@ qt_add_executable(qodex
     src/domain/CodexTypes.h
     src/domain/ThreadStore.cpp
     src/domain/ThreadStore.h
+    ${QODEX_THREADMODEL_SOURCES}
     src/storage/DatabaseManager.cpp
     src/storage/DatabaseManager.h
     src/storage/Migration.h

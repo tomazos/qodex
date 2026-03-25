@@ -49,6 +49,17 @@ using qodex::codex::ThreadUnarchiveResponse;
 using qodex::codex::ThreadUnsubscribeResponse;
 using qodex::codex::ThreadUnsubscribeStatus;
 using qodex::codex::ThreadUnarchivedNotificationParams;
+using qodex::codex::ItemAgentMessageDeltaNotificationParams;
+using qodex::codex::ItemCommandExecutionOutputDeltaNotificationParams;
+using qodex::codex::ItemCommandExecutionTerminalInteractionNotificationParams;
+using qodex::codex::ItemCompletedNotificationParams;
+using qodex::codex::ItemFileChangeOutputDeltaNotificationParams;
+using qodex::codex::ItemMcpToolCallProgressNotificationParams;
+using qodex::codex::ItemPlanDeltaNotificationParams;
+using qodex::codex::ItemReasoningSummaryPartAddedNotificationParams;
+using qodex::codex::ItemReasoningSummaryTextDeltaNotificationParams;
+using qodex::codex::ItemReasoningTextDeltaNotificationParams;
+using qodex::codex::ItemStartedNotificationParams;
 using qodex::codex::TurnCompletedNotificationParams;
 using qodex::codex::TurnStartedNotificationParams;
 
@@ -139,6 +150,72 @@ SessionController::SessionController(
         &CodexClient::turnCompletedNotificationReceived,
         this,
         &SessionController::onTurnCompletedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemStartedNotificationReceived,
+        this,
+        &SessionController::onItemStartedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemCompletedNotificationReceived,
+        this,
+        &SessionController::onItemCompletedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemAgentMessageDeltaNotificationReceived,
+        this,
+        &SessionController::onItemAgentMessageDeltaNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemCommandExecutionOutputDeltaNotificationReceived,
+        this,
+        &SessionController::onItemCommandExecutionOutputDeltaNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemCommandExecutionTerminalInteractionNotificationReceived,
+        this,
+        &SessionController::onItemCommandExecutionTerminalInteractionNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemFileChangeOutputDeltaNotificationReceived,
+        this,
+        &SessionController::onItemFileChangeOutputDeltaNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemMcpToolCallProgressNotificationReceived,
+        this,
+        &SessionController::onItemMcpToolCallProgressNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemPlanDeltaNotificationReceived,
+        this,
+        &SessionController::onItemPlanDeltaNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemReasoningSummaryPartAddedNotificationReceived,
+        this,
+        &SessionController::onItemReasoningSummaryPartAddedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemReasoningSummaryTextDeltaNotificationReceived,
+        this,
+        &SessionController::onItemReasoningSummaryTextDeltaNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::itemReasoningTextDeltaNotificationReceived,
+        this,
+        &SessionController::onItemReasoningTextDeltaNotificationReceived
     );
     connect(
         m_client,
@@ -808,6 +885,84 @@ void SessionController::onTurnStartedNotificationReceived(const TurnStartedNotif
 void SessionController::onTurnCompletedNotificationReceived(const TurnCompletedNotificationParams &params) {
     if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
         loadedThread->onTurnCompletedNotification(params);
+    }
+}
+
+void SessionController::onItemStartedNotificationReceived(const ItemStartedNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemStartedNotification(params);
+    }
+}
+
+void SessionController::onItemCompletedNotificationReceived(const ItemCompletedNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemCompletedNotification(params);
+    }
+}
+
+void SessionController::onItemAgentMessageDeltaNotificationReceived(const ItemAgentMessageDeltaNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemAgentMessageDeltaNotification(params);
+    }
+}
+
+void SessionController::onItemCommandExecutionOutputDeltaNotificationReceived(
+    const ItemCommandExecutionOutputDeltaNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemCommandExecutionOutputDeltaNotification(params);
+    }
+}
+
+void SessionController::onItemCommandExecutionTerminalInteractionNotificationReceived(
+    const ItemCommandExecutionTerminalInteractionNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemCommandExecutionTerminalInteractionNotification(params);
+    }
+}
+
+void SessionController::onItemFileChangeOutputDeltaNotificationReceived(
+    const ItemFileChangeOutputDeltaNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemFileChangeOutputDeltaNotification(params);
+    }
+}
+
+void SessionController::onItemMcpToolCallProgressNotificationReceived(
+    const ItemMcpToolCallProgressNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemMcpToolCallProgressNotification(params);
+    }
+}
+
+void SessionController::onItemPlanDeltaNotificationReceived(const ItemPlanDeltaNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemPlanDeltaNotification(params);
+    }
+}
+
+void SessionController::onItemReasoningSummaryPartAddedNotificationReceived(
+    const ItemReasoningSummaryPartAddedNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemReasoningSummaryPartAddedNotification(params);
+    }
+}
+
+void SessionController::onItemReasoningSummaryTextDeltaNotificationReceived(
+    const ItemReasoningSummaryTextDeltaNotificationParams &params
+) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemReasoningSummaryTextDeltaNotification(params);
+    }
+}
+
+void SessionController::onItemReasoningTextDeltaNotificationReceived(const ItemReasoningTextDeltaNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onItemReasoningTextDeltaNotification(params);
     }
 }
 

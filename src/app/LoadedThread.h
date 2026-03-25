@@ -3,11 +3,16 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QStringList>
+
+#include <map>
+#include <memory>
 
 #include <cstdint>
 
 #include "CodexClient.h"
 #include "CodexProtocol.h"
+#include "domain/threadmodel/Turn.h"
 #include "qodex_to_ui.pb.h"
 
 namespace qodex::app {
@@ -31,6 +36,25 @@ public:
     void onThreadStatusChanged(const qodex::codex::ThreadStatus &status);
     void onTurnStartedNotification(const qodex::codex::TurnStartedNotificationParams &params);
     void onTurnCompletedNotification(const qodex::codex::TurnCompletedNotificationParams &params);
+    void onItemStartedNotification(const qodex::codex::ItemStartedNotificationParams &params);
+    void onItemCompletedNotification(const qodex::codex::ItemCompletedNotificationParams &params);
+    void onItemAgentMessageDeltaNotification(const qodex::codex::ItemAgentMessageDeltaNotificationParams &params);
+    void onItemCommandExecutionOutputDeltaNotification(
+        const qodex::codex::ItemCommandExecutionOutputDeltaNotificationParams &params
+    );
+    void onItemCommandExecutionTerminalInteractionNotification(
+        const qodex::codex::ItemCommandExecutionTerminalInteractionNotificationParams &params
+    );
+    void onItemFileChangeOutputDeltaNotification(const qodex::codex::ItemFileChangeOutputDeltaNotificationParams &params);
+    void onItemMcpToolCallProgressNotification(const qodex::codex::ItemMcpToolCallProgressNotificationParams &params);
+    void onItemPlanDeltaNotification(const qodex::codex::ItemPlanDeltaNotificationParams &params);
+    void onItemReasoningSummaryPartAddedNotification(
+        const qodex::codex::ItemReasoningSummaryPartAddedNotificationParams &params
+    );
+    void onItemReasoningSummaryTextDeltaNotification(
+        const qodex::codex::ItemReasoningSummaryTextDeltaNotificationParams &params
+    );
+    void onItemReasoningTextDeltaNotification(const qodex::codex::ItemReasoningTextDeltaNotificationParams &params);
 
 signals:
     void statusMessageRequested(const QString &message);
@@ -48,9 +72,12 @@ private:
     };
 
     [[nodiscard]] QString activeTurnIdForThread(const qodex::codex::Thread &thread) const;
-    [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest(
-        const qodex::codex::ThreadResumeResponse &response
-    ) const;
+    void rebuildModelFromThread(const qodex::codex::Thread &thread);
+    [[nodiscard]] qodex::domain::threadmodel::Turn *turnForId(const QString &turnId);
+    [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
+    [[nodiscard]] qodex::domain::threadmodel::Turn *ensureTurn(const QString &turnId);
+    [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest() const;
+    void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
     [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)
         const;
@@ -65,6 +92,8 @@ private:
     qodex::codex::CodexClient *m_client = nullptr;
     ThreadUiProcess *m_threadUiProcess = nullptr;
     QHash<QString, PendingThreadUiUserInputRequest> m_pendingThreadUiUserInputRequests;
+    QStringList m_turnOrder;
+    std::map<QString, std::unique_ptr<qodex::domain::threadmodel::Turn>> m_turnsById;
 };
 
 }  // namespace qodex::app

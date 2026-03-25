@@ -1,6 +1,9 @@
 #include "app/LoadedThread.h"
 
 #include "app/ThreadUiProcess.h"
+#include "domain/threadmodel/AbstractItem.h"
+#include "domain/threadmodel/CompletedAgentMessage.h"
+#include "domain/threadmodel/CompletedUserMessage.h"
 
 namespace qodex::app {
 
@@ -19,6 +22,9 @@ using qodex::codex::TurnStatus;
 using qodex::codex::TurnSteerResponse;
 using qodex::codex::UserInput;
 using qodex::codex::UserInputText;
+using qodex::domain::threadmodel::AbstractItem;
+using qodex::domain::threadmodel::CompletedAgentMessage;
+using qodex::domain::threadmodel::CompletedUserMessage;
 
 LoadedThread::LoadedThread(
     const QString &threadId,
@@ -49,13 +55,20 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
     m_activeTurnId = response.thread ? activeTurnIdForThread(*response.thread) : QString{};
     m_pendingThreadUiUserInputRequests.clear();
+    m_turnOrder.clear();
+    m_turnsById.clear();
+    if (response.thread) {
+        rebuildModelFromThread(*response.thread);
+    }
     m_threadUiProcess->relaunch(m_title);
-    m_threadUiProcess->queueAddItems(buildThreadUiAddItemsRequest(response));
+    m_threadUiProcess->queueAddItems(buildThreadUiAddItemsRequest());
 }
 
 void LoadedThread::onThreadClosed() {
     m_activeTurnId.clear();
     m_pendingThreadUiUserInputRequests.clear();
+    m_turnOrder.clear();
+    m_turnsById.clear();
 }
 
 void LoadedThread::onThreadStatusChanged(const ThreadStatus &status) {
@@ -69,6 +82,7 @@ void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams
         return;
     }
 
+    ensureTurn(params.turn->id)->applyMetadata(*params.turn);
     m_activeTurnId = params.turn->id;
 }
 
@@ -78,6 +92,7 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
     }
 
     if (params.turn && !params.turn->id.isEmpty()) {
+        ensureTurn(params.turn->id)->applyMetadata(*params.turn);
         if (m_activeTurnId.isEmpty() || m_activeTurnId == params.turn->id) {
             m_activeTurnId.clear();
         }
@@ -85,6 +100,113 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
     }
 
     m_activeTurnId.clear();
+}
+
+void LoadedThread::onItemStartedNotification(const qodex::codex::ItemStartedNotificationParams &params) {
+    if (params.threadId != m_threadId || !params.item || params.turnId.isEmpty()) {
+        return;
+    }
+
+    const auto *startedItem = ensureTurn(params.turnId)->applyStartedItem(*params.item);
+    Q_UNUSED(startedItem);
+}
+
+void LoadedThread::onItemCompletedNotification(const qodex::codex::ItemCompletedNotificationParams &params) {
+    if (params.threadId != m_threadId || !params.item || params.turnId.isEmpty()) {
+        return;
+    }
+
+    if (auto *item = ensureTurn(params.turnId)->applyCompletedItem(*params.item)) {
+        queueDisplayItemIfSupported(*item);
+    }
+}
+
+void LoadedThread::onItemAgentMessageDeltaNotification(
+    const qodex::codex::ItemAgentMessageDeltaNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyAgentMessageDelta(params.itemId, params.delta);
+}
+
+void LoadedThread::onItemCommandExecutionOutputDeltaNotification(
+    const qodex::codex::ItemCommandExecutionOutputDeltaNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyCommandExecutionOutputDelta(params.itemId, params.delta);
+}
+
+void LoadedThread::onItemCommandExecutionTerminalInteractionNotification(
+    const qodex::codex::ItemCommandExecutionTerminalInteractionNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyCommandExecutionTerminalInteraction(params.itemId, params.processId, params.stdin);
+}
+
+void LoadedThread::onItemFileChangeOutputDeltaNotification(
+    const qodex::codex::ItemFileChangeOutputDeltaNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyFileChangeOutputDelta(params.itemId, params.delta);
+}
+
+void LoadedThread::onItemMcpToolCallProgressNotification(
+    const qodex::codex::ItemMcpToolCallProgressNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyMcpToolCallProgress(params.itemId, params.message);
+}
+
+void LoadedThread::onItemPlanDeltaNotification(const qodex::codex::ItemPlanDeltaNotificationParams &params) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyPlanDelta(params.itemId, params.delta);
+}
+
+void LoadedThread::onItemReasoningSummaryPartAddedNotification(
+    const qodex::codex::ItemReasoningSummaryPartAddedNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyReasoningSummaryPartAdded(params.itemId, params.summaryIndex);
+}
+
+void LoadedThread::onItemReasoningSummaryTextDeltaNotification(
+    const qodex::codex::ItemReasoningSummaryTextDeltaNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyReasoningSummaryTextDelta(params.itemId, params.summaryIndex, params.delta);
+}
+
+void LoadedThread::onItemReasoningTextDeltaNotification(
+    const qodex::codex::ItemReasoningTextDeltaNotificationParams &params
+) {
+    if (params.threadId != m_threadId) {
+        return;
+    }
+
+    ensureTurn(params.turnId)->applyReasoningTextDelta(params.itemId, params.contentIndex, params.delta);
 }
 
 void LoadedThread::onThreadUiUserInputRequested(const std::uint64_t requestId, const QString &text) {
@@ -243,57 +365,98 @@ QString LoadedThread::activeTurnIdForThread(const Thread &thread) const {
     return {};
 }
 
-qodex::threadui::ipc::qodex_to_ui::AddItemsRequest LoadedThread::buildThreadUiAddItemsRequest(
-    const ThreadResumeResponse &response
-) const {
-    qodex::threadui::ipc::qodex_to_ui::AddItemsRequest request;
-    if (!response.thread) {
-        return request;
-    }
+void LoadedThread::rebuildModelFromThread(const Thread &thread) {
+    m_turnOrder.clear();
+    m_turnsById.clear();
 
-    for (const Ref<Turn> &turn : response.thread->turns) {
-        if (!turn) {
+    for (const Ref<Turn> &turn : thread.turns) {
+        if (!turn || turn->id.isEmpty()) {
             continue;
         }
 
-        for (const Ref<qodex::codex::ThreadItem> &item : turn->items) {
-            if (!item) {
-                continue;
-            }
+        auto modelTurn = std::make_unique<qodex::domain::threadmodel::Turn>(turn->id);
+        modelTurn->applySnapshot(*turn);
+        m_turnOrder.append(turn->id);
+        m_turnsById.emplace(turn->id, std::move(modelTurn));
+    }
+}
 
-            switch (item->kind) {
-            case qodex::codex::ThreadItem::Kind::UserMessage: {
-                const Ref<qodex::codex::ThreadItemUserMessage> userMessage =
-                    std::get<Ref<qodex::codex::ThreadItemUserMessage>>(item->payload);
-                if (!userMessage) {
-                    break;
-                }
+qodex::domain::threadmodel::Turn *LoadedThread::turnForId(const QString &turnId) {
+    const auto it = m_turnsById.find(turnId);
+    return it == m_turnsById.end() ? nullptr : it->second.get();
+}
 
-                const QString text = flattenUserMessageContent(userMessage->content);
+const qodex::domain::threadmodel::Turn *LoadedThread::turnForId(const QString &turnId) const {
+    const auto it = m_turnsById.find(turnId);
+    return it == m_turnsById.end() ? nullptr : it->second.get();
+}
+
+qodex::domain::threadmodel::Turn *LoadedThread::ensureTurn(const QString &turnId) {
+    if (turnId.isEmpty()) {
+        return nullptr;
+    }
+
+    if (auto *existingTurn = turnForId(turnId)) {
+        return existingTurn;
+    }
+
+    auto turn = std::make_unique<qodex::domain::threadmodel::Turn>(turnId);
+    qodex::domain::threadmodel::Turn *turnPtr = turn.get();
+    m_turnOrder.append(turnId);
+    m_turnsById.emplace(turnId, std::move(turn));
+    return turnPtr;
+}
+
+qodex::threadui::ipc::qodex_to_ui::AddItemsRequest LoadedThread::buildThreadUiAddItemsRequest() const {
+    qodex::threadui::ipc::qodex_to_ui::AddItemsRequest request;
+
+    for (const QString &turnId : m_turnOrder) {
+        const qodex::domain::threadmodel::Turn *turn = turnForId(turnId);
+        if (turn == nullptr) {
+            continue;
+        }
+
+        for (const AbstractItem *item : turn->orderedItems()) {
+            if (const auto *userMessage = dynamic_cast<const CompletedUserMessage *>(item)) {
+                const QString text = flattenUserMessageContent(userMessage->data().content);
                 if (text.trimmed().isEmpty()) {
-                    break;
+                    continue;
                 }
 
                 request.add_items()->mutable_user_message()->set_text(text.toStdString());
-                break;
+                continue;
             }
-            case qodex::codex::ThreadItem::Kind::AgentMessage: {
-                const Ref<qodex::codex::ThreadItemAgentMessage> agentMessage =
-                    std::get<Ref<qodex::codex::ThreadItemAgentMessage>>(item->payload);
-                if (!agentMessage || agentMessage->text.trimmed().isEmpty()) {
-                    break;
+
+            if (const auto *agentMessage = dynamic_cast<const CompletedAgentMessage *>(item)) {
+                if (agentMessage->data().text.trimmed().isEmpty()) {
+                    continue;
                 }
 
-                request.add_items()->mutable_agent_message()->set_text(agentMessage->text.toStdString());
-                break;
-            }
-            default:
-                break;
+                request.add_items()->mutable_agent_message()->set_text(agentMessage->data().text.toStdString());
             }
         }
     }
 
     return request;
+}
+
+void LoadedThread::queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item) {
+    qodex::threadui::ipc::qodex_to_ui::AddItemsRequest request;
+
+    if (const auto *userMessage = dynamic_cast<const CompletedUserMessage *>(&item)) {
+        const QString text = flattenUserMessageContent(userMessage->data().content);
+        if (!text.trimmed().isEmpty()) {
+            request.add_items()->mutable_user_message()->set_text(text.toStdString());
+        }
+    } else if (const auto *agentMessage = dynamic_cast<const CompletedAgentMessage *>(&item)) {
+        if (!agentMessage->data().text.trimmed().isEmpty()) {
+            request.add_items()->mutable_agent_message()->set_text(agentMessage->data().text.toStdString());
+        }
+    }
+
+    if (request.items_size() > 0) {
+        m_threadUiProcess->queueAddItems(request);
+    }
 }
 
 QList<Ref<UserInput>> LoadedThread::buildTextUserInput(const QString &text) const {
