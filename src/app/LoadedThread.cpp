@@ -1,5 +1,7 @@
 #include "app/LoadedThread.h"
 
+#include <QJsonDocument>
+
 #include "app/ThreadUiProcess.h"
 #include "domain/threadmodel/AbstractItem.h"
 #include "domain/threadmodel/CompletedAgentMessage.h"
@@ -14,6 +16,7 @@ using qodex::codex::Ref;
 using qodex::codex::Thread;
 using qodex::codex::ThreadResumeResponse;
 using qodex::codex::ThreadStatus;
+using qodex::codex::ThreadItem;
 using qodex::codex::Turn;
 using qodex::codex::TurnCompletedNotificationParams;
 using qodex::codex::TurnStartResponse;
@@ -457,22 +460,11 @@ qodex::threadui::ipc::qodex_to_ui::AddItemsRequest LoadedThread::buildThreadUiAd
         }
 
         for (const AbstractItem *item : turn->orderedItems()) {
-            if (const auto *userMessage = dynamic_cast<const CompletedUserMessage *>(item)) {
-                const QString text = flattenUserMessageContent(userMessage->data().content);
-                if (text.trimmed().isEmpty()) {
-                    continue;
+            if (item != nullptr) {
+                qodex::threadui::ipc::common::Item *displayItem = request.add_items();
+                if (!appendDisplayItem(displayItem, *item)) {
+                    request.mutable_items()->RemoveLast();
                 }
-
-                request.add_items()->mutable_user_message()->set_text(text.toStdString());
-                continue;
-            }
-
-            if (const auto *agentMessage = dynamic_cast<const CompletedAgentMessage *>(item)) {
-                if (agentMessage->data().text.trimmed().isEmpty()) {
-                    continue;
-                }
-
-                request.add_items()->mutable_agent_message()->set_text(agentMessage->data().text.toStdString());
             }
         }
     }
@@ -482,21 +474,88 @@ qodex::threadui::ipc::qodex_to_ui::AddItemsRequest LoadedThread::buildThreadUiAd
 
 void LoadedThread::queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item) {
     qodex::threadui::ipc::qodex_to_ui::AddItemsRequest request;
-
-    if (const auto *userMessage = dynamic_cast<const CompletedUserMessage *>(&item)) {
-        const QString text = flattenUserMessageContent(userMessage->data().content);
-        if (!text.trimmed().isEmpty()) {
-            request.add_items()->mutable_user_message()->set_text(text.toStdString());
-        }
-    } else if (const auto *agentMessage = dynamic_cast<const CompletedAgentMessage *>(&item)) {
-        if (!agentMessage->data().text.trimmed().isEmpty()) {
-            request.add_items()->mutable_agent_message()->set_text(agentMessage->data().text.toStdString());
-        }
+    if (!appendDisplayItem(request.add_items(), item)) {
+        request.mutable_items()->RemoveLast();
     }
 
     if (request.items_size() > 0) {
         m_threadUiProcess->queueAddItems(request);
     }
+}
+
+bool LoadedThread::appendDisplayItem(qodex::threadui::ipc::common::Item *displayItem, const AbstractItem &item) const {
+    if (displayItem == nullptr || !item.isCompleted()) {
+        return false;
+    }
+
+    switch (item.kind()) {
+    case ThreadItem::Kind::UserMessage: {
+        const auto &userMessage = static_cast<const CompletedUserMessage &>(item);
+        const QString text = flattenUserMessageContent(userMessage.data().content).trimmed();
+        if (text.isEmpty()) {
+            return false;
+        }
+        displayItem->mutable_user_message()->set_text(text.toStdString());
+        return true;
+    }
+    case ThreadItem::Kind::AgentMessage: {
+        const auto &agentMessage = static_cast<const CompletedAgentMessage &>(item);
+        const QString text = agentMessage.data().text.trimmed();
+        if (text.isEmpty()) {
+            return false;
+        }
+        displayItem->mutable_agent_message()->set_text(text.toStdString());
+        return true;
+    }
+    case ThreadItem::Kind::Plan:
+        displayItem->mutable_plan()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::Reasoning:
+        displayItem->mutable_reasoning()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::CommandExecution:
+        displayItem->mutable_command_execution()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::FileChange:
+        displayItem->mutable_file_change()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::McpToolCall:
+        displayItem->mutable_mcp_tool_call()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::DynamicToolCall:
+        displayItem->mutable_dynamic_tool_call()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::CollabAgentToolCall:
+        displayItem->mutable_collab_agent_tool_call()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::WebSearch:
+        displayItem->mutable_web_search()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::ImageView:
+        displayItem->mutable_image_view()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::ImageGeneration:
+        displayItem->mutable_image_generation()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::EnteredReviewMode:
+        displayItem->mutable_entered_review_mode()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::ExitedReviewMode:
+        displayItem->mutable_exited_review_mode()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    case ThreadItem::Kind::ContextCompaction:
+        displayItem->mutable_context_compaction()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+        return true;
+    }
+
+    return false;
+}
+
+QString LoadedThread::summarizeNonMessageItemForThreadUi(const AbstractItem &item) const {
+    QJsonObject properties = item.properties();
+    properties.remove(QStringLiteral("id"));
+    const QByteArray compactJson = QJsonDocument(properties).toJson(QJsonDocument::Compact);
+    return compactJson.isEmpty() || compactJson == "{}" ? item.id() : QString::fromUtf8(compactJson);
 }
 
 QList<Ref<UserInput>> LoadedThread::buildTextUserInput(const QString &text) const {

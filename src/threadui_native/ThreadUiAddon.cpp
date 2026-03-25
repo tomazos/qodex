@@ -337,7 +337,7 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
         if (napi_create_object(env, &itemObject) != napi_ok ||
             napi_create_string_utf8(
                 env,
-                items[index].kind == qodex::threadui::native::DisplayItemKind::UserMessage ? "user" : "agent",
+                items[index].kind.c_str(),
                 NAPI_AUTO_LENGTH,
                 &kindValue
             ) != napi_ok ||

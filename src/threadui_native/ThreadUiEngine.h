@@ -9,13 +9,8 @@ namespace qodex::threadui::native {
 
 using FrameCountDisplayCallback = std::function<void(std::int64_t)>;
 
-enum class DisplayItemKind {
-    UserMessage,
-    AgentMessage,
-};
-
 struct DisplayItem {
-    DisplayItemKind kind = DisplayItemKind::UserMessage;
+    std::string kind;
     std::string text;
 };
 

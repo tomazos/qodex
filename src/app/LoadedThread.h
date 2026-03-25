@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -81,6 +82,11 @@ private:
     [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
     [[nodiscard]] qodex::domain::threadmodel::Turn *ensureTurn(const QString &turnId);
     [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest() const;
+    [[nodiscard]] bool appendDisplayItem(
+        qodex::threadui::ipc::common::Item *displayItem,
+        const qodex::domain::threadmodel::AbstractItem &item
+    ) const;
+    [[nodiscard]] QString summarizeNonMessageItemForThreadUi(const qodex::domain::threadmodel::AbstractItem &item) const;
     void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
     [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)

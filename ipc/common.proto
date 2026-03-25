@@ -16,10 +16,75 @@ message AgentMessage {
   string text = 1;
 }
 
+message Plan {
+  string text = 1;
+}
+
+message Reasoning {
+  string text = 1;
+}
+
+message CommandExecution {
+  string text = 1;
+}
+
+message FileChange {
+  string text = 1;
+}
+
+message McpToolCall {
+  string text = 1;
+}
+
+message DynamicToolCall {
+  string text = 1;
+}
+
+message CollabAgentToolCall {
+  string text = 1;
+}
+
+message WebSearch {
+  string text = 1;
+}
+
+message ImageView {
+  string text = 1;
+}
+
+message ImageGeneration {
+  string text = 1;
+}
+
+message EnteredReviewMode {
+  string text = 1;
+}
+
+message ExitedReviewMode {
+  string text = 1;
+}
+
+message ContextCompaction {
+  string text = 1;
+}
+
 message Item {
   oneof kind {
     UserMessage user_message = 1;
     AgentMessage agent_message = 2;
+    Plan plan = 3;
+    Reasoning reasoning = 4;
+    CommandExecution command_execution = 5;
+    FileChange file_change = 6;
+    McpToolCall mcp_tool_call = 7;
+    DynamicToolCall dynamic_tool_call = 8;
+    CollabAgentToolCall collab_agent_tool_call = 9;
+    WebSearch web_search = 10;
+    ImageView image_view = 11;
+    ImageGeneration image_generation = 12;
+    EnteredReviewMode entered_review_mode = 13;
+    ExitedReviewMode exited_review_mode = 14;
+    ContextCompaction context_compaction = 15;
   }
 }
 

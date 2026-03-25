@@ -119,6 +119,14 @@ function normalizeLaunchConfig(launchConfig) {
   };
 }
 
+function formatItemKindLabel(kind) {
+  const normalizedKind = typeof kind === 'string' && kind.trim() !== '' ? kind : 'item';
+  return normalizedKind
+    .split('_')
+    .map((part) => part.length === 0 ? part : `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
 function appendThreadItems(items) {
   if (!threadItemsContainer || !Array.isArray(items) || items.length === 0) {
     return;
@@ -131,12 +139,14 @@ function appendThreadItems(items) {
 
   for (const item of items) {
     const element = document.createElement('article');
-    const kind = item?.kind === 'user' ? 'user' : 'agent';
-    element.className = `thread-item thread-item--${kind}`;
+    const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
+    element.className = kind === 'user' || kind === 'agent'
+      ? `thread-item thread-item--${kind}`
+      : 'thread-item';
 
     const label = document.createElement('div');
     label.className = 'thread-item__label';
-    label.textContent = kind === 'user' ? 'User' : 'Agent';
+    label.textContent = formatItemKindLabel(kind);
 
     const body = document.createElement('pre');
     body.className = 'thread-item__body';

@@ -220,14 +220,92 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
         switch (item.kind_case()) {
         case qodex::threadui::ipc::common::Item::kUserMessage:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .kind = qodex::threadui::native::DisplayItemKind::UserMessage,
+                .kind = "user",
                 .text = item.user_message().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kAgentMessage:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .kind = qodex::threadui::native::DisplayItemKind::AgentMessage,
+                .kind = "agent",
                 .text = item.agent_message().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kPlan:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "plan",
+                .text = item.plan().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kReasoning:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "reasoning",
+                .text = item.reasoning().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kCommandExecution:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "command_execution",
+                .text = item.command_execution().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kFileChange:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "file_change",
+                .text = item.file_change().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kMcpToolCall:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "mcp_tool_call",
+                .text = item.mcp_tool_call().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kDynamicToolCall:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "dynamic_tool_call",
+                .text = item.dynamic_tool_call().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kCollabAgentToolCall:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "collab_agent_tool_call",
+                .text = item.collab_agent_tool_call().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kWebSearch:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "web_search",
+                .text = item.web_search().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kImageView:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "image_view",
+                .text = item.image_view().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kImageGeneration:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "image_generation",
+                .text = item.image_generation().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kEnteredReviewMode:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "entered_review_mode",
+                .text = item.entered_review_mode().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kExitedReviewMode:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "exited_review_mode",
+                .text = item.exited_review_mode().text(),
+            });
+            break;
+        case qodex::threadui::ipc::common::Item::kContextCompaction:
+            pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .kind = "context_compaction",
+                .text = item.context_compaction().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::KIND_NOT_SET:

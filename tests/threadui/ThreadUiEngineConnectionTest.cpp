@@ -41,6 +41,7 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     qodex::threadui::ipc::qodex_to_ui::AddItemsRequest addItemsRequest;
     addItemsRequest.add_items()->mutable_user_message()->set_text("Hello from user");
     addItemsRequest.add_items()->mutable_agent_message()->set_text("Hello from agent");
+    addItemsRequest.add_items()->mutable_command_execution()->set_text("{\"command\":\"date\"}");
 
     QVERIFY2(server.sendAddItems(launchConfig.token, addItemsRequest, &errorMessage), qPrintable(errorMessage));
 
@@ -55,11 +56,13 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
         }
     }
 
-    QCOMPARE(items.size(), std::size_t(2));
-    QCOMPARE(items[0].kind, qodex::threadui::native::DisplayItemKind::UserMessage);
+    QCOMPARE(items.size(), std::size_t(3));
+    QCOMPARE(items[0].kind, std::string("user"));
     QCOMPARE(items[0].text, std::string("Hello from user"));
-    QCOMPARE(items[1].kind, qodex::threadui::native::DisplayItemKind::AgentMessage);
+    QCOMPARE(items[1].kind, std::string("agent"));
     QCOMPARE(items[1].text, std::string("Hello from agent"));
+    QCOMPARE(items[2].kind, std::string("command_execution"));
+    QCOMPARE(items[2].text, std::string("{\"command\":\"date\"}"));
 
     qodex::threadui::native::shutdown();
 
