@@ -32,6 +32,7 @@ signals:
 private:
     void resizeSnugColumns();
     void emitSelectionForIndex(const QModelIndex &index);
+    void emitResumeForIndex(const QModelIndex &index);
     void showContextMenu(const QPoint &position);
     void showHeaderContextMenu(const QPoint &position);
 

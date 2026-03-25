@@ -118,6 +118,12 @@ ThreadListPane::ThreadListPane(ThreadListModel *model, QWidget *parent)
         this,
         [this](const QModelIndex &index) { emitSelectionForIndex(index); }
     );
+    connect(
+        m_treeView,
+        &QTreeView::doubleClicked,
+        this,
+        [this](const QModelIndex &index) { emitResumeForIndex(index); }
+    );
     connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
         if (m_treeView != nullptr) {
             m_treeView->expandAll();
@@ -217,6 +223,26 @@ void ThreadListPane::emitSelectionForIndex(const QModelIndex &index) {
         return;
     }
     emit threadSelected(threadId);
+}
+
+void ThreadListPane::emitResumeForIndex(const QModelIndex &index) {
+    if (!index.isValid()) {
+        return;
+    }
+
+    const QModelIndex threadIndex = index.siblingAtColumn(ThreadListModel::ThreadColumn);
+    if (!threadIndex.isValid()) {
+        return;
+    }
+
+    emitSelectionForIndex(threadIndex);
+
+    const QString threadId = threadIndex.data(ThreadListModel::IdRole).toString();
+    if (threadId.isEmpty()) {
+        return;
+    }
+
+    emit resumeThreadRequested(threadId);
 }
 
 void ThreadListPane::showContextMenu(const QPoint &position) {
