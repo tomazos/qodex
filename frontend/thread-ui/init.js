@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
+
 function resolveNativeModulePath() {
   const candidates = [
     path.join(__dirname, '..', 'native', 'qodex_thread_ui.node'),
@@ -27,6 +29,7 @@ let emptyStateElement = null;
 let composerForm = null;
 let composerInput = null;
 let pendingErrorDialogOpen = false;
+let messageRenderer = null;
 
 function describeError(error) {
   if (error instanceof Error) {
@@ -145,9 +148,14 @@ function appendThreadItems(items) {
       ? `thread-item thread-item--${kind}`
       : 'thread-item';
 
-    const body = document.createElement('pre');
+    const body = document.createElement('div');
     body.className = 'thread-item__body';
-    body.textContent = typeof item?.text === 'string' ? item.text : '';
+    if (isMessageKind && messageRenderer) {
+      body.innerHTML = messageRenderer.renderToHtmlFragment(typeof item?.text === 'string' ? item.text : '');
+    } else {
+      body.classList.add('thread-item__body--plain');
+      body.textContent = typeof item?.text === 'string' ? item.text : '';
+    }
 
     if (!isMessageKind) {
       const label = document.createElement('div');
@@ -254,6 +262,7 @@ async function initialize() {
     threadItemsContainer = document.getElementById('thread-items');
     emptyStateElement = document.getElementById('thread-empty-state');
     initializeComposer();
+    messageRenderer = createMessageRenderer({ domWindow: window });
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');
 

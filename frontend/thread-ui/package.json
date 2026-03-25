@@ -6,9 +6,19 @@
   "private": true,
   "main": "main.js",
   "scripts": {
-    "start": "node scripts/start-electron.js"
+    "start": "node scripts/start-electron.js",
+    "test": "node --test",
+    "test:renderer": "node --test ./test/message-rendering"
   },
   "devDependencies": {
-    "electron": "^41.0.3"
+    "commonmark-spec": "^0.31.2",
+    "electron": "^41.0.3",
+    "jsdom": "^29.0.1"
+  },
+  "dependencies": {
+    "@mdit/plugin-katex": "^0.25.1",
+    "dompurify": "^3.3.3",
+    "katex": "^0.16.42",
+    "markdown-it": "^14.1.1"
   }
 }

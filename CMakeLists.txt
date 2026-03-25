@@ -25,6 +25,7 @@ if(NOT KDDockWidgets_FOUND)
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(BASH_EXECUTABLE bash REQUIRED)
+find_program(NODE_EXECUTABLE node REQUIRED)
 find_program(NPM_EXECUTABLE npm REQUIRED)
 find_path(QODEX_ASIO_INCLUDE_DIR NAMES asio.hpp REQUIRED)
 
@@ -78,6 +79,8 @@ set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/main.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/init.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/index.html"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/message-rendering/MessageRenderer.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/MessageRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/styles.css"
     "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/start-electron.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test-links/local-page.html"
@@ -746,6 +749,12 @@ if(BUILD_TESTING)
     add_dependencies(ThreadUiEngineConnectionTest qodex_thread_ui_ipc_codegen)
 
     add_test(NAME ThreadUiEngineConnectionTest COMMAND ThreadUiEngineConnectionTest)
+
+    add_test(
+        NAME ThreadUiMessageRendererTest
+        COMMAND "${NODE_EXECUTABLE}" --test ./test/message-rendering/MessageRenderer.test.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
 
     qt_add_executable(MigrationRunnerTest
         resources/qodex.qrc

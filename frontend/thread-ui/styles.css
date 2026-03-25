@@ -134,8 +134,82 @@ main {
 .thread-item__body {
   margin: 0;
   font: inherit;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.thread-item__body--plain {
+  white-space: pre-wrap;
+}
+
+.thread-item__body > :first-child {
+  margin-top: 0;
+}
+
+.thread-item__body > :last-child {
+  margin-bottom: 0;
+}
+
+.thread-item__body p,
+.thread-item__body ul,
+.thread-item__body ol,
+.thread-item__body pre,
+.thread-item__body blockquote,
+.thread-item__body table {
+  margin: 0 0 0.85rem;
+}
+
+.thread-item__body ul,
+.thread-item__body ol {
+  padding-left: 1.5rem;
+}
+
+.thread-item__body code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, canvastext 10%, transparent);
+}
+
+.thread-item__body pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, canvastext 8%, transparent);
+}
+
+.thread-item__body pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.thread-item__body blockquote {
+  padding-left: 0.9rem;
+  border-left: 3px solid color-mix(in srgb, canvastext 20%, transparent);
+  opacity: 0.92;
+}
+
+.thread-item__body table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.thread-item__body th,
+.thread-item__body td {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.thread-item__body a {
+  color: Highlight;
+}
+
+.thread-item__body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0.85rem 0;
+  padding: 0.2rem 0;
 }
 
 .composer {

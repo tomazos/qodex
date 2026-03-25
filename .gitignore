@@ -1,6 +1,7 @@
 /build/
 /build-deb/
 /dist/
+/frontend/thread-ui/node_modules/
 /.idea/
 /.vscode/
 *.user
