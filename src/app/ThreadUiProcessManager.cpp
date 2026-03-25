@@ -204,6 +204,9 @@ ThreadUiProcess *ThreadUiProcessManager::createProcess(const QString &threadId, 
     QObject::connect(processPtr, &ThreadUiProcess::statusMessageRequested, this, [this](const QString &message) {
         emit statusMessageRequested(message);
     });
+    QObject::connect(processPtr, &ThreadUiProcess::processExitedExternally, this, [this](const QString &threadId) {
+        emit threadUiProcessExited(threadId);
+    });
 
     m_processes.push_back(std::move(process));
     return processPtr;

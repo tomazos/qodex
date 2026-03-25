@@ -220,6 +220,7 @@ void ThreadUiProcess::startProcess() {
                 ? QStringLiteral("Failed to start %1.").arg(title())
                 : QStringLiteral("%1 reported a process error.").arg(title());
             emit statusMessageRequested(appendStderrMessage(baseMessage, m_lastStandardError));
+            emit processExitedExternally(m_threadId);
             resetProcess();
             emit activeStateChanged();
         }
@@ -236,7 +237,10 @@ void ThreadUiProcess::startProcess() {
                         m_lastStandardError
                     )
                 );
+            } else {
+                emit statusMessageRequested(QStringLiteral("%1 closed.").arg(title()));
             }
+            emit processExitedExternally(m_threadId);
             resetProcess();
             emit activeStateChanged();
         }

@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QProcess>
+#include <QSet>
 #include <QHash>
 #include <QList>
 #include <QStringList>
@@ -116,6 +117,7 @@ private slots:
         const qodex::codex::ItemReasoningSummaryTextDeltaNotificationParams &params
     );
     void onItemReasoningTextDeltaNotificationReceived(const qodex::codex::ItemReasoningTextDeltaNotificationParams &params);
+    void onThreadUiProcessExited(const QString &threadId);
     void refreshSelectedThreadUi();
 
 private:
@@ -124,6 +126,7 @@ private:
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
     [[nodiscard]] QString threadSourceText(const qodex::codex::SessionSource &source) const;
     [[nodiscard]] LoadedThread *loadedThreadForId(const QString &threadId) const;
+    [[nodiscard]] bool isThreadUnsubscribePending(const QString &threadId) const;
     [[nodiscard]] LoadedThread *ensureLoadedThread(
         const QString &threadId,
         const QString &title
@@ -157,6 +160,7 @@ private:
     QHash<QString, QString> m_pendingUnsubscribeRequests;
     QHash<QString, QString> m_pendingForkRequests;
     QHash<QString, QString> m_pendingUnarchiveRequests;
+    QSet<QString> m_pendingThreadUiCloseUnsubscribes;
 };
 
 }  // namespace qodex::app

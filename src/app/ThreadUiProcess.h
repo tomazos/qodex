@@ -65,6 +65,7 @@ public:
 signals:
     void activeStateChanged();
     void statusMessageRequested(const QString &message);
+    void processExitedExternally(const QString &threadId);
     void userInputRequested(std::uint64_t requestId, const QString &text);
 
 private:

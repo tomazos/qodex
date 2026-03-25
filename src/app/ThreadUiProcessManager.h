@@ -34,6 +34,7 @@ public slots:
 signals:
     void activeProcessesChanged();
     void statusMessageRequested(const QString &message);
+    void threadUiProcessExited(const QString &threadId);
 
 private:
     [[nodiscard]] static QString resolveThreadUiAppDir();

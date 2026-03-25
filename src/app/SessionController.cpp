@@ -243,6 +243,12 @@ SessionController::SessionController(
         this,
         &SessionController::refreshSelectedThreadUi
     );
+    connect(
+        m_threadUiProcessManager,
+        &ThreadUiProcessManager::threadUiProcessExited,
+        this,
+        &SessionController::onThreadUiProcessExited
+    );
 }
 
 void SessionController::attachWindow(qodex::ui::MainWindow *window) {
@@ -780,6 +786,7 @@ void SessionController::onThreadUnsubscribeSucceeded(const JsonRpcId &id, const 
     if (threadId.isEmpty()) {
         return;
     }
+    m_pendingThreadUiCloseUnsubscribes.remove(threadId);
 
     if (response.status == ThreadUnsubscribeStatus::Unsubscribed
         || response.status == ThreadUnsubscribeStatus::NotLoaded) {
@@ -799,6 +806,7 @@ void SessionController::onThreadUnsubscribeSucceeded(const JsonRpcId &id, const 
 void SessionController::onThreadUnsubscribeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
     const QString threadId = m_pendingUnsubscribeRequests.take(id.toKey());
     if (!threadId.isEmpty()) {
+        m_pendingThreadUiCloseUnsubscribes.remove(threadId);
         m_mainWindow->setStatusMessage(
             QStringLiteral("Failed to close thread %1: %2").arg(threadId, error.message)
         );
@@ -1005,8 +1013,42 @@ void SessionController::refreshSelectedThreadUi() {
     }
 }
 
+void SessionController::onThreadUiProcessExited(const QString &threadId) {
+    if (threadId.isEmpty() || loadedThreadForId(threadId) == nullptr) {
+        return;
+    }
+
+    if (m_pendingThreadUiCloseUnsubscribes.contains(threadId) || isThreadUnsubscribePending(threadId)) {
+        return;
+    }
+
+    const auto summary = m_threadStore->threadSummaryById(threadId);
+    if (summary.has_value() && summary->statusText == QStringLiteral("Not Loaded")) {
+        unloadThread(threadId);
+        return;
+    }
+
+    const JsonRpcId requestId = m_client->sendThreadUnsubscribeRequest(threadId);
+    if (!requestId.isValid()) {
+        m_mainWindow->setStatusMessage(QStringLiteral("Thread UI closed, but thread/unsubscribe could not be sent."));
+        return;
+    }
+
+    m_pendingUnsubscribeRequests.insert(requestId.toKey(), threadId);
+    m_pendingThreadUiCloseUnsubscribes.insert(threadId);
+    m_mainWindow->setStatusMessage(QStringLiteral("Thread UI closed. Unloading thread..."));
+}
+
 LoadedThread *SessionController::loadedThreadForId(const QString &threadId) const {
     return m_loadedThreads.value(threadId, nullptr);
+}
+
+bool SessionController::isThreadUnsubscribePending(const QString &threadId) const {
+    return std::any_of(
+        m_pendingUnsubscribeRequests.cbegin(),
+        m_pendingUnsubscribeRequests.cend(),
+        [&threadId](const QString &pendingThreadId) { return pendingThreadId == threadId; }
+    );
 }
 
 LoadedThread *SessionController::ensureLoadedThread(const QString &threadId, const QString &title) {
@@ -1031,6 +1073,7 @@ LoadedThread *SessionController::ensureLoadedThread(const QString &threadId, con
 }
 
 void SessionController::unloadThread(const QString &threadId) {
+    m_pendingThreadUiCloseUnsubscribes.remove(threadId);
     LoadedThread *loadedThread = m_loadedThreads.take(threadId);
     if (loadedThread != nullptr) {
         loadedThread->deleteLater();
