@@ -36,6 +36,7 @@ void ApiLogModelTest::exposesExpectedColumns() {
     QCOMPARE(model.headerData(ApiLogModel::SuccessColumn, Qt::Horizontal).toString(), QStringLiteral("Success"));
     QCOMPARE(model.headerData(ApiLogModel::LatencyColumn, Qt::Horizontal).toString(), QStringLiteral("Latency (ms)"));
     QCOMPARE(model.headerData(ApiLogModel::SummaryColumn, Qt::Horizontal).toString(), QStringLiteral("Summary"));
+    QVERIFY(!model.index(0, 0).data(ApiLogModel::ApiLogIdRole).isValid());
 }
 
 void ApiLogModelTest::usesSlidingCacheAndSorts() {
@@ -76,6 +77,7 @@ void ApiLogModelTest::usesSlidingCacheAndSorts() {
         model.index(0, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString(),
         QStringLiteral("summary-1499")
     );
+    QCOMPARE(model.index(0, ApiLogModel::TimeColumn).data(ApiLogModel::ApiLogIdRole).toLongLong(), 1500);
     QCOMPARE(model.index(0, ApiLogModel::LatencyColumn).data(Qt::DisplayRole).toString(), QStringLiteral("1499"));
     QVERIFY(model.index(1200, ApiLogModel::SummaryColumn).data(Qt::DisplayRole).toString().isEmpty());
 

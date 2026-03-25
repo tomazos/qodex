@@ -7,6 +7,7 @@
 #include <kddockwidgets/DockWidget.h>
 
 #include "ui/ApiLogModel.h"
+#include "ui/ApiLogInspectorPane.h"
 #include "ui/ApiLogPane.h"
 #include "ui/LoadedThreadsModel.h"
 #include "ui/LoadedThreadsPane.h"
@@ -20,6 +21,7 @@ MainWindow::MainWindow(
     const QString &windowTitle,
     ThreadListModel *threadListModel,
     ApiLogModel *apiLogModel,
+    qodex::storage::DatabaseManager *databaseManager,
     LoadedThreadsModel *loadedThreadsModel,
     QWidget *parent
 )
@@ -63,6 +65,22 @@ MainWindow::MainWindow(
             m_apiLogDock->close();
         }
     }
+    if (apiLogModel != nullptr && databaseManager != nullptr) {
+        m_apiLogInspectorPane = new ApiLogInspectorPane(databaseManager);
+        m_apiLogInspectorDock =
+            new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.ApiLogInspector"));
+        m_apiLogInspectorDock->setTitle(QStringLiteral("API Log Inspector"));
+        m_apiLogInspectorDock->setWidget(m_apiLogInspectorPane);
+        if (m_apiLogDock != nullptr) {
+            m_apiLogDock->addDockWidgetAsTab(
+                m_apiLogInspectorDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else {
+            addDockWidgetAsTab(m_apiLogInspectorDock);
+            m_apiLogInspectorDock->close();
+        }
+    }
     if (loadedThreadsModel != nullptr) {
         m_loadedThreadsPane = new LoadedThreadsPane(loadedThreadsModel);
         m_loadedThreadsDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.LoadedThreads"));
@@ -77,12 +95,16 @@ MainWindow::MainWindow(
             addDockWidgetAsTab(m_loadedThreadsDock);
         }
     }
+    if (m_apiLogPane != nullptr) {
+        connect(m_apiLogPane, &ApiLogPane::inspectApiLogRequested, this, &MainWindow::inspectApiLog);
+    }
 
     m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
 }
 
 MainWindow::~MainWindow() {
     delete m_loadedThreadsDock;
+    delete m_apiLogInspectorDock;
     delete m_apiLogDock;
     delete m_threadListDock;
 }
@@ -93,6 +115,10 @@ ThreadListPane *MainWindow::threadListPane() const {
 
 ApiLogPane *MainWindow::apiLogPane() const {
     return m_apiLogPane;
+}
+
+ApiLogInspectorPane *MainWindow::apiLogInspectorPane() const {
+    return m_apiLogInspectorPane;
 }
 
 LoadedThreadsPane *MainWindow::loadedThreadsPane() const {
@@ -111,6 +137,9 @@ QList<QAction *> MainWindow::viewActions() const {
     if (m_apiLogDock != nullptr) {
         actions.append(m_apiLogDock->toggleAction());
     }
+    if (m_apiLogInspectorDock != nullptr) {
+        actions.append(m_apiLogInspectorDock->toggleAction());
+    }
     if (m_loadedThreadsDock != nullptr) {
         actions.append(m_loadedThreadsDock->toggleAction());
     }
@@ -119,6 +148,16 @@ QList<QAction *> MainWindow::viewActions() const {
 
 void MainWindow::setStatusMessage(const QString &message) {
     statusBar()->showMessage(message);
+}
+
+void MainWindow::inspectApiLog(const qint64 apiLogId) {
+    if (m_apiLogInspectorPane == nullptr || m_apiLogInspectorDock == nullptr) {
+        return;
+    }
+
+    m_apiLogInspectorPane->inspectApiLog(apiLogId);
+    m_apiLogInspectorDock->show();
+    m_apiLogInspectorDock->raise();
 }
 
 void MainWindow::rebuildThreadMenu(const QList<ThreadUiMenuEntry> &entries) {

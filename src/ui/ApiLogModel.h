@@ -12,6 +12,10 @@ class ApiLogModel final : public QAbstractTableModel {
     Q_OBJECT
 
 public:
+    enum Role {
+        ApiLogIdRole = Qt::UserRole + 1,
+    };
+
     enum Column {
         TimeColumn = 0,
         DirectionColumn,

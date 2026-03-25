@@ -562,6 +562,8 @@ qt_add_executable(qodex
     src/threadui/ThreadUiIpcServer.h
     src/ui/ApiLogModel.cpp
     src/ui/ApiLogModel.h
+    src/ui/ApiLogInspectorPane.cpp
+    src/ui/ApiLogInspectorPane.h
     src/ui/ApiLogPane.cpp
     src/ui/ApiLogPane.h
     src/ui/LoadedThreadsModel.cpp

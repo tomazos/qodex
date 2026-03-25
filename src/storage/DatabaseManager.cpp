@@ -311,6 +311,55 @@ QList<ApiLogListRecord> DatabaseManager::loadApiLogPage(
     return rows;
 }
 
+std::optional<ApiLogDetailRecord> DatabaseManager::loadApiLogDetail(const qint64 id, QString *errorMessage) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "SELECT id, ts_utc, session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
+        "thread_id, success, latency_ms, summary_text, payload_json "
+        "FROM api_log "
+        "WHERE id = ?;"
+    ));
+    query.addBindValue(id);
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+
+    if (!query.next()) {
+        return std::nullopt;
+    }
+
+    return ApiLogDetailRecord{
+        .id = query.value(0).toLongLong(),
+        .timestampUtc = query.value(1).toString(),
+        .sessionId = query.value(2).toString(),
+        .direction = query.value(3).toString(),
+        .messageKind = query.value(4).toString(),
+        .method = query.value(5).toString(),
+        .jsonrpcId = query.value(6).toString(),
+        .correlationId = query.value(7).toString(),
+        .threadId = query.value(8).toString(),
+        .success = query.value(9).isNull() ? std::nullopt
+                                           : std::optional<bool>(query.value(9).toInt() != 0),
+        .latencyMs = query.value(10).isNull() ? std::nullopt
+                                              : std::optional<qint64>(query.value(10).toLongLong()),
+        .summaryText = query.value(11).toString(),
+        .payloadJson = query.value(12).toString(),
+    };
+}
+
 bool DatabaseManager::replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage) {
     if (errorMessage != nullptr) {
         errorMessage->clear();

@@ -62,6 +62,8 @@ QVariant ApiLogModel::data(const QModelIndex &index, const int role) const {
     switch (role) {
     case Qt::DisplayRole:
         return displayValueForColumn(row, column);
+    case ApiLogIdRole:
+        return row.id;
     case Qt::ToolTipRole:
         if (column == SummaryColumn) {
             return row.summaryText;

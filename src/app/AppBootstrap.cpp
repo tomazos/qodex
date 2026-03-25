@@ -9,6 +9,7 @@
 #include <kddockwidgets/LayoutSaver.h>
 
 #include "ui/ApiLogPane.h"
+#include "ui/ApiLogInspectorPane.h"
 #include "ui/LoadedThreadsPane.h"
 #include "ui/ThreadListPane.h"
 
@@ -35,6 +36,7 @@ AppBootstrap::AppBootstrap(
           QStringLiteral("Qodex"),
           &m_threadListModel,
           &m_apiLogModel,
+          m_databaseManager,
           &m_loadedThreadsModel
       ),
       m_threadUiProcessManager(threadUiIpcServer, this),
@@ -163,6 +165,10 @@ QString AppBootstrap::threadListViewKeyForWindowKey(const QString &windowKey) {
 
 QString AppBootstrap::apiLogViewKeyForWindowKey(const QString &windowKey) {
     return QStringLiteral("%1/api-log-header").arg(windowKey);
+}
+
+QString AppBootstrap::apiLogInspectorViewKeyForWindowKey(const QString &windowKey) {
+    return QStringLiteral("%1/api-log-inspector").arg(windowKey);
 }
 
 QString AppBootstrap::loadedThreadsViewKeyForWindowKey(const QString &windowKey) {
@@ -342,6 +348,12 @@ void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWin
                 pane->saveViewState(),
             });
         }
+        if (qodex::ui::ApiLogInspectorPane *pane = window->apiLogInspectorPane()) {
+            viewStates.append(qodex::storage::ViewStateRecord{
+                apiLogInspectorViewKeyForWindowKey(window->windowKey()),
+                pane->saveViewState(),
+            });
+        }
         if (qodex::ui::LoadedThreadsPane *pane = window->loadedThreadsPane()) {
             viewStates.append(qodex::storage::ViewStateRecord{
                 loadedThreadsViewKeyForWindowKey(window->windowKey()),
@@ -393,6 +405,17 @@ void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
         }
     }
 
+    if (window->apiLogInspectorPane() != nullptr) {
+        const auto headerState =
+            m_databaseManager->loadViewState(apiLogInspectorViewKeyForWindowKey(window->windowKey()), &errorMessage);
+        if (!errorMessage.isEmpty()) {
+            qWarning("Failed to load API log inspector view state: %s", qPrintable(errorMessage));
+            errorMessage.clear();
+        } else if (headerState.has_value()) {
+            window->apiLogInspectorPane()->restoreViewState(*headerState);
+        }
+    }
+
     if (window->loadedThreadsPane() != nullptr) {
         const auto headerState =
             m_databaseManager->loadViewState(loadedThreadsViewKeyForWindowKey(window->windowKey()), &errorMessage);
@@ -418,7 +441,7 @@ qodex::ui::MainWindow *AppBootstrap::createWindow(
     const QString &windowTitle,
     const bool showImmediately
 ) {
-    auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, nullptr, nullptr);
+    auto window = std::make_unique<qodex::ui::MainWindow>(windowKey, windowTitle, nullptr, nullptr, nullptr, nullptr);
     window->move(80 + 40 * (m_nextWindowNumber - 1), 80 + 40 * (m_nextWindowNumber - 1));
     window->installEventFilter(this);
     QObject::connect(

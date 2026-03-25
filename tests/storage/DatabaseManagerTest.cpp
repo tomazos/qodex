@@ -22,6 +22,7 @@ private slots:
     void persistsSettings();
     void appendsApiLogRows();
     void loadsApiLogPages();
+    void loadsApiLogDetail();
 };
 
 void DatabaseManagerTest::persistsWindowAndViewState() {
@@ -270,6 +271,56 @@ void DatabaseManagerTest::loadsApiLogPages() {
     QCOMPARE(methodAscending.at(2).summaryText, QStringLiteral("beta"));
     QVERIFY(methodAscending.at(0).payloadPreview.endsWith(QStringLiteral("...")));
     QVERIFY(methodAscending.at(0).payloadPreview.size() <= 160);
+}
+
+void DatabaseManagerTest::loadsApiLogDetail() {
+    QTemporaryDir temporaryDir;
+    QVERIFY(temporaryDir.isValid());
+
+    const QString databasePath = temporaryDir.filePath(QStringLiteral("qodex.sqlite3"));
+    QString errorMessage;
+
+    DatabaseManager databaseManager(databasePath);
+    QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
+
+    QVERIFY2(
+        databaseManager.appendApiLog(
+            ApiLogRecord{
+                .sessionId = QStringLiteral("session-detail"),
+                .direction = QStringLiteral("outbound"),
+                .messageKind = QStringLiteral("request"),
+                .method = QStringLiteral("thread/resume"),
+                .jsonrpcId = QStringLiteral("client-99"),
+                .correlationId = QStringLiteral("client-99"),
+                .threadId = QStringLiteral("thread-detail"),
+                .success = true,
+                .latencyMs = 77,
+                .payloadJson = QStringLiteral(R"({"threadId":"thread-detail","includeItems":true})"),
+                .summaryText = QStringLiteral("detail row"),
+            },
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    const QList<qodex::storage::ApiLogListRecord> rows = databaseManager.loadApiLogPage(
+        0,
+        1,
+        ApiLogSortField::TimestampUtc,
+        Qt::DescendingOrder,
+        &errorMessage
+    );
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QCOMPARE(rows.size(), 1);
+
+    const auto detail = databaseManager.loadApiLogDetail(rows.at(0).id, &errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QVERIFY(detail.has_value());
+    QCOMPARE(detail->id, rows.at(0).id);
+    QCOMPARE(detail->sessionId, QStringLiteral("session-detail"));
+    QCOMPARE(detail->method, QStringLiteral("thread/resume"));
+    QCOMPARE(detail->payloadJson, QStringLiteral(R"({"threadId":"thread-detail","includeItems":true})"));
+    QCOMPARE(detail->summaryText, QStringLiteral("detail row"));
 }
 
 QTEST_GUILESS_MAIN(DatabaseManagerTest)

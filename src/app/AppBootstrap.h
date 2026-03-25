@@ -54,6 +54,7 @@ private:
     [[nodiscard]] static QString titleForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString threadListViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString apiLogViewKeyForWindowKey(const QString &windowKey);
+    [[nodiscard]] static QString apiLogInspectorViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] static QString loadedThreadsViewKeyForWindowKey(const QString &windowKey);
     [[nodiscard]] qodex::ui::MainWindow *windowByKey(const QString &windowKey);
     [[nodiscard]] QList<qodex::ui::MainWindow *> windows();

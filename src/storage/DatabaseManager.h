@@ -68,6 +68,22 @@ struct ApiLogListRecord {
     QString payloadPreview;
 };
 
+struct ApiLogDetailRecord {
+    qint64 id = 0;
+    QString timestampUtc;
+    QString sessionId;
+    QString direction;
+    QString messageKind;
+    QString method;
+    QString jsonrpcId;
+    QString correlationId;
+    QString threadId;
+    std::optional<bool> success;
+    std::optional<qint64> latencyMs;
+    QString summaryText;
+    QString payloadJson;
+};
+
 class DatabaseManager final {
 public:
     explicit DatabaseManager(const QString &databasePath);
@@ -89,6 +105,7 @@ public:
         Qt::SortOrder sortOrder,
         QString *errorMessage
     ) const;
+    [[nodiscard]] std::optional<ApiLogDetailRecord> loadApiLogDetail(qint64 id, QString *errorMessage) const;
 
     [[nodiscard]] bool replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage);
     [[nodiscard]] bool replaceViewStates(const QList<ViewStateRecord> &viewStates, QString *errorMessage);

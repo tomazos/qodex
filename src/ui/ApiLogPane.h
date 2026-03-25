@@ -17,6 +17,9 @@ public:
     [[nodiscard]] QByteArray saveViewState() const;
     bool restoreViewState(const QByteArray &state);
 
+signals:
+    void inspectApiLogRequested(qint64 apiLogId);
+
 private:
     void ensureVisibleRowsLoaded();
     void applyDefaultColumnState();

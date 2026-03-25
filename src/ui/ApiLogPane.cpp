@@ -50,6 +50,18 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     connect(m_tableView, &QWidget::customContextMenuRequested, this, &ApiLogPane::showContextMenu);
     connect(m_tableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, &ApiLogPane::showHeaderContextMenu);
     connect(m_tableView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { ensureVisibleRowsLoaded(); });
+    connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex &index) {
+        if (!index.isValid()) {
+            return;
+        }
+
+        const QVariant apiLogId = index.data(ApiLogModel::ApiLogIdRole);
+        if (!apiLogId.isValid()) {
+            return;
+        }
+
+        emit inspectApiLogRequested(apiLogId.toLongLong());
+    });
     connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
         if (!m_restoredViewState) {
             applyDefaultColumnState();
