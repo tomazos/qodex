@@ -46,10 +46,12 @@ public:
 
     void attachWindow(ui::MainWindow *window);
     void start();
+    [[nodiscard]] QList<const LoadedThread *> loadedThreads() const;
 
 signals:
     void startupProgressChanged(const QString &message, int progress);
     void startupFinished();
+    void loadedThreadsChanged();
 
 private slots:
     void onTransportStarted();

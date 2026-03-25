@@ -564,6 +564,10 @@ qt_add_executable(qodex
     src/ui/ApiLogModel.h
     src/ui/ApiLogPane.cpp
     src/ui/ApiLogPane.h
+    src/ui/LoadedThreadsModel.cpp
+    src/ui/LoadedThreadsModel.h
+    src/ui/LoadedThreadsPane.cpp
+    src/ui/LoadedThreadsPane.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
     src/ui/ProgressSplashScreen.cpp

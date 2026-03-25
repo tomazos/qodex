@@ -51,6 +51,27 @@ QString LoadedThread::threadId() const {
     return m_threadId;
 }
 
+const QString &LoadedThread::title() const {
+    return m_title;
+}
+
+const QString &LoadedThread::activeTurnId() const {
+    return m_activeTurnId;
+}
+
+QList<const qodex::domain::threadmodel::Turn *> LoadedThread::orderedTurns() const {
+    QList<const qodex::domain::threadmodel::Turn *> turns;
+    turns.reserve(m_turnOrder.size());
+
+    for (const QString &turnId : m_turnOrder) {
+        if (const auto *turn = turnForId(turnId)) {
+            turns.append(turn);
+        }
+    }
+
+    return turns;
+}
+
 void LoadedThread::resume(const QString &title, const ThreadResumeResponse &response) {
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
     m_activeTurnId = response.thread ? activeTurnIdForThread(*response.thread) : QString{};
@@ -62,6 +83,7 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
     }
     m_threadUiProcess->relaunch(m_title);
     m_threadUiProcess->queueAddItems(buildThreadUiAddItemsRequest());
+    emit stateChanged();
 }
 
 void LoadedThread::onThreadClosed() {
@@ -69,12 +91,14 @@ void LoadedThread::onThreadClosed() {
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
     m_turnsById.clear();
+    emit stateChanged();
 }
 
 void LoadedThread::onThreadStatusChanged(const ThreadStatus &status) {
     if (status.kind != ThreadStatus::Kind::Active) {
         m_activeTurnId.clear();
     }
+    emit stateChanged();
 }
 
 void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams &params) {
@@ -84,6 +108,7 @@ void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams
 
     ensureTurn(params.turn->id)->applyMetadata(*params.turn);
     m_activeTurnId = params.turn->id;
+    emit stateChanged();
 }
 
 void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationParams &params) {
@@ -96,10 +121,12 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
         if (m_activeTurnId.isEmpty() || m_activeTurnId == params.turn->id) {
             m_activeTurnId.clear();
         }
+        emit stateChanged();
         return;
     }
 
     m_activeTurnId.clear();
+    emit stateChanged();
 }
 
 void LoadedThread::onItemStartedNotification(const qodex::codex::ItemStartedNotificationParams &params) {
@@ -109,6 +136,7 @@ void LoadedThread::onItemStartedNotification(const qodex::codex::ItemStartedNoti
 
     const auto *startedItem = ensureTurn(params.turnId)->applyStartedItem(*params.item);
     Q_UNUSED(startedItem);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemCompletedNotification(const qodex::codex::ItemCompletedNotificationParams &params) {
@@ -119,6 +147,7 @@ void LoadedThread::onItemCompletedNotification(const qodex::codex::ItemCompleted
     if (auto *item = ensureTurn(params.turnId)->applyCompletedItem(*params.item)) {
         queueDisplayItemIfSupported(*item);
     }
+    emit stateChanged();
 }
 
 void LoadedThread::onItemAgentMessageDeltaNotification(
@@ -129,6 +158,7 @@ void LoadedThread::onItemAgentMessageDeltaNotification(
     }
 
     ensureTurn(params.turnId)->applyAgentMessageDelta(params.itemId, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemCommandExecutionOutputDeltaNotification(
@@ -139,6 +169,7 @@ void LoadedThread::onItemCommandExecutionOutputDeltaNotification(
     }
 
     ensureTurn(params.turnId)->applyCommandExecutionOutputDelta(params.itemId, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemCommandExecutionTerminalInteractionNotification(
@@ -149,6 +180,7 @@ void LoadedThread::onItemCommandExecutionTerminalInteractionNotification(
     }
 
     ensureTurn(params.turnId)->applyCommandExecutionTerminalInteraction(params.itemId, params.processId, params.stdin);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemFileChangeOutputDeltaNotification(
@@ -159,6 +191,7 @@ void LoadedThread::onItemFileChangeOutputDeltaNotification(
     }
 
     ensureTurn(params.turnId)->applyFileChangeOutputDelta(params.itemId, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemMcpToolCallProgressNotification(
@@ -169,6 +202,7 @@ void LoadedThread::onItemMcpToolCallProgressNotification(
     }
 
     ensureTurn(params.turnId)->applyMcpToolCallProgress(params.itemId, params.message);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemPlanDeltaNotification(const qodex::codex::ItemPlanDeltaNotificationParams &params) {
@@ -177,6 +211,7 @@ void LoadedThread::onItemPlanDeltaNotification(const qodex::codex::ItemPlanDelta
     }
 
     ensureTurn(params.turnId)->applyPlanDelta(params.itemId, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemReasoningSummaryPartAddedNotification(
@@ -187,6 +222,7 @@ void LoadedThread::onItemReasoningSummaryPartAddedNotification(
     }
 
     ensureTurn(params.turnId)->applyReasoningSummaryPartAdded(params.itemId, params.summaryIndex);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemReasoningSummaryTextDeltaNotification(
@@ -197,6 +233,7 @@ void LoadedThread::onItemReasoningSummaryTextDeltaNotification(
     }
 
     ensureTurn(params.turnId)->applyReasoningSummaryTextDelta(params.itemId, params.summaryIndex, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onItemReasoningTextDeltaNotification(
@@ -207,6 +244,7 @@ void LoadedThread::onItemReasoningTextDeltaNotification(
     }
 
     ensureTurn(params.turnId)->applyReasoningTextDelta(params.itemId, params.contentIndex, params.delta);
+    emit stateChanged();
 }
 
 void LoadedThread::onThreadUiUserInputRequested(const std::uint64_t requestId, const QString &text) {
@@ -275,6 +313,7 @@ void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResp
     if (response.turn && !response.turn->id.isEmpty()) {
         m_activeTurnId = response.turn->id;
     }
+    emit stateChanged();
 
     QString errorMessage;
     if (!m_threadUiProcess->replyToUserInputRequest(
@@ -317,6 +356,7 @@ void LoadedThread::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResp
     if (!response.turnId.isEmpty()) {
         m_activeTurnId = response.turnId;
     }
+    emit stateChanged();
 
     QString errorMessage;
     if (!m_threadUiProcess->replyToUserInputRequest(

@@ -305,6 +305,36 @@ void SessionController::attachWindow(qodex::ui::MainWindow *window) {
     }
 }
 
+QList<const LoadedThread *> SessionController::loadedThreads() const {
+    QList<const LoadedThread *> threads;
+    threads.reserve(m_loadedThreads.size());
+
+    for (LoadedThread *loadedThread : m_loadedThreads) {
+        if (loadedThread != nullptr) {
+            threads.append(loadedThread);
+        }
+    }
+
+    std::sort(
+        threads.begin(),
+        threads.end(),
+        [](const LoadedThread *left, const LoadedThread *right) {
+            if (left == nullptr || right == nullptr) {
+                return left < right;
+            }
+
+            const QString &leftTitle = left->title();
+            const QString &rightTitle = right->title();
+            if (leftTitle != rightTitle) {
+                return leftTitle < rightTitle;
+            }
+            return left->threadId() < right->threadId();
+        }
+    );
+
+    return threads;
+}
+
 void SessionController::start() {
     if (m_startRequested) {
         return;
@@ -994,7 +1024,9 @@ LoadedThread *SessionController::ensureLoadedThread(const QString &threadId, con
     QObject::connect(loadedThread, &LoadedThread::statusMessageRequested, this, [this](const QString &message) {
         m_mainWindow->setStatusMessage(message);
     });
+    QObject::connect(loadedThread, &LoadedThread::stateChanged, this, &SessionController::loadedThreadsChanged);
     m_loadedThreads.insert(threadId, loadedThread);
+    emit loadedThreadsChanged();
     return loadedThread;
 }
 
@@ -1004,6 +1036,7 @@ void SessionController::unloadThread(const QString &threadId) {
         loadedThread->deleteLater();
     }
     m_threadUiProcessManager->destroyThreadUiForThread(threadId);
+    emit loadedThreadsChanged();
 }
 
 qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {

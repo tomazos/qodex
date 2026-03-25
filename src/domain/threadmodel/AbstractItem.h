@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
 
 #include "CodexProtocol.h"
@@ -14,6 +15,7 @@ public:
     [[nodiscard]] const QString &id() const;
     [[nodiscard]] virtual qodex::codex::ThreadItem::Kind kind() const = 0;
     [[nodiscard]] virtual bool isCompleted() const = 0;
+    [[nodiscard]] virtual QJsonObject properties() const = 0;
 
 private:
     QString m_id;

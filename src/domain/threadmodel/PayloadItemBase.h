@@ -1,5 +1,8 @@
 #pragma once
 
+#include <QJsonObject>
+#include <QJsonValue>
+
 #include <utility>
 
 #include "domain/threadmodel/CompletedItem.h"
@@ -17,6 +20,17 @@ public:
 
     [[nodiscard]] qodex::codex::ThreadItem::Kind kind() const override {
         return KindValue;
+    }
+
+    [[nodiscard]] QJsonObject properties() const override {
+        const QJsonValue value = qodex::codex::toJson(m_payload);
+        if (value.isObject()) {
+            return value.toObject();
+        }
+
+        QJsonObject properties;
+        properties.insert(QStringLiteral("value"), value);
+        return properties;
     }
 
     [[nodiscard]] const PayloadT &data() const {

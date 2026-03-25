@@ -16,6 +16,7 @@ public:
 
     void appendDelta(const QString &delta);
     [[nodiscard]] const QString &streamedText() const;
+    [[nodiscard]] QJsonObject properties() const override;
 
 private:
     QString m_streamedText;

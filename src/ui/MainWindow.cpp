@@ -8,6 +8,8 @@
 
 #include "ui/ApiLogModel.h"
 #include "ui/ApiLogPane.h"
+#include "ui/LoadedThreadsModel.h"
+#include "ui/LoadedThreadsPane.h"
 #include "ui/ThreadListModel.h"
 #include "ui/ThreadListPane.h"
 
@@ -18,6 +20,7 @@ MainWindow::MainWindow(
     const QString &windowTitle,
     ThreadListModel *threadListModel,
     ApiLogModel *apiLogModel,
+    LoadedThreadsModel *loadedThreadsModel,
     QWidget *parent
 )
     : KDDockWidgets::QtWidgets::MainWindow(
@@ -60,11 +63,26 @@ MainWindow::MainWindow(
             m_apiLogDock->close();
         }
     }
+    if (loadedThreadsModel != nullptr) {
+        m_loadedThreadsPane = new LoadedThreadsPane(loadedThreadsModel);
+        m_loadedThreadsDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.LoadedThreads"));
+        m_loadedThreadsDock->setTitle(QStringLiteral("Loaded Threads"));
+        m_loadedThreadsDock->setWidget(m_loadedThreadsPane);
+        if (m_threadListDock != nullptr) {
+            m_threadListDock->addDockWidgetAsTab(
+                m_loadedThreadsDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartVisible)
+            );
+        } else {
+            addDockWidgetAsTab(m_loadedThreadsDock);
+        }
+    }
 
     m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
 }
 
 MainWindow::~MainWindow() {
+    delete m_loadedThreadsDock;
     delete m_apiLogDock;
     delete m_threadListDock;
 }
@@ -75,6 +93,10 @@ ThreadListPane *MainWindow::threadListPane() const {
 
 ApiLogPane *MainWindow::apiLogPane() const {
     return m_apiLogPane;
+}
+
+LoadedThreadsPane *MainWindow::loadedThreadsPane() const {
+    return m_loadedThreadsPane;
 }
 
 QString MainWindow::windowKey() const {
@@ -88,6 +110,9 @@ QList<QAction *> MainWindow::viewActions() const {
     }
     if (m_apiLogDock != nullptr) {
         actions.append(m_apiLogDock->toggleAction());
+    }
+    if (m_loadedThreadsDock != nullptr) {
+        actions.append(m_loadedThreadsDock->toggleAction());
     }
     return actions;
 }

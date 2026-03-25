@@ -44,4 +44,8 @@ void InprogressReasoning::appendSummaryTextDelta(const qint64 summaryIndex, cons
     }
 }
 
+QJsonObject InprogressReasoning::properties() const {
+    return Base::properties();
+}
+
 }  // namespace qodex::domain::threadmodel

@@ -9,6 +9,7 @@
 #include <kddockwidgets/LayoutSaver.h>
 
 #include "ui/ApiLogPane.h"
+#include "ui/LoadedThreadsPane.h"
 #include "ui/ThreadListPane.h"
 
 namespace qodex::app {
@@ -28,11 +29,13 @@ AppBootstrap::AppBootstrap(
       m_threadStore(),
       m_threadListModel(&m_threadStore),
       m_apiLogModel(m_databaseManager),
+      m_loadedThreadsModel(),
       m_mainWindow(
           QStringLiteral("qodex.MainWindow.Primary"),
           QStringLiteral("Qodex"),
           &m_threadListModel,
-          &m_apiLogModel
+          &m_apiLogModel,
+          &m_loadedThreadsModel
       ),
       m_threadUiProcessManager(threadUiIpcServer, this),
       m_sessionController(
@@ -43,6 +46,7 @@ AppBootstrap::AppBootstrap(
           &m_threadUiProcessManager,
           &m_mainWindow
       ) {
+    m_loadedThreadsModel.setSessionController(&m_sessionController);
     m_mainWindow.move(80, 80);
     m_mainWindow.installEventFilter(this);
     QObject::connect(
@@ -159,6 +163,10 @@ QString AppBootstrap::threadListViewKeyForWindowKey(const QString &windowKey) {
 
 QString AppBootstrap::apiLogViewKeyForWindowKey(const QString &windowKey) {
     return QStringLiteral("%1/api-log-header").arg(windowKey);
+}
+
+QString AppBootstrap::loadedThreadsViewKeyForWindowKey(const QString &windowKey) {
+    return QStringLiteral("%1/loaded-threads-header").arg(windowKey);
 }
 
 qodex::ui::MainWindow *AppBootstrap::windowByKey(const QString &windowKey) {
@@ -334,6 +342,12 @@ void AppBootstrap::savePersistentState(const qodex::ui::MainWindow *excludingWin
                 pane->saveViewState(),
             });
         }
+        if (qodex::ui::LoadedThreadsPane *pane = window->loadedThreadsPane()) {
+            viewStates.append(qodex::storage::ViewStateRecord{
+                loadedThreadsViewKeyForWindowKey(window->windowKey()),
+                pane->saveHeaderState(),
+            });
+        }
     };
 
     collectWindowState(&m_mainWindow, true);
@@ -376,6 +390,16 @@ void AppBootstrap::restoreWindowViewState(qodex::ui::MainWindow *window) {
             qWarning("Failed to load API log view state: %s", qPrintable(errorMessage));
         } else if (headerState.has_value()) {
             window->apiLogPane()->restoreViewState(*headerState);
+        }
+    }
+
+    if (window->loadedThreadsPane() != nullptr) {
+        const auto headerState =
+            m_databaseManager->loadViewState(loadedThreadsViewKeyForWindowKey(window->windowKey()), &errorMessage);
+        if (!errorMessage.isEmpty()) {
+            qWarning("Failed to load loaded threads view state: %s", qPrintable(errorMessage));
+        } else if (headerState.has_value()) {
+            window->loadedThreadsPane()->restoreHeaderState(*headerState);
         }
     }
 }

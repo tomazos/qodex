@@ -16,6 +16,7 @@ public:
     void appendContentDelta(qint64 contentIndex, const QString &delta);
     void addSummaryPart(qint64 summaryIndex);
     void appendSummaryTextDelta(qint64 summaryIndex, const QString &delta);
+    [[nodiscard]] QJsonObject properties() const override;
 };
 
 }  // namespace qodex::domain::threadmodel

@@ -21,6 +21,7 @@ public:
     void appendOutputDelta(const QString &delta);
     void recordTerminalInteraction(const QString &processId, const QString &stdin);
     [[nodiscard]] const QStringList &terminalInputs() const;
+    [[nodiscard]] QJsonObject properties() const override;
 
 private:
     QStringList m_terminalInputs;

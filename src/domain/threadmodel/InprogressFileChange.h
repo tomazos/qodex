@@ -17,6 +17,7 @@ public:
 
     void appendOutputDelta(const QString &delta);
     [[nodiscard]] const QString &outputDelta() const;
+    [[nodiscard]] QJsonObject properties() const override;
 
 private:
     QString m_outputDelta;

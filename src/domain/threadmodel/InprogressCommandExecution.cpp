@@ -26,4 +26,15 @@ const QStringList &InprogressCommandExecution::terminalInputs() const {
     return m_terminalInputs;
 }
 
+QJsonObject InprogressCommandExecution::properties() const {
+    QJsonObject properties = Base::properties();
+
+    QJsonArray terminalInputsJson;
+    for (const QString &input : m_terminalInputs) {
+        terminalInputsJson.append(input);
+    }
+    properties.insert(QStringLiteral("terminalInputs"), terminalInputsJson);
+    return properties;
+}
+
 }  // namespace qodex::domain::threadmodel

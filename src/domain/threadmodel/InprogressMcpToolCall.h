@@ -17,6 +17,7 @@ public:
 
     void appendProgressMessage(const QString &message);
     [[nodiscard]] const QStringList &progressMessages() const;
+    [[nodiscard]] QJsonObject properties() const override;
 
 private:
     QStringList m_progressMessages;

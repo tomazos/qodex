@@ -17,4 +17,10 @@ const QString &InprogressPlan::streamedText() const {
     return m_streamedText;
 }
 
+QJsonObject InprogressPlan::properties() const {
+    QJsonObject properties = Base::properties();
+    properties.insert(QStringLiteral("streamedText"), m_streamedText);
+    return properties;
+}
+
 }  // namespace qodex::domain::threadmodel

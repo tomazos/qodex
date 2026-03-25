@@ -31,6 +31,9 @@ public:
     );
 
     [[nodiscard]] QString threadId() const;
+    [[nodiscard]] const QString &title() const;
+    [[nodiscard]] const QString &activeTurnId() const;
+    [[nodiscard]] QList<const qodex::domain::threadmodel::Turn *> orderedTurns() const;
     void resume(const QString &title, const qodex::codex::ThreadResumeResponse &response);
     void onThreadClosed();
     void onThreadStatusChanged(const qodex::codex::ThreadStatus &status);
@@ -58,6 +61,7 @@ public:
 
 signals:
     void statusMessageRequested(const QString &message);
+    void stateChanged();
 
 private slots:
     void onThreadUiUserInputRequested(std::uint64_t requestId, const QString &text);

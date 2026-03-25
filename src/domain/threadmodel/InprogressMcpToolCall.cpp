@@ -16,4 +16,15 @@ const QStringList &InprogressMcpToolCall::progressMessages() const {
     return m_progressMessages;
 }
 
+QJsonObject InprogressMcpToolCall::properties() const {
+    QJsonObject properties = Base::properties();
+
+    QJsonArray progressMessagesJson;
+    for (const QString &message : m_progressMessages) {
+        progressMessagesJson.append(message);
+    }
+    properties.insert(QStringLiteral("progressMessages"), progressMessagesJson);
+    return properties;
+}
+
 }  // namespace qodex::domain::threadmodel

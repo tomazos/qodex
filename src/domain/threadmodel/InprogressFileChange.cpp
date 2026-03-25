@@ -16,4 +16,10 @@ const QString &InprogressFileChange::outputDelta() const {
     return m_outputDelta;
 }
 
+QJsonObject InprogressFileChange::properties() const {
+    QJsonObject properties = Base::properties();
+    properties.insert(QStringLiteral("outputDelta"), m_outputDelta);
+    return properties;
+}
+
 }  // namespace qodex::domain::threadmodel

@@ -16,6 +16,8 @@ namespace qodex::ui {
 
 class ApiLogModel;
 class ApiLogPane;
+class LoadedThreadsModel;
+class LoadedThreadsPane;
 class ThreadListModel;
 class ThreadListPane;
 class MainWindow;
@@ -37,12 +39,14 @@ public:
         const QString &windowTitle,
         ThreadListModel *threadListModel = nullptr,
         ApiLogModel *apiLogModel = nullptr,
+        LoadedThreadsModel *loadedThreadsModel = nullptr,
         QWidget *parent = nullptr
     );
     ~MainWindow() override;
 
     [[nodiscard]] ThreadListPane *threadListPane() const;
     [[nodiscard]] ApiLogPane *apiLogPane() const;
+    [[nodiscard]] LoadedThreadsPane *loadedThreadsPane() const;
     [[nodiscard]] QString windowKey() const;
     [[nodiscard]] QList<QAction *> viewActions() const;
     void setStatusMessage(const QString &message);
@@ -65,6 +69,8 @@ private:
     ThreadListPane *m_threadListPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_apiLogDock = nullptr;
     ApiLogPane *m_apiLogPane = nullptr;
+    KDDockWidgets::QtWidgets::DockWidget *m_loadedThreadsDock = nullptr;
+    LoadedThreadsPane *m_loadedThreadsPane = nullptr;
     QMenu *m_threadMenu = nullptr;
     QMenu *m_viewMenu = nullptr;
     QMenu *m_windowMenu = nullptr;
