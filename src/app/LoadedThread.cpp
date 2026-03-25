@@ -5,9 +5,36 @@
 #include "app/ThreadUiProcess.h"
 #include "domain/threadmodel/AbstractItem.h"
 #include "domain/threadmodel/CompletedAgentMessage.h"
+#include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
 
 namespace qodex::app {
+
+namespace {
+
+QString flattenReasoningTextForThreadUi(const qodex::codex::ThreadItemReasoning &reasoning) {
+    const auto joinSections = [](const std::optional<QList<QString>> &sections) {
+        QStringList nonEmptySections;
+        if (sections.has_value()) {
+            for (const QString &section : *sections) {
+                const QString trimmedSection = section.trimmed();
+                if (!trimmedSection.isEmpty()) {
+                    nonEmptySections.append(trimmedSection);
+                }
+            }
+        }
+        return nonEmptySections.join(QStringLiteral("\n\n"));
+    };
+
+    const QString summaryText = joinSections(reasoning.summary);
+    if (!summaryText.isEmpty()) {
+        return summaryText;
+    }
+
+    return joinSections(reasoning.content);
+}
+
+}  // namespace
 
 using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
@@ -510,9 +537,15 @@ bool LoadedThread::appendDisplayItem(qodex::threadui::ipc::common::Item *display
     case ThreadItem::Kind::Plan:
         displayItem->mutable_plan()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
         return true;
-    case ThreadItem::Kind::Reasoning:
-        displayItem->mutable_reasoning()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
+    case ThreadItem::Kind::Reasoning: {
+        const auto &reasoning = static_cast<const qodex::domain::threadmodel::CompletedReasoning &>(item);
+        const QString text = flattenReasoningTextForThreadUi(reasoning.data()).trimmed();
+        if (text.isEmpty()) {
+            return false;
+        }
+        displayItem->mutable_reasoning()->set_text(text.toStdString());
         return true;
+    }
     case ThreadItem::Kind::CommandExecution:
         displayItem->mutable_command_execution()->set_text(summarizeNonMessageItemForThreadUi(item).toStdString());
         return true;

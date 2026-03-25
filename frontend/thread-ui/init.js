@@ -95,21 +95,19 @@ function appendThreadItems(items) {
   for (const item of items) {
     const element = document.createElement('article');
     const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
-    const isMessageKind = kind === 'user' || kind === 'agent';
-    element.className = kind === 'user' || kind === 'agent'
-      ? `thread-item thread-item--${kind}`
-      : 'thread-item';
+    const isMarkupKind = kind === 'user' || kind === 'agent' || kind === 'reasoning';
+    element.className = isMarkupKind ? `thread-item thread-item--${kind}` : 'thread-item';
 
     const body = document.createElement('div');
     body.className = 'thread-item__body';
-    if (isMessageKind && messageRenderer) {
+    if (isMarkupKind && messageRenderer) {
       body.innerHTML = messageRenderer.renderToHtmlFragment(typeof item?.text === 'string' ? item.text : '');
     } else {
       body.classList.add('thread-item__body--plain');
       body.textContent = typeof item?.text === 'string' ? item.text : '';
     }
 
-    if (!isMessageKind) {
+    if (!isMarkupKind) {
       const label = document.createElement('div');
       label.className = 'thread-item__label';
       label.textContent = formatItemKindLabel(kind);
