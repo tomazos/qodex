@@ -139,15 +139,13 @@ main {
 }
 
 .composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid color-mix(in srgb, canvastext 12%, transparent);
 }
 
 .composer__input {
-  flex: 1;
+  display: block;
+  width: 100%;
   min-height: calc(1lh + 1.25rem);
   padding: 0.625rem 0.75rem;
   border: 1px solid color-mix(in srgb, canvastext 16%, transparent);
@@ -161,29 +159,7 @@ main {
   box-sizing: border-box;
 }
 
-.composer__send {
-  min-width: 6rem;
-  min-height: calc(1lh + 1.25rem);
-  padding: 0.625rem 1rem;
-  border: 1px solid color-mix(in srgb, canvastext 18%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, #2563eb 70%, canvas);
-  color: white;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.composer__send:hover {
-  background: color-mix(in srgb, #1d4ed8 78%, canvas);
-}
-
-.composer__send:active {
-  background: color-mix(in srgb, #1e40af 82%, canvas);
-}
-
-.composer__input:focus-visible,
-.composer__send:focus-visible {
+.composer__input:focus-visible {
   outline: 2px solid Highlight;
   outline-offset: 2px;
 }
