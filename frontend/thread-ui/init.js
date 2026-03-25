@@ -140,19 +140,23 @@ function appendThreadItems(items) {
   for (const item of items) {
     const element = document.createElement('article');
     const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
+    const isMessageKind = kind === 'user' || kind === 'agent';
     element.className = kind === 'user' || kind === 'agent'
       ? `thread-item thread-item--${kind}`
       : 'thread-item';
-
-    const label = document.createElement('div');
-    label.className = 'thread-item__label';
-    label.textContent = formatItemKindLabel(kind);
 
     const body = document.createElement('pre');
     body.className = 'thread-item__body';
     body.textContent = typeof item?.text === 'string' ? item.text : '';
 
-    element.append(label, body);
+    if (!isMessageKind) {
+      const label = document.createElement('div');
+      label.className = 'thread-item__label';
+      label.textContent = formatItemKindLabel(kind);
+      element.append(label);
+    }
+
+    element.append(body);
     threadItemsContainer.appendChild(element);
   }
 
