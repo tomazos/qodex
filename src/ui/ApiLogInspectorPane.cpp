@@ -87,7 +87,7 @@ ApiLogInspectorPane::ApiLogInspectorPane(qodex::storage::DatabaseManager *databa
 
     m_payloadEdit = new QPlainTextEdit(m_splitter);
     m_payloadEdit->setReadOnly(true);
-    m_payloadEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_payloadEdit->setLineWrapMode(QPlainTextEdit::WidgetWidth);
     m_payloadEdit->setFont(monospaceFont());
 
     m_splitter->addWidget(m_fieldsTree);
