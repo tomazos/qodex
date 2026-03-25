@@ -121,20 +121,6 @@ async function showErrorDialog(message) {
   }
 }
 
-function getWindowState(window) {
-  return {
-    isMaximized: window.isMaximized(),
-  };
-}
-
-function sendWindowState(window) {
-  if (window.isDestroyed()) {
-    return;
-  }
-
-  window.webContents.send('window:state-changed', getWindowState(window));
-}
-
 const appEntryPath = path.resolve(__dirname, 'index.html');
 
 function isAppEntryUrl(url) {
@@ -223,7 +209,7 @@ function createWindow() {
     height: 720,
     minWidth: 640,
     minHeight: 480,
-    frame: false,
+    frame: true,
     autoHideMenuBar: true,
     icon: windowIconPath,
     show: !instanceInfo.smokeTest,
@@ -268,19 +254,10 @@ function createWindow() {
     void showFatalErrorAndExit('Renderer process became unresponsive.');
   });
 
-  mainWindow.on('maximize', () => {
-    sendWindowState(mainWindow);
-  });
-
-  mainWindow.on('unmaximize', () => {
-    sendWindowState(mainWindow);
-  });
-
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow.webContents.send('thread-ui:instance-info', instanceInfo);
-    sendWindowState(mainWindow);
     if (pendingActivationRequest) {
       pendingActivationRequest = false;
       focusMainWindow();
@@ -291,33 +268,6 @@ function createWindow() {
     mainWindow = null;
   });
 }
-
-ipcMain.handle('window:get-state', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  return getWindowState(window);
-});
-
-ipcMain.handle('window:minimize', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  window.minimize();
-});
-
-ipcMain.handle('window:toggle-maximize', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-
-  if (window.isMaximized()) {
-    window.unmaximize();
-  } else {
-    window.maximize();
-  }
-
-  return getWindowState(window);
-});
-
-ipcMain.handle('window:close', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  window.close();
-});
 
 ipcMain.handle('thread-ui:get-instance-info', () => instanceInfo);
 ipcMain.handle('thread-ui:get-launch-config', () => launchConfig);

@@ -55,61 +55,12 @@ async function reportFatalError(error) {
   await ipcRenderer.invoke('thread-ui:fatal-error', describeError(error));
 }
 
-function updateWindowState(state) {
-  const maximizeButton = document.getElementById('window-maximize');
-
-  if (!maximizeButton) {
-    return;
-  }
-
-  const isMaximized = state?.isMaximized === true;
-  maximizeButton.textContent = isMaximized ? 'Restore' : 'Max';
-  maximizeButton.setAttribute(
-    'aria-label',
-    isMaximized ? 'Restore window' : 'Maximize window',
-  );
-}
-
-async function initializeWindowChrome() {
-  document.getElementById('window-minimize')
-    .addEventListener('click', async () => {
-      await ipcRenderer.invoke('window:minimize');
-    });
-
-  document.getElementById('window-maximize')
-    .addEventListener('click', async () => {
-      const state = await ipcRenderer.invoke('window:toggle-maximize');
-      updateWindowState(state);
-    });
-
-  document.getElementById('window-close')
-    .addEventListener('click', async () => {
-      await ipcRenderer.invoke('window:close');
-    });
-
-  document.getElementById('titlebar-drag-region')
-    .addEventListener('dblclick', async () => {
-      const state = await ipcRenderer.invoke('window:toggle-maximize');
-      updateWindowState(state);
-    });
-
-  ipcRenderer.on('window:state-changed', (_event, state) => {
-    updateWindowState(state);
-  });
-
-  updateWindowState(await ipcRenderer.invoke('window:get-state'));
-}
-
 function applyInstanceInfo(instanceInfo) {
   if (!instanceInfo || typeof instanceInfo.title !== 'string' || instanceInfo.title.trim() === '') {
     return;
   }
 
   document.title = instanceInfo.title;
-  const titleElement = document.querySelector('.titlebar__title');
-  if (titleElement) {
-    titleElement.textContent = instanceInfo.title;
-  }
 }
 
 function normalizeLaunchConfig(launchConfig) {
@@ -252,7 +203,6 @@ async function initialize() {
   }
 
   try {
-    await initializeWindowChrome();
     applyInstanceInfo(await ipcRenderer.invoke('thread-ui:get-instance-info'));
     ipcRenderer.on('thread-ui:instance-info', (_event, instanceInfo) => {
       applyInstanceInfo(instanceInfo);
