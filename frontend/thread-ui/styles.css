@@ -69,7 +69,7 @@ main {
 }
 
 .thread-item--reasoning {
-  color: color-mix(in srgb, canvastext 80%, var(--thread-item-background) 20%);
+  color: color-mix(in srgb, canvastext 60%, var(--thread-item-background) 40%);
 }
 
 .thread-item__label {
