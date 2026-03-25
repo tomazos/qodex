@@ -52,19 +52,24 @@ main {
 }
 
 .thread-item {
+  --thread-item-background: color-mix(in srgb, canvas 92%, canvastext 8%);
   min-width: 0;
   border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
   border-radius: 10px;
   padding: 0.75rem 0.9rem;
-  background: color-mix(in srgb, canvas 92%, canvastext 8%);
+  background: var(--thread-item-background);
 }
 
 .thread-item--user {
-  background: color-mix(in srgb, #2b6cb0 12%, canvas);
+  --thread-item-background: color-mix(in srgb, #2b6cb0 12%, canvas);
 }
 
 .thread-item--agent {
-  background: color-mix(in srgb, #2f855a 12%, canvas);
+  --thread-item-background: color-mix(in srgb, #2f855a 12%, canvas);
+}
+
+.thread-item--reasoning {
+  color: color-mix(in srgb, canvastext 80%, var(--thread-item-background) 20%);
 }
 
 .thread-item__label {
