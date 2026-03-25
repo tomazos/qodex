@@ -221,6 +221,7 @@ main {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .file-change__badge {
