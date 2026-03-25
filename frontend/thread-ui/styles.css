@@ -85,7 +85,8 @@ main {
 }
 
 .thread-item--user .thread-item__body,
-.thread-item--agent .thread-item__body {
+.thread-item--agent .thread-item__body,
+.thread-item--reasoning .thread-item__body {
   font-family: var(--font-ui);
 }
 
