@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron')
 const readline = require('node:readline');
 const { URL, fileURLToPath } = require('node:url');
 const path = require('path');
+const { buildContextMenuTemplate } = require('./context-menu/ContextMenu');
 
 const windowIconPath = path.join(__dirname, 'assets', 'qodex-icon-256x256.png');
 
@@ -169,6 +170,18 @@ function installExternalNavigationPolicy(window) {
   });
 }
 
+function installContextMenu(window) {
+  window.webContents.on('context-menu', (_event, params) => {
+    const template = buildContextMenuTemplate(params);
+    if (template.length === 0) {
+      return;
+    }
+
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({ window });
+  });
+}
+
 function focusMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     pendingActivationRequest = true;
@@ -225,6 +238,7 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.removeMenu();
   installExternalNavigationPolicy(mainWindow);
+  installContextMenu(mainWindow);
 
   if (instanceInfo.smokeTest) {
     const failSmokeTest = (message) => {
