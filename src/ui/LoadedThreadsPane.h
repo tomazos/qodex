@@ -18,6 +18,7 @@ public:
     bool restoreHeaderState(const QByteArray &state);
 
 private:
+    void expandToTurnLevel();
     void resizeSnugColumns();
 
     LoadedThreadsModel *m_model = nullptr;

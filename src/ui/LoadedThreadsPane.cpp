@@ -38,13 +38,13 @@ LoadedThreadsPane::LoadedThreadsPane(LoadedThreadsModel *model, QWidget *parent)
     if (m_model != nullptr) {
         connect(m_model, &LoadedThreadsModel::treeRebuilt, this, [this] {
             if (m_treeView != nullptr) {
-                m_treeView->expandAll();
+                expandToTurnLevel();
                 resizeSnugColumns();
             }
         });
     }
 
-    m_treeView->expandAll();
+    expandToTurnLevel();
     resizeSnugColumns();
 }
 
@@ -65,6 +65,27 @@ bool LoadedThreadsPane::restoreHeaderState(const QByteArray &state) {
         resizeSnugColumns();
     }
     return restored;
+}
+
+void LoadedThreadsPane::expandToTurnLevel() {
+    if (m_treeView == nullptr || m_model == nullptr) {
+        return;
+    }
+
+    for (int threadRow = 0; threadRow < m_model->rowCount(); ++threadRow) {
+        const QModelIndex threadIndex = m_model->index(threadRow, 0);
+        if (!threadIndex.isValid()) {
+            continue;
+        }
+
+        m_treeView->expand(threadIndex);
+        for (int turnRow = 0; turnRow < m_model->rowCount(threadIndex); ++turnRow) {
+            const QModelIndex turnIndex = m_model->index(turnRow, 0, threadIndex);
+            if (turnIndex.isValid()) {
+                m_treeView->expand(turnIndex);
+            }
+        }
+    }
 }
 
 void LoadedThreadsPane::resizeSnugColumns() {
