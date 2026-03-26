@@ -1,9 +1,5 @@
 # TODO
 
-Ideas worth considering for `qodex` after reviewing `wodex`.
-
-These are not commitments. They are candidate improvements that looked structurally useful rather than prototype-specific.
-
 ## Projection Layer
 
 - Extract a dedicated presentation projection layer from [LoadedThread.cpp](/home/zos/qodex/src/app/LoadedThread.cpp) into a separate module.
