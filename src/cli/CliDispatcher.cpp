@@ -8,6 +8,7 @@
 #include "app/AppPaths.h"
 #include "cli/DbQueryCommand.h"
 #include "cli/HelpCommand.h"
+#include "debug/DebugLog.h"
 
 namespace qodex::cli {
 
@@ -42,6 +43,10 @@ bool isOptionWithValue(const QString &argument) {
 
 bool isInlineDataOption(const QString &argument) {
     return argument.startsWith(QStringLiteral("--data="));
+}
+
+bool isDebugOption(const QString &argument) {
+    return argument == QStringLiteral("--debug");
 }
 
 }  // namespace
@@ -80,9 +85,10 @@ QString CliDispatcher::renderGeneralHelp(const QString &programName, const QStri
         QString(),
         QStringLiteral("Usage:"),
         QStringLiteral("  %1 help [command...]").arg(programName),
-        QStringLiteral("  %1 [--data FILE] db query --sql <statement>").arg(programName),
+        QStringLiteral("  %1 [--debug] [--data FILE] db query --sql <statement>").arg(programName),
         QString(),
         QStringLiteral("Global options:"),
+        QStringLiteral("  --debug      Enable timestamped qodex debug logging to stdout"),
         QStringLiteral("  --data FILE  Path to the SQLite database file. Defaults to %1").arg(defaultDatabasePath),
         QString(),
         QStringLiteral("Commands:"),
@@ -134,8 +140,14 @@ int CliDispatcher::run(const int argc, char *argv[]) const {
         return 2;
     }
 
+    if (options.debugEnabled) {
+        qodex::debug::setEnabled(true);
+        qodex::debug::installStdoutMessageHandler();
+    }
+
     const app::AppPaths appPaths = app::AppPaths::discover(options.databasePathOverride);
     const QString programName = QFileInfo(application.applicationFilePath()).fileName();
+    QODEBUG("CLI global options parsed", "databasePathOverride=", options.databasePathOverride, "debug=", options.debugEnabled);
 
     if (remainingArguments.isEmpty()) {
         stdoutStream << renderGeneralHelp(programName, appPaths.databasePath);
@@ -149,6 +161,8 @@ int CliDispatcher::run(const int argc, char *argv[]) const {
         stderrStream << QStringLiteral("See `%1 help`.").arg(programName) << Qt::endl;
         return 2;
     }
+
+    QODEBUG("Dispatching CLI command", command->commandPath().join(QStringLiteral(" ")));
 
     return command->run(
         remainingArguments.mid(consumedArgumentCount),
@@ -172,6 +186,9 @@ QStringList CliDispatcher::extractLeadingPositionalArguments(const QStringList &
             continue;
         }
         if (isInlineDataOption(argument)) {
+            continue;
+        }
+        if (isDebugOption(argument)) {
             continue;
         }
         if (argument == QStringLiteral("--")) {
@@ -229,6 +246,12 @@ bool CliDispatcher::parseGlobalOptions(
         if (argument.startsWith(QStringLiteral("--data="))) {
             if (options != nullptr) {
                 options->databasePathOverride = argument.sliced(QStringLiteral("--data=").size());
+            }
+            continue;
+        }
+        if (argument == QStringLiteral("--debug")) {
+            if (options != nullptr) {
+                options->debugEnabled = true;
             }
             continue;
         }

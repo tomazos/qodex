@@ -93,6 +93,13 @@ Command-line entrypoints and dispatch.
 - [HelpCommand](./src/cli/HelpCommand.h): `qodex help`
 - [DbQueryCommand](./src/cli/DbQueryCommand.h): readonly SQLite query command for inspecting qodex state while the GUI is running
 
+### `src/debug/`
+
+Optional runtime debug instrumentation.
+
+- [DebugLog](./src/debug/DebugLog.h): global `--debug` plumbing, timestamped stdout log handler, and the `QODEBUG(...)` macro
+- Used for live transport/debugging traces, especially raw app-server stdin/stdout/stderr capture that complements the persisted API log
+
 ### `src/codex/`
 
 Codex transport/client infrastructure.

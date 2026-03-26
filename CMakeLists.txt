@@ -534,6 +534,19 @@ if(NOT TARGET qodex_protocol_artifacts)
     message(FATAL_ERROR "qodex requires the codex executable to generate protocol artifacts at configure time.")
 endif()
 
+add_library(qodex_debuglog STATIC
+    src/debug/DebugLog.cpp
+    src/debug/DebugLog.h
+)
+
+target_include_directories(qodex_debuglog PUBLIC
+    "${PROJECT_SOURCE_DIR}/src"
+)
+
+target_link_libraries(qodex_debuglog PUBLIC
+    Qt6::Core
+)
+
 qt_add_executable(qodex
     resources/qodex.qrc
     src/main.cpp
@@ -618,6 +631,7 @@ target_link_libraries(
         Qt6::Widgets
         KDAB::kddockwidgets
         SQLite::SQLite3
+        qodex_debuglog
         qodex_thread_ui_ipc
 )
 add_dependencies(qodex qodex_thread_ui_ipc_codegen)
@@ -649,6 +663,7 @@ if(BUILD_TESTING)
     )
 
     target_link_libraries(AppServerTransportTest PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(AppServerTransportTest PRIVATE qodex_debuglog)
 
     add_test(NAME AppServerTransportTest COMMAND AppServerTransportTest)
 
@@ -671,7 +686,7 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/src"
     )
 
-    target_link_libraries(TrafficLoggerTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3)
+    target_link_libraries(TrafficLoggerTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3 qodex_debuglog)
 
     add_test(NAME TrafficLoggerTest COMMAND TrafficLoggerTest)
 
@@ -695,7 +710,7 @@ if(BUILD_TESTING)
         "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
     )
 
-    target_link_libraries(CodexClientGeneratedTest PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(CodexClientGeneratedTest PRIVATE Qt6::Core Qt6::Test qodex_debuglog)
 
     add_test(NAME CodexClientGeneratedTest COMMAND CodexClientGeneratedTest)
 
@@ -731,7 +746,7 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/src"
     )
 
-    target_link_libraries(CliDispatcherTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3)
+    target_link_libraries(CliDispatcherTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3 qodex_debuglog)
 
     add_test(NAME CliDispatcherTest COMMAND CliDispatcherTest)
 
@@ -752,7 +767,19 @@ if(BUILD_TESTING)
         "${PROJECT_SOURCE_DIR}/src"
     )
 
-    target_link_libraries(DbQueryCommandTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3)
+    target_link_libraries(DbQueryCommandTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3 qodex_debuglog)
+
+    qt_add_executable(DebugLogTest
+        tests/debug/DebugLogTest.cpp
+    )
+
+    target_include_directories(DebugLogTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(DebugLogTest PRIVATE Qt6::Core Qt6::Test qodex_debuglog)
+
+    add_test(NAME DebugLogTest COMMAND DebugLogTest)
 
     add_test(NAME DbQueryCommandTest COMMAND DbQueryCommandTest)
 

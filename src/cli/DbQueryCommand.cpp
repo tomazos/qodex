@@ -10,6 +10,7 @@
 #include <QJsonObject>
 
 #include "cli/CliDispatcher.h"
+#include "debug/DebugLog.h"
 
 namespace qodex::cli {
 
@@ -39,7 +40,7 @@ QString DbQueryCommand::summary() const {
 }
 
 QString DbQueryCommand::usage() const {
-    return QStringLiteral("[--data FILE] db query --sql <statement>");
+    return QStringLiteral("[--debug] [--data FILE] db query --sql <statement>");
 }
 
 QString DbQueryCommand::description() const {
@@ -89,6 +90,8 @@ int DbQueryCommand::run(const QStringList &arguments, const CliContext &context)
         *context.stderrStream << context.dispatcher->renderCommandHelp(*this, context.executableName);
         return 2;
     }
+
+    QODEBUG("Executing readonly SQLite query against", context.databasePath, sql);
 
     sqlite3 *database = nullptr;
     QString errorMessage;

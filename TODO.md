@@ -1,13 +1,5 @@
 # TODO
 
-## Optional Raw Protocol Capture
-
-- Consider an optional debug mode that records raw app-server JSON-RPC traffic in addition to the SQLite API log.
-- This should be opt-in and meant only for transport/debugging cases where persisted API log rows are not enough.
-- Benefit:
-  - easier diagnosis of logger/parser bugs
-  - easier diagnosis if the app-server process crashes before a payload is fully persisted
-
 ## ThreadUI DOM Update Strategy
 
 - Consider a more incremental DOM update strategy in ThreadUI for very large transcripts.

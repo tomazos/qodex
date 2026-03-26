@@ -9,6 +9,7 @@
 #include "app/AppPaths.h"
 #include "app/SingleInstanceManager.h"
 #include "cli/CliDispatcher.h"
+#include "debug/DebugLog.h"
 #include "storage/DatabaseManager.h"
 #include "threadui/ThreadUiIpcServer.h"
 #include "ui/ProgressSplashScreen.h"
@@ -27,6 +28,16 @@ void configureApplicationMetadata(QCoreApplication &application) {
     application.setOrganizationName(QStringLiteral("Tomazos.com"));
     application.setApplicationName(QStringLiteral("Qodex"));
     application.setApplicationVersion(applicationVersionString());
+}
+
+void enableDebugLoggingIfRequested(const QStringList &arguments) {
+    if (!qodex::debug::argumentsContainDebugFlag(arguments)) {
+        return;
+    }
+
+    qodex::debug::setEnabled(true);
+    qodex::debug::installStdoutMessageHandler();
+    QODEBUG("Debug logging enabled from command line");
 }
 
 QStringList rawArgumentsFromArgv(const int argc, char *argv[]) {
@@ -68,10 +79,21 @@ int runGuiMain(int argc, char *argv[]) {
             .arg(defaultDatabasePath),
         QStringLiteral("file")
     );
+    QCommandLineOption debugOption(
+        QStringList{QStringLiteral("debug")},
+        QStringLiteral("Enable timestamped qodex debug logging to stdout.")
+    );
     commandLineParser.addOption(dataOption);
+    commandLineParser.addOption(debugOption);
     commandLineParser.process(app);
 
+    if (commandLineParser.isSet(debugOption)) {
+        qodex::debug::setEnabled(true);
+        qodex::debug::installStdoutMessageHandler();
+    }
+
     const qodex::app::AppPaths appPaths = qodex::app::AppPaths::discover(commandLineParser.value(dataOption));
+    QODEBUG("Selected GUI mode with database", appPaths.databasePath);
 
     qodex::ui::ProgressSplashScreen startupSplash(QStringLiteral("Starting Qodex"));
     startupSplash.setStatus(QStringLiteral("Checking for a running Qodex instance..."), 10);
@@ -145,10 +167,14 @@ int runGuiMain(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
     const QStringList rawArguments = rawArgumentsFromArgv(argc, argv);
+    enableDebugLoggingIfRequested(rawArguments.mid(1));
+
     qodex::cli::CliDispatcher cliDispatcher;
     if (cliDispatcher.shouldRunCli(rawArguments.mid(1))) {
+        QODEBUG("Dispatching to CLI mode");
         return cliDispatcher.run(argc, argv);
     }
 
+    QODEBUG("Dispatching to GUI mode");
     return runGuiMain(argc, argv);
 }

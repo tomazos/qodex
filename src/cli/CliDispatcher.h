@@ -24,6 +24,7 @@ public:
 private:
     struct GlobalOptions {
         QString databasePathOverride;
+        bool debugEnabled = false;
     };
 
     [[nodiscard]] QStringList extractLeadingPositionalArguments(const QStringList &arguments) const;

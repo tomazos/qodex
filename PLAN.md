@@ -63,6 +63,7 @@ Implemented today:
 - thread-list `Resume Thread` context menu action and double-click-to-resume behavior
 - automated tests covering transport, generated client wiring, storage, models, and single-instance behavior
 - automated thread-ui IPC tests covering listener startup, login, add-items delivery, and send-user-input routing
+- opt-in `--debug` mode with timestamped stdout logging and raw app-server stdin/stdout/stderr capture via `QODEBUG(...)`
 
 Removed on purpose:
 

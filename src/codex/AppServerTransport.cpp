@@ -3,6 +3,8 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
+#include "debug/DebugLog.h"
+
 namespace qodex::codex {
 
 AppServerTransport::AppServerTransport(QObject *parent)
@@ -56,6 +58,7 @@ void AppServerTransport::start(const QString &program, const QStringList &argume
     m_stderrBuffer.clear();
     m_pendingRequests.clear();
 
+    QODEBUG("Starting codex app-server", program, arguments);
     m_process.setProgram(m_program);
     m_process.setArguments(m_arguments);
     m_process.start();
@@ -66,6 +69,7 @@ void AppServerTransport::stop() {
         return;
     }
 
+    QODEBUG("Stopping codex app-server");
     m_process.closeWriteChannel();
     m_process.terminate();
     if (!m_process.waitForFinished(3000)) {
@@ -222,6 +226,7 @@ void AppServerTransport::handleReadyReadStandardError() {
 }
 
 void AppServerTransport::handleProcessError(const QProcess::ProcessError error) {
+    QODEBUG("codex app-server process error", describeProcessError(error));
     emit transportError(describeProcessError(error));
 }
 
@@ -234,6 +239,7 @@ void AppServerTransport::handleProcessFinished(const int exitCode, const QProces
     });
 
     failPendingRequests(QStringLiteral("app-server exited before responding to all requests"));
+    QODEBUG("codex app-server exited", "exitCode=", exitCode, "exitStatus=", static_cast<int>(exitStatus));
     emit processExited(exitCode, exitStatus);
 }
 
@@ -244,6 +250,7 @@ JsonRpcId AppServerTransport::allocateRequestId() {
 
 void AppServerTransport::writeMessage(const QJsonObject &message) {
     const QByteArray payload = QJsonDocument(message).toJson(QJsonDocument::Compact) + '\n';
+    QODEBUG("app-server stdin <=", QString::fromUtf8(payload.trimmed()));
     if (m_process.write(payload) == -1) {
         emit transportError(QStringLiteral("Failed to write JSON-RPC message to app-server stdin."));
     }
@@ -254,6 +261,8 @@ void AppServerTransport::processIncomingLine(const QByteArray &line) {
     if (trimmedLine.isEmpty()) {
         return;
     }
+
+    QODEBUG("app-server stdout =>", QString::fromUtf8(trimmedLine));
 
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(trimmedLine, &parseError);
@@ -346,6 +355,7 @@ void AppServerTransport::processIncomingObject(const QJsonObject &object) {
 void AppServerTransport::processStandardErrorChunk(const QByteArray &chunk) {
     const QString text = QString::fromUtf8(chunk).trimmed();
     if (!text.isEmpty()) {
+        QODEBUG("app-server stderr =>", text);
         emit transportError(QStringLiteral("app-server stderr: %1").arg(text));
     }
 }
