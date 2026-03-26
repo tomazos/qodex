@@ -72,8 +72,16 @@ private slots:
     void onTurnSteerFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
 
 private:
+    enum class PendingThreadUiUserInputDispatchKind {
+        TurnStart,
+        TurnSteer,
+    };
+
     struct PendingThreadUiUserInputRequest {
         std::uint64_t requestId = 0;
+        QString text;
+        PendingThreadUiUserInputDispatchKind dispatchKind = PendingThreadUiUserInputDispatchKind::TurnStart;
+        bool retriedAfterNoActiveTurnSteerFailure = false;
     };
 
     [[nodiscard]] QString activeTurnIdForThread(const qodex::codex::Thread &thread) const;
@@ -87,6 +95,18 @@ private:
         const qodex::domain::threadmodel::AbstractItem &item
     ) const;
     [[nodiscard]] QString summarizeNonMessageItemForThreadUi(const qodex::domain::threadmodel::AbstractItem &item) const;
+    [[nodiscard]] qodex::codex::JsonRpcId dispatchPendingThreadUiUserInputRequest(
+        const PendingThreadUiUserInputRequest &pendingRequest
+    ) const;
+    [[nodiscard]] bool requeuePendingThreadUiUserInputRequest(
+        PendingThreadUiUserInputRequest pendingRequest,
+        QString *errorMessage = nullptr
+    );
+    void replyToThreadUiUserInputRequest(
+        const PendingThreadUiUserInputRequest &pendingRequest,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message
+    );
     void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
     [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)

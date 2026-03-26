@@ -14,6 +14,8 @@ namespace qodex::app {
 
 namespace {
 
+constexpr qint64 kJsonRpcInvalidRequestErrorCode = -32600;
+
 QString flattenReasoningTextForThreadUi(const qodex::codex::ThreadItemReasoning &reasoning) {
     const auto joinSections = [](const std::optional<QList<QString>> &sections) {
         QStringList nonEmptySections;
@@ -204,6 +206,11 @@ bool appendFileChangeDisplayItem(
     }
 
     return displayItem->changes_size() > 0;
+}
+
+bool isNoActiveTurnToSteerError(const qodex::codex::JsonRpcErrorObject &error) {
+    return error.code == kJsonRpcInvalidRequestErrorCode &&
+        error.message.trimmed().compare(QStringLiteral("no active turn to steer"), Qt::CaseInsensitive) == 0;
 }
 
 }  // namespace
@@ -454,58 +461,34 @@ void LoadedThread::onItemReasoningTextDeltaNotification(
 void LoadedThread::onThreadUiUserInputRequested(const std::uint64_t requestId, const QString &text) {
     const QString trimmedText = text.trimmed();
     if (trimmedText.isEmpty()) {
-        QString ignoredError;
-        const bool responseSent = m_threadUiProcess->replyToUserInputRequest(
-            requestId,
+        replyToThreadUiUserInputRequest(
+            PendingThreadUiUserInputRequest{
+                .requestId = requestId,
+                .text = trimmedText,
+            },
             qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-            QStringLiteral("Input must not be empty."),
-            &ignoredError
+            QStringLiteral("Input must not be empty.")
         );
-        Q_UNUSED(responseSent);
         return;
     }
 
-    const QList<Ref<UserInput>> input = buildTextUserInput(trimmedText);
+    PendingThreadUiUserInputRequest pendingRequest{
+        .requestId = requestId,
+        .text = trimmedText,
+        .dispatchKind = m_activeTurnId.isEmpty()
+            ? PendingThreadUiUserInputDispatchKind::TurnStart
+            : PendingThreadUiUserInputDispatchKind::TurnSteer,
+    };
 
-    JsonRpcId transportRequestId;
-    if (m_activeTurnId.isEmpty()) {
-        transportRequestId = m_client->sendTurnStartRequest(
-            missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
-            missing<qodex::codex::ApprovalsReviewer>(),
-            missing<Ref<qodex::codex::CollaborationMode>>(),
-            missing<QString>(),
-            missing<qodex::codex::ReasoningEffort>(),
-            input,
-            missing<QString>(),
-            std::nullopt,
-            missing<qodex::codex::Personality>(),
-            missing<Ref<qodex::codex::SandboxPolicy>>(),
-            missing<qodex::codex::ServiceTier>(),
-            missing<qodex::codex::ReasoningSummary>(),
-            m_threadId
-        );
-    } else {
-        transportRequestId = m_client->sendTurnSteerRequest(m_activeTurnId, input, m_threadId);
-    }
-
-    if (!transportRequestId.isValid()) {
-        QString ignoredError;
-        const bool responseSent = m_threadUiProcess->replyToUserInputRequest(
-            requestId,
+    QString errorMessage;
+    if (!requeuePendingThreadUiUserInputRequest(pendingRequest, &errorMessage)) {
+        replyToThreadUiUserInputRequest(
+            pendingRequest,
             qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-            QStringLiteral("Failed to send turn request."),
-            &ignoredError
+            errorMessage.isEmpty() ? QStringLiteral("Failed to send turn request.") : errorMessage
         );
-        Q_UNUSED(responseSent);
         return;
     }
-
-    m_pendingThreadUiUserInputRequests.insert(
-        transportRequestId.toKey(),
-        PendingThreadUiUserInputRequest{
-            .requestId = requestId,
-        }
-    );
 }
 
 void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResponse &response) {
@@ -519,17 +502,11 @@ void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResp
     }
     emit stateChanged();
 
-    QString errorMessage;
-    if (!m_threadUiProcess->replyToUserInputRequest(
-            pendingRequest.requestId,
-            qodex::threadui::ipc::common::RESULT_STATUS_OK,
-            QStringLiteral("Turn started."),
-            &errorMessage
-        )) {
-        emit statusMessageRequested(
-            QStringLiteral("Failed to reply to %1 input request: %2").arg(m_title, errorMessage)
-        );
-    }
+    replyToThreadUiUserInputRequest(
+        pendingRequest,
+        qodex::threadui::ipc::common::RESULT_STATUS_OK,
+        QStringLiteral("Turn started.")
+    );
 }
 
 void LoadedThread::onTurnStartFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
@@ -538,17 +515,7 @@ void LoadedThread::onTurnStartFailed(const JsonRpcId &id, const JsonRpcErrorObje
         return;
     }
 
-    QString errorMessage;
-    if (!m_threadUiProcess->replyToUserInputRequest(
-            pendingRequest.requestId,
-            qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-            error.message,
-            &errorMessage
-        )) {
-        emit statusMessageRequested(
-            QStringLiteral("Failed to reply to %1 input request: %2").arg(m_title, errorMessage)
-        );
-    }
+    replyToThreadUiUserInputRequest(pendingRequest, qodex::threadui::ipc::common::RESULT_STATUS_ERROR, error.message);
 }
 
 void LoadedThread::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResponse &response) {
@@ -562,32 +529,100 @@ void LoadedThread::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResp
     }
     emit stateChanged();
 
-    QString errorMessage;
-    if (!m_threadUiProcess->replyToUserInputRequest(
-            pendingRequest.requestId,
-            qodex::threadui::ipc::common::RESULT_STATUS_OK,
-            QStringLiteral("Turn steered."),
-            &errorMessage
-        )) {
-        emit statusMessageRequested(
-            QStringLiteral("Failed to reply to %1 input request: %2").arg(m_title, errorMessage)
-        );
-    }
+    replyToThreadUiUserInputRequest(
+        pendingRequest,
+        qodex::threadui::ipc::common::RESULT_STATUS_OK,
+        QStringLiteral("Turn steered.")
+    );
 }
 
 void LoadedThread::onTurnSteerFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
-    const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
+    auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
     if (pendingRequest.requestId == 0) {
         return;
     }
 
-    QString errorMessage;
-    if (!m_threadUiProcess->replyToUserInputRequest(
-            pendingRequest.requestId,
+    if (!pendingRequest.retriedAfterNoActiveTurnSteerFailure && isNoActiveTurnToSteerError(error)) {
+        pendingRequest.dispatchKind = PendingThreadUiUserInputDispatchKind::TurnStart;
+        pendingRequest.retriedAfterNoActiveTurnSteerFailure = true;
+        m_activeTurnId.clear();
+        emit stateChanged();
+
+        QString retryErrorMessage;
+        if (requeuePendingThreadUiUserInputRequest(pendingRequest, &retryErrorMessage)) {
+            return;
+        }
+
+        const QString failureMessage = retryErrorMessage.isEmpty()
+            ? QStringLiteral("no active turn to steer")
+            : QStringLiteral("%1 Retry as turn/start failed: %2").arg(error.message, retryErrorMessage);
+        replyToThreadUiUserInputRequest(
+            pendingRequest,
             qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
-            error.message,
-            &errorMessage
-        )) {
+            failureMessage
+        );
+        return;
+    }
+
+    replyToThreadUiUserInputRequest(pendingRequest, qodex::threadui::ipc::common::RESULT_STATUS_ERROR, error.message);
+}
+
+JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThreadUiUserInputRequest &pendingRequest) const {
+    const QList<Ref<UserInput>> input = buildTextUserInput(pendingRequest.text);
+    if (pendingRequest.dispatchKind == PendingThreadUiUserInputDispatchKind::TurnSteer) {
+        if (m_activeTurnId.isEmpty()) {
+            return {};
+        }
+
+        return m_client->sendTurnSteerRequest(m_activeTurnId, input, m_threadId);
+    }
+
+    return m_client->sendTurnStartRequest(
+        missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
+        missing<qodex::codex::ApprovalsReviewer>(),
+        missing<Ref<qodex::codex::CollaborationMode>>(),
+        missing<QString>(),
+        missing<qodex::codex::ReasoningEffort>(),
+        input,
+        missing<QString>(),
+        std::nullopt,
+        missing<qodex::codex::Personality>(),
+        missing<Ref<qodex::codex::SandboxPolicy>>(),
+        missing<qodex::codex::ServiceTier>(),
+        missing<qodex::codex::ReasoningSummary>(),
+        m_threadId
+    );
+}
+
+bool LoadedThread::requeuePendingThreadUiUserInputRequest(
+    PendingThreadUiUserInputRequest pendingRequest,
+    QString *errorMessage
+) {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+
+    const JsonRpcId transportRequestId = dispatchPendingThreadUiUserInputRequest(pendingRequest);
+    if (!transportRequestId.isValid()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = pendingRequest.dispatchKind == PendingThreadUiUserInputDispatchKind::TurnSteer
+                ? QStringLiteral("Failed to send turn/steer request.")
+                : QStringLiteral("Failed to send turn/start request.");
+        }
+        return false;
+    }
+
+    m_pendingThreadUiUserInputRequests.insert(transportRequestId.toKey(), std::move(pendingRequest));
+    return true;
+}
+
+void LoadedThread::replyToThreadUiUserInputRequest(
+    const PendingThreadUiUserInputRequest &pendingRequest,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message
+) {
+    QString errorMessage;
+    if (!m_threadUiProcess->replyToUserInputRequest(pendingRequest.requestId, status, message, &errorMessage)) {
         emit statusMessageRequested(
             QStringLiteral("Failed to reply to %1 input request: %2").arg(m_title, errorMessage)
         );
