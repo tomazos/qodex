@@ -543,6 +543,13 @@ qt_add_executable(qodex
     src/app/AppConfig.h
     src/app/AppPaths.cpp
     src/app/AppPaths.h
+    src/cli/CliCommand.h
+    src/cli/CliDispatcher.cpp
+    src/cli/CliDispatcher.h
+    src/cli/DbQueryCommand.cpp
+    src/cli/DbQueryCommand.h
+    src/cli/HelpCommand.cpp
+    src/cli/HelpCommand.h
     src/app/LoadedThread.cpp
     src/app/LoadedThread.h
     src/app/SessionController.cpp
@@ -706,6 +713,48 @@ if(BUILD_TESTING)
     target_link_libraries(ThreadStoreTest PRIVATE Qt6::Core Qt6::Test)
 
     add_test(NAME ThreadStoreTest COMMAND ThreadStoreTest)
+
+    qt_add_executable(CliDispatcherTest
+        tests/cli/CliDispatcherTest.cpp
+        src/app/AppPaths.cpp
+        src/app/AppPaths.h
+        src/cli/CliCommand.h
+        src/cli/CliDispatcher.cpp
+        src/cli/CliDispatcher.h
+        src/cli/DbQueryCommand.cpp
+        src/cli/DbQueryCommand.h
+        src/cli/HelpCommand.cpp
+        src/cli/HelpCommand.h
+    )
+
+    target_include_directories(CliDispatcherTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(CliDispatcherTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME CliDispatcherTest COMMAND CliDispatcherTest)
+
+    qt_add_executable(DbQueryCommandTest
+        tests/cli/DbQueryCommandTest.cpp
+        src/app/AppPaths.cpp
+        src/app/AppPaths.h
+        src/cli/CliCommand.h
+        src/cli/CliDispatcher.cpp
+        src/cli/CliDispatcher.h
+        src/cli/DbQueryCommand.cpp
+        src/cli/DbQueryCommand.h
+        src/cli/HelpCommand.cpp
+        src/cli/HelpCommand.h
+    )
+
+    target_include_directories(DbQueryCommandTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(DbQueryCommandTest PRIVATE Qt6::Core Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME DbQueryCommandTest COMMAND DbQueryCommandTest)
 
     qt_add_executable(ThreadUiProjectorTest
         tests/domain/ThreadUiProjectorTest.cpp

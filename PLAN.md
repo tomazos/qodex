@@ -590,8 +590,8 @@ The public interfaces should be designed so this move does not force a rewrite.
 
 ## Proposed Initial Runtime Flow
 
-1. `main.cpp` creates `QApplication`.
-2. `AppBootstrap` loads config, database-backed state, and creates services.
+1. `main.cpp` inspects raw `argv` and dispatches either to the CLI layer (`src/cli/`) or the Qt GUI path.
+2. In GUI mode, `AppBootstrap` loads config, database-backed state, and creates services.
 3. `AppServerTransport` starts `codex app-server`.
 4. `CodexClient` performs `initialize`.
 5. `SessionController` requests thread list.

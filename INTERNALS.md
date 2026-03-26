@@ -6,12 +6,13 @@ For future direction and unfinished work, see [PLAN.md](./PLAN.md).
 
 ## Overall Shape
 
-`qodex` is split into four main runtime layers:
+`qodex` is split into five main runtime layers:
 
-1. native Qt shell
-2. Codex app-server transport/client layer
-3. loaded-thread domain state and persistence
-4. external Electron ThreadUI windows
+1. CLI / process entry layer
+2. native Qt shell
+3. Codex app-server transport/client layer
+4. loaded-thread domain state and persistence
+5. external Electron ThreadUI windows
 
 The key architectural rule is:
 
@@ -26,13 +27,14 @@ The entry point is [src/main.cpp](./src/main.cpp).
 
 Startup sequence:
 
-1. Create `QApplication`, command-line parser, and app metadata.
-2. Resolve app paths with [AppPaths](./src/app/AppPaths.h).
-3. Enforce single-instance behavior with [SingleInstanceManager](./src/app/SingleInstanceManager.h).
-4. Open the SQLite database with [DatabaseManager](./src/storage/DatabaseManager.h).
-5. Start the ThreadUI IPC listener with [ThreadUiIpcServer](./src/threadui/ThreadUiIpcServer.h).
-6. Construct [AppBootstrap](./src/app/AppBootstrap.h), which composes the rest of the application.
-7. `AppBootstrap::start()` delegates to [SessionController](./src/app/SessionController.h) to initialize Codex and request initial models/thread lists.
+1. [src/main.cpp](./src/main.cpp) inspects raw `argv` before any Qt GUI setup.
+2. If the invocation is a CLI command, [CliDispatcher](./src/cli/CliDispatcher.h) constructs `QCoreApplication` and dispatches to a command under `src/cli/`.
+3. Otherwise qodex enters GUI mode, creates `QApplication`, resolves app paths with [AppPaths](./src/app/AppPaths.h), and parses GUI command-line options.
+4. Enforce single-instance behavior with [SingleInstanceManager](./src/app/SingleInstanceManager.h).
+5. Open the SQLite database with [DatabaseManager](./src/storage/DatabaseManager.h).
+6. Start the ThreadUI IPC listener with [ThreadUiIpcServer](./src/threadui/ThreadUiIpcServer.h).
+7. Construct [AppBootstrap](./src/app/AppBootstrap.h), which composes the rest of the application.
+8. `AppBootstrap::start()` delegates to [SessionController](./src/app/SessionController.h) to initialize Codex and request initial models/thread lists.
 
 The ThreadUI TCP server is deliberately up during splash/startup so any launched ThreadUI can connect immediately.
 
@@ -81,6 +83,15 @@ Application composition and orchestration.
 - [ThreadUiProcess](./src/app/ThreadUiProcess.h): one Electron child process plus its launch/auth state
 - [SingleInstanceManager](./src/app/SingleInstanceManager.h): one-qodex-process-per-database-path behavior
 - [AppPaths](./src/app/AppPaths.h), [AppConfig](./src/app/AppConfig.h): runtime paths and config
+
+### `src/cli/`
+
+Command-line entrypoints and dispatch.
+
+- [CliDispatcher](./src/cli/CliDispatcher.h): global CLI option parsing, command matching, help rendering, and dispatch
+- [CliCommand](./src/cli/CliCommand.h): abstract command interface
+- [HelpCommand](./src/cli/HelpCommand.h): `qodex help`
+- [DbQueryCommand](./src/cli/DbQueryCommand.h): readonly SQLite query command for inspecting qodex state while the GUI is running
 
 ### `src/codex/`
 

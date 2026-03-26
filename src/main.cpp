@@ -8,12 +8,39 @@
 #include "app/AppBootstrap.h"
 #include "app/AppPaths.h"
 #include "app/SingleInstanceManager.h"
+#include "cli/CliDispatcher.h"
 #include "storage/DatabaseManager.h"
 #include "threadui/ThreadUiIpcServer.h"
 #include "ui/ProgressSplashScreen.h"
 
-int main(int argc, char *argv[]) {
+namespace {
+
+QString applicationVersionString() {
+#ifdef QODEX_APP_VERSION
+    return QString::fromLatin1(QODEX_APP_VERSION);
+#else
+    return QStringLiteral("unknown");
+#endif
+}
+
+void configureApplicationMetadata(QCoreApplication &application) {
+    application.setOrganizationName(QStringLiteral("Tomazos.com"));
+    application.setApplicationName(QStringLiteral("Qodex"));
+    application.setApplicationVersion(applicationVersionString());
+}
+
+QStringList rawArgumentsFromArgv(const int argc, char *argv[]) {
+    QStringList arguments;
+    arguments.reserve(std::max(0, argc));
+    for (int index = 0; index < argc; ++index) {
+        arguments.append(QString::fromLocal8Bit(argv[index]));
+    }
+    return arguments;
+}
+
+int runGuiMain(int argc, char *argv[]) {
     QApplication app(argc, argv);
+    configureApplicationMetadata(app);
     app.setDesktopFileName(QStringLiteral("com.tomazos.qodex"));
     QIcon applicationIcon;
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-16x16.png"), QSize(16, 16));
@@ -28,9 +55,6 @@ int main(int argc, char *argv[]) {
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-512x512.png"), QSize(512, 512));
     applicationIcon.addFile(QStringLiteral(":/images/qodex-icon-618x618.png"), QSize(618, 618));
     app.setWindowIcon(applicationIcon);
-    app.setOrganizationName(QStringLiteral("Tomazos.com"));
-    app.setApplicationName(QStringLiteral("Qodex"));
-    app.setApplicationVersion(QStringLiteral(QODEX_APP_VERSION));
     app.setQuitOnLastWindowClosed(false);
 
     QCommandLineParser commandLineParser;
@@ -115,4 +139,16 @@ int main(int argc, char *argv[]) {
     bootstrap.start();
 
     return app.exec();
+}
+
+}  // namespace
+
+int main(int argc, char *argv[]) {
+    const QStringList rawArguments = rawArgumentsFromArgv(argc, argv);
+    qodex::cli::CliDispatcher cliDispatcher;
+    if (cliDispatcher.shouldRunCli(rawArguments.mid(1))) {
+        return cliDispatcher.run(argc, argv);
+    }
+
+    return runGuiMain(argc, argv);
 }
