@@ -459,6 +459,21 @@ void AppBootstrap::onWindowAboutToClose(qodex::ui::MainWindow *window) {
     }
 
     savePersistentState(window);
+    QTimer::singleShot(0, this, [this, window] {
+        const auto it = std::find_if(
+            m_additionalWindows.begin(),
+            m_additionalWindows.end(),
+            [window](const std::unique_ptr<qodex::ui::MainWindow> &candidate) {
+                return candidate != nullptr && candidate.get() == window;
+            }
+        );
+        if (it == m_additionalWindows.end()) {
+            return;
+        }
+
+        m_additionalWindows.erase(it);
+        rebuildWindowMenus();
+    });
 }
 
 qodex::ui::MainWindow *AppBootstrap::createWindow(
