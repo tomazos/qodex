@@ -35,6 +35,8 @@ let messageRenderer = null;
 let commandExecutionRenderer = null;
 let fileChangeRenderer = null;
 let composerResizeFrameId = null;
+let lastSubmittedComposerText = null;
+let lastSubmittedComposerAtMs = 0;
 
 function describeError(error) {
   if (error instanceof Error) {
@@ -165,6 +167,19 @@ async function showPendingError(message) {
     return;
   }
 
+  const submittedRecently = (performance.now() - lastSubmittedComposerAtMs) <= 5000;
+  if (
+    composerInput &&
+    submittedRecently &&
+    typeof lastSubmittedComposerText === 'string' &&
+    composerInput.value.length === 0
+  ) {
+    composerInput.value = lastSubmittedComposerText;
+    resizeComposerInput();
+  }
+  lastSubmittedComposerText = null;
+  lastSubmittedComposerAtMs = 0;
+
   pendingErrorDialogOpen = true;
   try {
     await ipcRenderer.invoke('thread-ui:show-error', message);
@@ -192,6 +207,8 @@ function submitComposerInput() {
     return;
   }
 
+  lastSubmittedComposerText = text;
+  lastSubmittedComposerAtMs = performance.now();
   native.sendUserInput(text);
   composerInput.value = '';
   resizeComposerInput();

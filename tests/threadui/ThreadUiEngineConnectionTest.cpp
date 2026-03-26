@@ -17,6 +17,7 @@ class ThreadUiEngineConnectionTest final : public QObject {
 private slots:
     void establishesTcpConnectionToQodexListener();
     void sendsUserInputRequestsAndReportsErrors();
+    void rejectsUserInputWhenNoAuthenticatedConnectionExists();
 };
 
 void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
@@ -195,6 +196,32 @@ void ThreadUiEngineConnectionTest::sendsUserInputRequestsAndReportsErrors() {
     qodex::threadui::native::shutdown();
 
     QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
+}
+
+void ThreadUiEngineConnectionTest::rejectsUserInputWhenNoAuthenticatedConnectionExists() {
+    qodex::threadui::native::initialize(LaunchConfig{
+        .host = "127.0.0.1",
+        .port = 1,
+        .token = "disconnected-test-token",
+    });
+
+    qodex::threadui::native::sendUserInput("This should not queue silently");
+
+    std::string pendingError;
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 1000 && pendingError.empty()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        pendingError = qodex::threadui::native::takePendingError();
+        if (pendingError.empty()) {
+            QTest::qWait(20);
+        }
+    }
+
+    QVERIFY2(!pendingError.empty(), "Expected a disconnected sendUserInput error.");
+    QCOMPARE(pendingError, std::string("Thread UI is not connected to qodex."));
+
+    qodex::threadui::native::shutdown();
 }
 
 QTEST_GUILESS_MAIN(ThreadUiEngineConnectionTest)
