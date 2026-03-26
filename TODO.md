@@ -1,13 +1,5 @@
 # TODO
 
-## ThreadUI DOM Update Strategy
-
-- Consider a more incremental DOM update strategy in ThreadUI for very large transcripts.
-- Preserve stable node identity and update only the affected items instead of always appending/rebuilding larger sections.
-- Benefit:
-  - better scalability for long threads
-  - cleaner foundation for richer live item updates later
-
 ## Transcript Virtualization
 
 - Consider transcript virtualization once ThreadUI is rendering enough rich item types that very large threads become expensive.

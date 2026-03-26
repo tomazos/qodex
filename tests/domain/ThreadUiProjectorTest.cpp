@@ -109,7 +109,9 @@ void ThreadUiProjectorTest::projectsTurnsInOrderAndSkipsInprogressItems() {
     const auto request = projector.projectTurns({&firstTurn, &secondTurn});
 
     QCOMPARE(request.items_size(), 2);
+    QCOMPARE(QString::fromStdString(request.items(0).item_id()), QStringLiteral("user-1"));
     QCOMPARE(QString::fromStdString(request.items(0).user_message().text()), QStringLiteral("Hello\n\nWorld"));
+    QCOMPARE(QString::fromStdString(request.items(1).item_id()), QStringLiteral("agent-1"));
     QCOMPARE(QString::fromStdString(request.items(1).agent_message().text()), QStringLiteral("Goodbye"));
 }
 
@@ -125,6 +127,7 @@ void ThreadUiProjectorTest::projectsReasoningSummaryBeforeRawContent() {
 
     const auto projectedItem = projector.projectCompletedItem(reasoning);
     QVERIFY(projectedItem.has_value());
+    QCOMPARE(QString::fromStdString(projectedItem->item_id()), QStringLiteral("reasoning-1"));
     QCOMPARE(
         QString::fromStdString(projectedItem->reasoning().text()),
         QStringLiteral("First summary paragraph\n\nSecond")
@@ -155,6 +158,7 @@ void ThreadUiProjectorTest::projectsStructuredCommandExecutionAndFileChangeItems
 
     const auto projectedCommand = projector.projectCompletedItem(commandExecution);
     QVERIFY(projectedCommand.has_value());
+    QCOMPARE(QString::fromStdString(projectedCommand->item_id()), QStringLiteral("command-1"));
     QCOMPARE(QString::fromStdString(projectedCommand->command_execution().command()), QStringLiteral("git status"));
     QCOMPARE(QString::fromStdString(projectedCommand->command_execution().cwd()), QStringLiteral("/home/zos/qodex"));
     QCOMPARE(QString::fromStdString(projectedCommand->command_execution().status()), QStringLiteral("completed"));
@@ -193,6 +197,7 @@ void ThreadUiProjectorTest::projectsStructuredCommandExecutionAndFileChangeItems
 
     const auto projectedFileChange = projector.projectCompletedItem(fileChange);
     QVERIFY(projectedFileChange.has_value());
+    QCOMPARE(QString::fromStdString(projectedFileChange->item_id()), QStringLiteral("file-1"));
     QCOMPARE(QString::fromStdString(projectedFileChange->file_change().status()), QStringLiteral("completed"));
     QCOMPARE(projectedFileChange->file_change().changes_size(), 1);
     QCOMPARE(
@@ -224,6 +229,7 @@ void ThreadUiProjectorTest::summarizesGenericCompletedItemsAsCompactJson() {
 
     const auto projectedItem = projector.projectCompletedItem(plan);
     QVERIFY(projectedItem.has_value());
+    QCOMPARE(QString::fromStdString(projectedItem->item_id()), QStringLiteral("plan-1"));
     QCOMPARE(QString::fromStdString(projectedItem->plan().text()), QStringLiteral("{\"text\":\"Step 1\"}"));
 
     ThreadItemUserMessage emptyUserPayload;

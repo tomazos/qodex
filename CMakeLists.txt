@@ -883,6 +883,12 @@ if(BUILD_TESTING)
         WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
     )
 
+    add_test(
+        NAME ThreadUiTranscriptViewTest
+        COMMAND "${NODE_EXECUTABLE}" --test ./test/transcript-rendering/TranscriptView.test.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
+
     qt_add_executable(MigrationRunnerTest
         resources/qodex.qrc
         tests/storage/MigrationRunnerTest.cpp

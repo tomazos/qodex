@@ -60,6 +60,7 @@ Implemented today:
 - thread resume into thread-ui with full-history `AddItems`
 - thread-ui prompt composer with `SendUserInput` routed to `turn/start` or `turn/steer`
 - basic thread-ui rendering of completed items, now including all completed item kinds
+- stable `item_id` projection into ThreadUI and incremental DOM upsert behavior for transcript items
 - thread-list `Resume Thread` context menu action and double-click-to-resume behavior
 - automated tests covering transport, generated client wiring, storage, models, and single-instance behavior
 - automated thread-ui IPC tests covering listener startup, login, add-items delivery, and send-user-input routing
@@ -74,9 +75,8 @@ Removed on purpose:
 
 Current gap:
 
-- thread-ui currently renders plain text only; no markdown, KaTeX, or rich item-specific rendering yet
 - thread-ui currently receives completed items; in-progress/live streaming is modeled in qodex but not yet projected richly into Electron
-- non-message completed items are currently summarized minimally for thread-ui rather than rendered with item-specific presentation
+- several non-message completed items still use minimal text summaries in thread-ui rather than dedicated item-specific presentation
 - qodex supervises thread-ui windows, but activation/focus behavior still needs more platform-specific work
 
 ## Top-Level Module Layout

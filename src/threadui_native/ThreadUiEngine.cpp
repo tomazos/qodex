@@ -212,27 +212,32 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
     pendingItems.reserve(pendingItems.size() + static_cast<std::size_t>(request.items_size()));
 
     for (const auto &item : request.items()) {
+        const std::string itemId = item.item_id();
         switch (item.kind_case()) {
         case qodex::threadui::ipc::common::Item::kUserMessage:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "user",
                 .text = item.user_message().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kAgentMessage:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "agent",
                 .text = item.agent_message().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kPlan:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "plan",
                 .text = item.plan().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kReasoning:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "reasoning",
                 .text = item.reasoning().text(),
             });
@@ -240,6 +245,7 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
         case qodex::threadui::ipc::common::Item::kCommandExecution:
         {
             qodex::threadui::native::DisplayItem displayItem;
+            displayItem.id = itemId;
             displayItem.kind = "command_execution";
             displayItem.commandExecution.command = item.command_execution().command();
             displayItem.commandExecution.cwd = item.command_execution().cwd();
@@ -262,6 +268,7 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
         case qodex::threadui::ipc::common::Item::kFileChange:
         {
             qodex::threadui::native::DisplayItem displayItem;
+            displayItem.id = itemId;
             displayItem.kind = "file_change";
             displayItem.fileChange.status = item.file_change().status();
             displayItem.fileChange.changes.reserve(static_cast<std::size_t>(item.file_change().changes_size()));
@@ -278,54 +285,63 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
         }
         case qodex::threadui::ipc::common::Item::kMcpToolCall:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "mcp_tool_call",
                 .text = item.mcp_tool_call().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kDynamicToolCall:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "dynamic_tool_call",
                 .text = item.dynamic_tool_call().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kCollabAgentToolCall:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "collab_agent_tool_call",
                 .text = item.collab_agent_tool_call().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kWebSearch:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "web_search",
                 .text = item.web_search().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kImageView:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "image_view",
                 .text = item.image_view().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kImageGeneration:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "image_generation",
                 .text = item.image_generation().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kEnteredReviewMode:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "entered_review_mode",
                 .text = item.entered_review_mode().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kExitedReviewMode:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "exited_review_mode",
                 .text = item.exited_review_mode().text(),
             });
             break;
         case qodex::threadui::ipc::common::Item::kContextCompaction:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
+                .id = itemId,
                 .kind = "context_compaction",
                 .text = item.context_compaction().text(),
             });

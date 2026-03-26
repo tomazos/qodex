@@ -40,10 +40,16 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
 
     qodex::threadui::ipc::qodex_to_ui::AddItemsRequest addItemsRequest;
-    addItemsRequest.add_items()->mutable_user_message()->set_text("Hello from user");
-    addItemsRequest.add_items()->mutable_agent_message()->set_text("Hello from agent");
+    qodex::threadui::ipc::common::Item *userItem = addItemsRequest.add_items();
+    userItem->set_item_id("user-1");
+    userItem->mutable_user_message()->set_text("Hello from user");
+    qodex::threadui::ipc::common::Item *agentItem = addItemsRequest.add_items();
+    agentItem->set_item_id("agent-1");
+    agentItem->mutable_agent_message()->set_text("Hello from agent");
+    qodex::threadui::ipc::common::Item *commandItem = addItemsRequest.add_items();
+    commandItem->set_item_id("command-1");
     qodex::threadui::ipc::common::CommandExecution *commandExecution =
-        addItemsRequest.add_items()->mutable_command_execution();
+        commandItem->mutable_command_execution();
     commandExecution->set_command("/bin/bash -lc \"date\"");
     commandExecution->set_cwd("/home/zos");
     commandExecution->set_status("completed");
@@ -54,7 +60,9 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     commandExecution->set_process_id("12345");
     commandExecution->set_aggregated_output("Wed Mar 25 19:35:16 AEST 2026\n");
     commandExecution->add_action_labels("Read /home/zos/file.txt");
-    qodex::threadui::ipc::common::FileChange *fileChange = addItemsRequest.add_items()->mutable_file_change();
+    qodex::threadui::ipc::common::Item *fileChangeItem = addItemsRequest.add_items();
+    fileChangeItem->set_item_id("file-1");
+    qodex::threadui::ipc::common::FileChange *fileChange = fileChangeItem->mutable_file_change();
     fileChange->set_status("completed");
     qodex::threadui::ipc::common::FileChangeChange *fileChangeUpdate = fileChange->add_changes();
     fileChangeUpdate->set_path("/tmp/styles.css");
@@ -75,10 +83,13 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     }
 
     QCOMPARE(items.size(), std::size_t(4));
+    QCOMPARE(items[0].id, std::string("user-1"));
     QCOMPARE(items[0].kind, std::string("user"));
     QCOMPARE(items[0].text, std::string("Hello from user"));
+    QCOMPARE(items[1].id, std::string("agent-1"));
     QCOMPARE(items[1].kind, std::string("agent"));
     QCOMPARE(items[1].text, std::string("Hello from agent"));
+    QCOMPARE(items[2].id, std::string("command-1"));
     QCOMPARE(items[2].kind, std::string("command_execution"));
     QCOMPARE(items[2].commandExecution.command, std::string("/bin/bash -lc \"date\""));
     QCOMPARE(items[2].commandExecution.cwd, std::string("/home/zos"));
@@ -91,6 +102,7 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QCOMPARE(items[2].commandExecution.aggregatedOutput, std::string("Wed Mar 25 19:35:16 AEST 2026\n"));
     QCOMPARE(items[2].commandExecution.actionLabels.size(), std::size_t(1));
     QCOMPARE(items[2].commandExecution.actionLabels[0], std::string("Read /home/zos/file.txt"));
+    QCOMPARE(items[3].id, std::string("file-1"));
     QCOMPARE(items[3].kind, std::string("file_change"));
     QCOMPARE(items[3].fileChange.status, std::string("completed"));
     QCOMPARE(items[3].fileChange.changes.size(), std::size_t(1));

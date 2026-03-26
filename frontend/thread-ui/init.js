@@ -5,6 +5,7 @@ const { ipcRenderer } = require('electron');
 const { createCommandExecutionRenderer } = require('./command-rendering/CommandExecutionRenderer');
 const { createFileChangeRenderer } = require('./diff-rendering/FileChangeRenderer');
 const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
+const { createTranscriptView } = require('./transcript-rendering/TranscriptView');
 
 function resolveNativeModulePath() {
   const candidates = [
@@ -34,6 +35,7 @@ let pendingErrorDialogOpen = false;
 let messageRenderer = null;
 let commandExecutionRenderer = null;
 let fileChangeRenderer = null;
+let transcriptView = null;
 let composerResizeFrameId = null;
 let lastSubmittedComposerText = null;
 let lastSubmittedComposerAtMs = 0;
@@ -80,66 +82,11 @@ function normalizeLaunchConfig(launchConfig) {
   };
 }
 
-function formatItemKindLabel(kind) {
-  const normalizedKind = typeof kind === 'string' && kind.trim() !== '' ? kind : 'item';
-  return normalizedKind
-    .split('_')
-    .map((part) => part.length === 0 ? part : `${part[0].toUpperCase()}${part.slice(1)}`)
-    .join(' ');
-}
-
-function appendThreadItems(items) {
-  if (!threadItemsContainer || !Array.isArray(items) || items.length === 0) {
+function upsertThreadItems(items) {
+  if (!transcriptView || !Array.isArray(items) || items.length === 0) {
     return;
   }
-
-  if (emptyStateElement) {
-    emptyStateElement.remove();
-    emptyStateElement = null;
-  }
-
-  for (const item of items) {
-    const element = document.createElement('article');
-    const kind = typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
-    const isMarkupKind = kind === 'user' || kind === 'agent' || kind === 'reasoning';
-    const isCommandExecutionKind = kind === 'command_execution';
-    const isFileChangeKind = kind === 'file_change';
-    element.className = isMarkupKind ? `thread-item thread-item--${kind}` : 'thread-item';
-    if (isCommandExecutionKind) {
-      element.classList.add('thread-item--command-execution');
-    }
-    if (isFileChangeKind) {
-      element.classList.add('thread-item--file-change');
-    }
-
-    if (isCommandExecutionKind && commandExecutionRenderer) {
-      element.append(commandExecutionRenderer.renderToElement(item));
-    } else if (isFileChangeKind && fileChangeRenderer) {
-      element.append(fileChangeRenderer.renderToElement(item));
-    } else {
-      const body = document.createElement('div');
-      body.className = 'thread-item__body';
-      if (isMarkupKind && messageRenderer) {
-        body.innerHTML = messageRenderer.renderToHtmlFragment(typeof item?.text === 'string' ? item.text : '');
-      } else {
-        body.classList.add('thread-item__body--plain');
-        body.textContent = typeof item?.text === 'string' ? item.text : '';
-      }
-
-      if (!isMarkupKind) {
-        const label = document.createElement('div');
-        label.className = 'thread-item__label';
-        label.textContent = formatItemKindLabel(kind);
-        element.append(label);
-      }
-
-      element.append(body);
-    }
-
-    threadItemsContainer.appendChild(element);
-  }
-
-  threadItemsContainer.scrollTop = threadItemsContainer.scrollHeight;
+  transcriptView.upsertItems(items);
 }
 
 function resizeComposerInput() {
@@ -262,6 +209,14 @@ async function initialize() {
     messageRenderer = createMessageRenderer({ domWindow: window });
     commandExecutionRenderer = createCommandExecutionRenderer({ domWindow: window });
     fileChangeRenderer = createFileChangeRenderer({ domWindow: window });
+    transcriptView = createTranscriptView({
+      domWindow: window,
+      container: threadItemsContainer,
+      emptyStateElement,
+      messageRenderer,
+      commandExecutionRenderer,
+      fileChangeRenderer,
+    });
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');
 
@@ -278,7 +233,7 @@ async function initialize() {
           return;
         }
 
-        appendThreadItems(native.takePendingItems());
+        upsertThreadItems(native.takePendingItems());
         if (!pendingErrorDialogOpen) {
           const pendingError = native.takePendingError();
           if (typeof pendingError === 'string' && pendingError.length > 0) {

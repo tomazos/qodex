@@ -331,10 +331,17 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
 
     for (std::size_t index = 0; index < items.size(); ++index) {
         napi_value itemObject = nullptr;
+        napi_value idValue = nullptr;
         napi_value kindValue = nullptr;
         napi_value textValue = nullptr;
 
         if (napi_create_object(env, &itemObject) != napi_ok ||
+            napi_create_string_utf8(
+                env,
+                items[index].id.c_str(),
+                NAPI_AUTO_LENGTH,
+                &idValue
+            ) != napi_ok ||
             napi_create_string_utf8(
                 env,
                 items[index].kind.c_str(),
@@ -342,6 +349,7 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
                 &kindValue
             ) != napi_ok ||
             napi_create_string_utf8(env, items[index].text.c_str(), NAPI_AUTO_LENGTH, &textValue) != napi_ok ||
+            napi_set_named_property(env, itemObject, "id", idValue) != napi_ok ||
             napi_set_named_property(env, itemObject, "kind", kindValue) != napi_ok ||
             napi_set_named_property(env, itemObject, "text", textValue) != napi_ok ||
             napi_set_element(env, array, index, itemObject) != napi_ok) {

@@ -35,6 +35,7 @@ struct DisplayCommandExecution {
 };
 
 struct DisplayItem {
+    std::string id;
     std::string kind;
     std::string text;
     DisplayCommandExecution commandExecution;

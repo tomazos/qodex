@@ -244,6 +244,8 @@ std::optional<qodex::threadui::ipc::common::Item> ThreadUiProjector::projectComp
         return std::nullopt;
     }
 
+    displayItem.set_item_id(item.id().toStdString());
+
     return displayItem;
 }
 

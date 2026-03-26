@@ -182,8 +182,9 @@ Electron-side native addon.
 Electron application source.
 
 - [main.js](./frontend/thread-ui/main.js): Electron main process, window creation, fatal-error handling, context menu, external-link policy
-- [init.js](./frontend/thread-ui/init.js): renderer bootstrap, transcript DOM updates, composer behavior, native-addon polling
+- [init.js](./frontend/thread-ui/init.js): renderer bootstrap, transcript wiring, composer behavior, native-addon polling
 - [index.html](./frontend/thread-ui/index.html), [styles.css](./frontend/thread-ui/styles.css): UI structure and styling
+- [transcript-rendering/TranscriptView.js](./frontend/thread-ui/transcript-rendering/TranscriptView.js): stable-id transcript upsert layer that preserves existing DOM node identity
 - [message-rendering/MessageRenderer.js](./frontend/thread-ui/message-rendering/MessageRenderer.js): markdown/KaTeX renderer
 - [diff-rendering/FileChangeRenderer.js](./frontend/thread-ui/diff-rendering/FileChangeRenderer.js): file-change diff presentation
 - [command-rendering/CommandExecutionRenderer.js](./frontend/thread-ui/command-rendering/CommandExecutionRenderer.js): command execution presentation
@@ -242,9 +243,9 @@ When a thread is resumed:
 5. qodex passes a launch token and loopback endpoint on the command line.
 6. ThreadUI connects back and sends `UiToQodex.Login`.
 7. qodex authenticates the connection and routes it to the correct `ThreadUiProcess`.
-8. qodex sends a full-history `QodexToUi.AddItems`.
+8. qodex sends a full-history `QodexToUi.AddItems`, with stable per-item ids.
 
-After that, live Codex notifications mutate the `LoadedThread` domain model. Completed items are projected by `ThreadUiProjector` into ThreadUI as additional `AddItems`.
+After that, live Codex notifications mutate the `LoadedThread` domain model. Completed items are projected by `ThreadUiProjector` into ThreadUI as additional `AddItems`, and the Electron transcript view upserts affected items in place rather than rebuilding the whole transcript surface.
 
 ### Prompt input from ThreadUI
 

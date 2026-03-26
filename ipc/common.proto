@@ -93,6 +93,8 @@ message ContextCompaction {
 }
 
 message Item {
+  string item_id = 16;
+
   oneof kind {
     UserMessage user_message = 1;
     AgentMessage agent_message = 2;
