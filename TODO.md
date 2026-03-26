@@ -1,13 +1,5 @@
 # TODO
 
-## Markdown Conformance Runner
-
-- Add a first-class CommonMark conformance runner for the ThreadUI message renderer, similar in spirit to `wodex`'s spec runner.
-- Keep the current sanitizer and raw-HTML-disabled policy, but make the exact accepted/rejected fixture set explicit.
-- Benefit:
-  - stronger regression protection for markdown rendering
-  - easier to reason about deliberate deviations from the spec
-
 ## Optional Raw Protocol Capture
 
 - Consider an optional debug mode that records raw app-server JSON-RPC traffic in addition to the SQLite API log.

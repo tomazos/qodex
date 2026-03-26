@@ -289,7 +289,7 @@ Major areas:
 - `tests/threadui/`: IPC server, native addon, renderer, and smoke-path coverage
 - `tests/ui/`: Qt model/view behavior
 
-ThreadUI also has Node-based renderer tests under `frontend/thread-ui/test/...`, and those are wired into CTest.
+ThreadUI also has Node-based renderer tests under `frontend/thread-ui/test/...`, plus a standalone CommonMark conformance runner at [run-commonmark-conformance.cjs](./frontend/thread-ui/scripts/run-commonmark-conformance.cjs). Both are wired into CTest.
 
 ## Architectural Boundaries That Matter
 

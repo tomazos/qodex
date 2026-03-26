@@ -82,9 +82,13 @@ set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/command-rendering/CommandExecutionRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/diff-rendering/FileChangeRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/message-rendering/MessageRenderer.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/run-commonmark-conformance.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/command-rendering/CommandExecutionRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/diff-rendering/FileChangeRenderer.test.cjs"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/CommonMarkConformance.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/MessageRenderer.test.cjs"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test-support/message-rendering/commonmark_expectations.cjs"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test-support/message-rendering/commonmark_runner.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/styles.css"
     "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/start-electron.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test-links/local-page.html"
@@ -778,6 +782,12 @@ if(BUILD_TESTING)
     add_dependencies(ThreadUiEngineConnectionTest qodex_thread_ui_ipc_codegen)
 
     add_test(NAME ThreadUiEngineConnectionTest COMMAND ThreadUiEngineConnectionTest)
+
+    add_test(
+        NAME ThreadUiCommonMarkConformanceTest
+        COMMAND "${NODE_EXECUTABLE}" ./scripts/run-commonmark-conformance.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
 
     add_test(
         NAME ThreadUiMessageRendererTest

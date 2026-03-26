@@ -652,6 +652,7 @@ This is still the highest-value test area, but today some loaded-thread reductio
 
 - IPC transport and handshake tests
 - generated service / dispatcher tests from the thread-ui `.proto` definitions
+- CommonMark conformance runner with an explicit accepted/rejected example set for the markdown renderer
 - Electron staging/addon smoke tests
 - optional end-to-end launch smoke tests against the staged thread-ui bundle
 

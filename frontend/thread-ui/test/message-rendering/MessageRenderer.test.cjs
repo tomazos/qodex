@@ -4,7 +4,6 @@ const path = require('node:path');
 const test = require('node:test');
 const { execFileSync } = require('node:child_process');
 
-const commonmarkSpec = require('commonmark-spec');
 const { JSDOM } = require('jsdom');
 
 const { createMessageRenderer } = require('../../message-rendering/MessageRenderer');
@@ -18,10 +17,6 @@ function normalizeHtml(html) {
 
 function renderMessage(text) {
   return renderer.renderToHtmlFragment(text);
-}
-
-function decodeCommonMarkVisibleTabs(text) {
-  return text.replaceAll('→', '\t');
 }
 
 function assertHtmlContains(html, needle) {
@@ -137,47 +132,6 @@ test('does not allow dangerous KaTeX trust-required commands through', () => {
   assert.doesNotMatch(html, /<a\b/i);
   assert.doesNotMatch(html, /href\s*=\s*"javascript:/i);
 });
-
-const EXCLUDED_COMMONMARK_SECTIONS = new Set([
-  'HTML blocks',
-  'Raw HTML',
-]);
-
-// These examples depend on raw HTML parsing or raw HTML passthrough semantics.
-// This renderer intentionally disables raw HTML entirely and treats it as text.
-const EXCLUDED_COMMONMARK_EXAMPLES = new Set([
-  21,
-  31,
-  201,
-  308,
-  309,
-  344,
-  475,
-  476,
-  477,
-  491,
-  494,
-  524,
-  536,
-  642,
-  643,
-]);
-
-for (const specCase of commonmarkSpec.tests) {
-  if (EXCLUDED_COMMONMARK_SECTIONS.has(specCase.section)) {
-    continue;
-  }
-
-  if (EXCLUDED_COMMONMARK_EXAMPLES.has(specCase.number)) {
-    continue;
-  }
-
-  test(`CommonMark example #${specCase.number} (${specCase.section})`, () => {
-    const actual = normalizeHtml(renderMessage(decodeCommonMarkVisibleTabs(specCase.markdown)));
-    const expected = normalizeHtml(decodeCommonMarkVisibleTabs(specCase.html));
-    assert.equal(actual, expected);
-  });
-}
 
 function loadRealWorldCorpusFromLocalDb() {
   const defaultDbPath = path.join(

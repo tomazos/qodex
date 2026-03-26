@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node scripts/start-electron.js",
     "test": "node --test",
+    "test:commonmark": "node scripts/run-commonmark-conformance.cjs",
     "test:renderer": "node --test ./test/message-rendering"
   },
   "devDependencies": {
