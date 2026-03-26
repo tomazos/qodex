@@ -13,6 +13,7 @@
 
 #include "CodexClient.h"
 #include "CodexProtocol.h"
+#include "domain/ThreadUiProjector.h"
 #include "domain/threadmodel/Turn.h"
 #include "qodex_to_ui.pb.h"
 
@@ -89,12 +90,6 @@ private:
     [[nodiscard]] qodex::domain::threadmodel::Turn *turnForId(const QString &turnId);
     [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
     [[nodiscard]] qodex::domain::threadmodel::Turn *ensureTurn(const QString &turnId);
-    [[nodiscard]] qodex::threadui::ipc::qodex_to_ui::AddItemsRequest buildThreadUiAddItemsRequest() const;
-    [[nodiscard]] bool appendDisplayItem(
-        qodex::threadui::ipc::common::Item *displayItem,
-        const qodex::domain::threadmodel::AbstractItem &item
-    ) const;
-    [[nodiscard]] QString summarizeNonMessageItemForThreadUi(const qodex::domain::threadmodel::AbstractItem &item) const;
     [[nodiscard]] qodex::codex::JsonRpcId dispatchPendingThreadUiUserInputRequest(
         const PendingThreadUiUserInputRequest &pendingRequest
     ) const;
@@ -109,8 +104,6 @@ private:
     );
     void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
-    [[nodiscard]] QString flattenUserMessageContent(const QList<qodex::codex::Ref<qodex::codex::UserInput>> &content)
-        const;
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
@@ -124,6 +117,7 @@ private:
     QHash<QString, PendingThreadUiUserInputRequest> m_pendingThreadUiUserInputRequests;
     QStringList m_turnOrder;
     std::map<QString, std::unique_ptr<qodex::domain::threadmodel::Turn>> m_turnsById;
+    qodex::domain::ThreadUiProjector m_threadUiProjector;
 };
 
 }  // namespace qodex::app

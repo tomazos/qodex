@@ -318,8 +318,6 @@ Responsibilities:
 - Convert persisted Codex thread items into a structured snapshot/delta format for the Electron thread-ui
 - Convert command/file/tool/reasoning/plan items into a UI-facing representation without producing HTML in qodex
 
-This is still the intended direction conceptually, but today the projection logic lives mostly inside `LoadedThread` rather than a separate projector class.
-
 #### `src/domain/LiveTurnReducer.h` / `src/domain/LiveTurnReducer.cpp`
 
 Responsibilities:
@@ -684,7 +682,8 @@ To prevent another "single huge file" outcome:
 - `ThreadStore`
 - loaded-thread `Turn` / `Item` hierarchy
 - `LoadedThread` mutation from resume + live notifications
-- separate projector / reducer extraction still pending
+- `ThreadUiProjector` extracted
+- separate reducer extraction still pending
 
 ### Phase 3. Native shell `[mostly implemented]`
 

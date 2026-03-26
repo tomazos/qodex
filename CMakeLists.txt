@@ -557,6 +557,8 @@ qt_add_executable(qodex
     src/codex/TrafficLogger.cpp
     src/codex/TrafficLogger.h
     src/domain/CodexTypes.h
+    src/domain/ThreadUiProjector.cpp
+    src/domain/ThreadUiProjector.h
     src/domain/ThreadStore.cpp
     src/domain/ThreadStore.h
     ${QODEX_THREADMODEL_SOURCES}
@@ -700,6 +702,25 @@ if(BUILD_TESTING)
     target_link_libraries(ThreadStoreTest PRIVATE Qt6::Core Qt6::Test)
 
     add_test(NAME ThreadStoreTest COMMAND ThreadStoreTest)
+
+    qt_add_executable(ThreadUiProjectorTest
+        tests/domain/ThreadUiProjectorTest.cpp
+        src/domain/ThreadUiProjector.cpp
+        src/domain/ThreadUiProjector.h
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_CPP}"
+        "${QODEX_EXPERIMENTAL_CODEX_PROTOCOL_H}"
+        ${QODEX_THREADMODEL_SOURCES}
+    )
+
+    target_include_directories(ThreadUiProjectorTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
+    )
+
+    target_link_libraries(ThreadUiProjectorTest PRIVATE Qt6::Core Qt6::Test qodex_thread_ui_ipc)
+    add_dependencies(ThreadUiProjectorTest qodex_thread_ui_ipc_codegen)
+
+    add_test(NAME ThreadUiProjectorTest COMMAND ThreadUiProjectorTest)
 
     qt_add_executable(SingleInstanceManagerTest
         tests/app/SingleInstanceManagerTest.cpp

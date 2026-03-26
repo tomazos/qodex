@@ -58,6 +58,7 @@ The important ownership boundaries are:
 - `ThreadUiProcessManager` owns one [ThreadUiProcess](./src/app/ThreadUiProcess.h) per loaded thread.
 - `SessionController` owns one [LoadedThread](./src/app/LoadedThread.h) per loaded Codex thread.
 - `LoadedThread` owns the in-memory turn/item model for that one thread.
+- [ThreadUiProjector](./src/domain/ThreadUiProjector.h) converts completed domain items into ThreadUI IPC display items.
 
 ## Repository Layout
 
@@ -75,7 +76,7 @@ Application composition and orchestration.
 
 - [AppBootstrap](./src/app/AppBootstrap.h): creates the object graph, restores windows, rebuilds menus
 - [SessionController](./src/app/SessionController.h): coordinates startup, thread/model refreshes, and routes Codex notifications
-- [LoadedThread](./src/app/LoadedThread.h): one loaded Codex thread in memory, including active turn tracking and ThreadUI projection
+- [LoadedThread](./src/app/LoadedThread.h): one loaded Codex thread in memory, including active turn tracking and ThreadUI request routing
 - [ThreadUiProcessManager](./src/app/ThreadUiProcessManager.h): owns and supervises ThreadUI subprocesses
 - [ThreadUiProcess](./src/app/ThreadUiProcess.h): one Electron child process plus its launch/auth state
 - [SingleInstanceManager](./src/app/SingleInstanceManager.h): one-qodex-process-per-database-path behavior
@@ -97,6 +98,7 @@ The generated protocol bindings live under `build/generated/protocol/...` and ar
 Persistent-ish in-memory application state.
 
 - [ThreadStore](./src/domain/ThreadStore.h): thread summary cache used by the shell models
+- [ThreadUiProjector](./src/domain/ThreadUiProjector.h): stateless projection from `src/domain/threadmodel` into `QodexToUi.AddItems`
 - `threadmodel/`: loaded-thread item hierarchy
 
 `threadmodel/` contains:
@@ -224,7 +226,7 @@ When a thread is resumed:
 7. qodex authenticates the connection and routes it to the correct `ThreadUiProcess`.
 8. qodex sends a full-history `QodexToUi.AddItems`.
 
-After that, live Codex notifications mutate the `LoadedThread` domain model. Completed items are projected into ThreadUI as additional `AddItems`.
+After that, live Codex notifications mutate the `LoadedThread` domain model. Completed items are projected by `ThreadUiProjector` into ThreadUI as additional `AddItems`.
 
 ### Prompt input from ThreadUI
 

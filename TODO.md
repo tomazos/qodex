@@ -1,13 +1,5 @@
 # TODO
 
-## Projection Layer
-
-- Extract a dedicated presentation projection layer from [LoadedThread.cpp](/home/zos/qodex/src/app/LoadedThread.cpp) into a separate module.
-- Keep the loaded-thread domain model authoritative and make the projector responsible for converting domain/threadmodel objects into ThreadUI IPC display items.
-- Benefit:
-  - cleaner separation between domain state and renderer-facing presentation policy
-  - easier testing of rendering/projection rules without routing through the whole app
-
 ## Markdown Conformance Runner
 
 - Add a first-class CommonMark conformance runner for the ThreadUI message renderer, similar in spirit to `wodex`'s spec runner.
