@@ -8,10 +8,28 @@
 #include <QTimer>
 #include <QTableView>
 #include <QVBoxLayout>
+#include <optional>
 
 #include "ui/ApiLogModel.h"
 
 namespace qodex::ui {
+
+namespace {
+
+std::optional<qint64> apiLogIdForIndex(const QModelIndex &index) {
+    if (!index.isValid()) {
+        return std::nullopt;
+    }
+
+    const QVariant apiLogId = index.data(ApiLogModel::ApiLogIdRole);
+    if (!apiLogId.isValid()) {
+        return std::nullopt;
+    }
+
+    return apiLogId.toLongLong();
+}
+
+}  // namespace
 
 ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     : QWidget(parent),
@@ -69,16 +87,12 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
         });
     });
     connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex &index) {
-        if (!index.isValid()) {
+        const std::optional<qint64> apiLogId = apiLogIdForIndex(index);
+        if (!apiLogId.has_value()) {
             return;
         }
 
-        const QVariant apiLogId = index.data(ApiLogModel::ApiLogIdRole);
-        if (!apiLogId.isValid()) {
-            return;
-        }
-
-        emit inspectApiLogRequested(apiLogId.toLongLong());
+        emit inspectApiLogRequested(*apiLogId);
     });
     connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
         if (!m_restoredViewState) {
@@ -186,11 +200,31 @@ void ApiLogPane::showContextMenu(const QPoint &position) {
         return;
     }
 
+    QModelIndex index = m_tableView->indexAt(position);
+    std::optional<qint64> clickedApiLogId;
+    if (index.isValid()) {
+        index = index.siblingAtColumn(ApiLogModel::TimeColumn);
+        if (m_tableView->selectionModel() != nullptr) {
+            m_tableView->selectionModel()->setCurrentIndex(
+                index,
+                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows
+            );
+        }
+        clickedApiLogId = apiLogIdForIndex(index);
+    }
+
     QMenu menu(this);
     QAction *refreshAction = menu.addAction(QStringLiteral("Refresh API Log"));
+    QAction *inspectAction = nullptr;
+    if (clickedApiLogId.has_value()) {
+        menu.addSeparator();
+        inspectAction = menu.addAction(QStringLiteral("Inspect"));
+    }
     const QAction *selectedAction = menu.exec(m_tableView->viewport()->mapToGlobal(position));
     if (selectedAction == refreshAction) {
         m_model->refresh();
+    } else if (selectedAction == inspectAction && clickedApiLogId.has_value()) {
+        emit inspectApiLogRequested(*clickedApiLogId);
     }
 }
 
