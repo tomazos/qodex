@@ -6,6 +6,27 @@ function formatItemKindLabel(kind) {
     .join(' ');
 }
 
+function canonicalizeSignatureValue(value) {
+  if (typeof value === 'bigint') {
+    return `${value}n`;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeSignatureValue);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.keys(value)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = canonicalizeSignatureValue(value[key]);
+        return result;
+      }, {});
+  }
+
+  return value;
+}
+
 function createTranscriptView({
   domWindow,
   container,
@@ -37,7 +58,7 @@ function createTranscriptView({
   }
 
   function computeSignature(item) {
-    return JSON.stringify(item ?? null);
+    return JSON.stringify(canonicalizeSignatureValue(item ?? null));
   }
 
   function isMarkupKind(kind) {

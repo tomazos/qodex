@@ -96,3 +96,39 @@ test('falls back to anonymous ids for legacy items without ids', () => {
   assert.equal(items.length, 1);
   assert.match(items[0].dataset.itemId, /^anonymous-item-/);
 });
+
+test('accepts transcript items containing nested bigint fields', () => {
+  const { container, transcriptView } = createView();
+
+  transcriptView.upsertItems([
+    {
+      id: 'command-1',
+      kind: 'command_execution',
+      commandExecution: {
+        command: 'ctest',
+        exitCode: 8n,
+        durationMs: 215n,
+        processId: '12345',
+      },
+    },
+  ]);
+
+  const commandNode = container.querySelector('[data-item-id="command-1"]');
+  assert.ok(commandNode);
+  assert.match(commandNode.textContent, /ctest/);
+
+  transcriptView.upsertItems([
+    {
+      id: 'command-1',
+      kind: 'command_execution',
+      commandExecution: {
+        command: 'ctest --output-on-failure',
+        exitCode: 8n,
+        durationMs: 300n,
+        processId: '12345',
+      },
+    },
+  ]);
+
+  assert.match(commandNode.textContent, /ctest --output-on-failure/);
+});
