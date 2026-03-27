@@ -153,19 +153,48 @@ function createTranscriptView({
     );
   }
 
+  function effectiveScrollHeight() {
+    return Math.max(container.scrollHeight, totalTranscriptHeight());
+  }
+
   function isScrolledNearBottom() {
-    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const remaining = effectiveScrollHeight() - container.scrollTop - container.clientHeight;
     return remaining <= 4;
   }
 
+  function approximateBottomScrollTop() {
+    return Math.max(0, totalTranscriptHeight() - viewportHeight());
+  }
+
   function scrollToBottom() {
-    container.scrollTop = container.scrollHeight;
+    container.scrollTop = approximateBottomScrollTop();
+  }
+
+  function alignLastItemIntoView() {
+    if (itemOrder.length === 0) {
+      return;
+    }
+
+    const lastRecord = itemRecordsById.get(itemOrder[itemOrder.length - 1]);
+    if (!lastRecord || !lastRecord.element || lastRecord.element.parentNode !== mountedItemsHost) {
+      return;
+    }
+
+    if (typeof lastRecord.element.scrollIntoView === 'function') {
+      lastRecord.element.scrollIntoView({
+        block: 'end',
+        inline: 'nearest',
+      });
+    }
   }
 
   function stickToBottom() {
     scrollToBottom();
     renderVisibleWindow();
+    alignLastItemIntoView();
+    renderVisibleWindow();
     scrollToBottom();
+    alignLastItemIntoView();
     renderVisibleWindow();
   }
 

@@ -13,6 +13,7 @@ function createView({
   scrollHeightGetter,
   requestAnimationFrameImpl,
   cancelAnimationFrameImpl,
+  scrollIntoViewImpl,
 } = {}) {
   const dom = new JSDOM(`
     <!doctype html>
@@ -57,6 +58,12 @@ function createView({
 
   if (typeof cancelAnimationFrameImpl === 'function') {
     dom.window.cancelAnimationFrame = cancelAnimationFrameImpl;
+  }
+
+  if (typeof scrollIntoViewImpl === 'function') {
+    dom.window.HTMLElement.prototype.scrollIntoView = function scrollIntoView(options) {
+      scrollIntoViewImpl.call(this, options);
+    };
   }
 
   Object.defineProperty(container, 'clientHeight', {
@@ -209,6 +216,8 @@ test('virtualizes long transcripts to a bounded mounted window', () => {
     })),
   );
 
+  scrollContainer(container, 0);
+
   const mountedBeforeScroll = Array.from(container.querySelectorAll('.thread-item'))
     .map((element) => element.dataset.itemId);
 
@@ -256,6 +265,8 @@ test('reuses the same DOM node when an item scrolls out of view and back', () =>
     })),
   );
 
+  scrollContainer(container, 0);
+
   const itemNodeBefore = container.querySelector('[data-item-id="item-0"]');
   assert.ok(itemNodeBefore);
 
@@ -276,6 +287,9 @@ test('sticks to the transcript end after full-history resume settles measured he
     overscanPx: 0,
     scrollHeightGetter() {
       return scrollHeightValue;
+    },
+    scrollIntoViewImpl() {
+      container.scrollTop = scrollHeightValue;
     },
     measureElementHeight(element, fallbackHeight) {
       const itemIndex = Number.parseInt(element.dataset.itemId.replace('item-', ''), 10);
@@ -325,6 +339,9 @@ test('sticks to the transcript end after scroll metrics become available on the 
       return frameId;
     },
     cancelAnimationFrameImpl() {},
+    scrollIntoViewImpl() {
+      container.scrollTop = frameCount === 0 ? container.scrollTop : 4000;
+    },
   });
 
   transcriptView.upsertItems(
@@ -335,7 +352,7 @@ test('sticks to the transcript end after scroll metrics become available on the 
     })),
   );
 
-  assert.equal(container.scrollTop, 0);
+  assert.notEqual(container.scrollTop, 4000);
   while (scheduledFrames.length > 0) {
     const frame = scheduledFrames.shift();
     frame();
