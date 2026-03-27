@@ -7,11 +7,17 @@ const { createCommandExecutionRenderer } = require('../../command-rendering/Comm
 
 function renderCommandExecution(commandExecution) {
   const dom = new JSDOM('<!doctype html><html><body></body></html>');
-  const renderer = createCommandExecutionRenderer({ domWindow: dom.window });
+  const renderer = createCommandExecutionRenderer({
+    domWindow: dom.window,
+    shellIdentity: {
+      username: 'zos',
+      hostname: 'zoidberg',
+    },
+  });
   return renderer.renderToElement(commandExecution);
 }
 
-test('renders command, cwd, status badge, and output', () => {
+test('renders title, shell prompt, footer status, and output', () => {
   const element = renderCommandExecution({
     command: '/bin/bash -lc "date"',
     cwd: '/home/zos',
@@ -25,14 +31,17 @@ test('renders command, cwd, status badge, and output', () => {
     actionLabels: ['Read /home/zos/file.txt'],
   });
 
+  assert.equal(element.querySelector('.command-execution__title').textContent, 'Read /home/zos/file.txt');
+  assert.equal(
+    element.querySelector('.command-execution__prompt').textContent,
+    'zos@zoidberg:~$ date'
+  );
   assert.equal(element.querySelector('.command-execution__badge').textContent, 'Completed');
   assert.match(element.querySelector('.command-execution__meta').textContent, /exit 0/);
   assert.match(element.querySelector('.command-execution__meta').textContent, /215 ms/);
   assert.match(element.querySelector('.command-execution__meta').textContent, /pid 12345/);
-  assert.equal(element.querySelector('.command-execution__command').textContent, '/bin/bash -lc "date"');
-  assert.equal(element.querySelector('.command-execution__cwd').textContent, '/home/zos');
   assert.match(element.querySelector('.command-execution__output').textContent, /Wed Mar 25/);
-  assert.equal(element.querySelector('.command-execution__action').textContent, 'Read /home/zos/file.txt');
+  assert.equal(element.lastElementChild.className, 'command-execution__footer');
 });
 
 test('renders failed commands with their failure badge and preserves output', () => {
@@ -51,6 +60,27 @@ test('renders failed commands with their failure badge and preserves output', ()
 
   assert.ok(element.querySelector('.command-execution__badge--failed'));
   assert.match(element.querySelector('.command-execution__output').textContent, /\*\*\*Failed/);
+});
+
+test('keeps non-home cwd values and falls back to a generic title when there is no action label', () => {
+  const element = renderCommandExecution({
+    command: 'ctest --output-on-failure',
+    cwd: '/tmp/build',
+    status: 'completed',
+    hasExitCode: false,
+    exitCode: 0n,
+    hasDurationMs: false,
+    durationMs: 0n,
+    processId: '',
+    aggregatedOutput: 'ok\n',
+    actionLabels: [],
+  });
+
+  assert.equal(element.querySelector('.command-execution__title').textContent, 'Run command');
+  assert.equal(
+    element.querySelector('.command-execution__prompt').textContent,
+    'zos@zoidberg:/tmp/build$ ctest --output-on-failure'
+  );
 });
 
 test('renders a no-output placeholder when the command produced no aggregated output', () => {

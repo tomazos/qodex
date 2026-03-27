@@ -217,13 +217,6 @@ main {
   gap: 0.7rem;
 }
 
-.command-execution__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem;
-}
-
 .command-execution__badge {
   display: inline-flex;
   align-items: center;
@@ -257,45 +250,47 @@ main {
   color: canvastext;
 }
 
-.command-execution__meta {
-  font-size: 0.9rem;
-  opacity: 0.8;
+.command-execution__title {
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
-.command-execution__command,
-.command-execution__cwd,
+.command-execution__prompt,
 .command-execution__output {
   font-family: var(--font-mono);
 }
 
-.command-execution__command {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  font-weight: 700;
-}
-
-.command-execution__cwd {
-  font-size: 0.9rem;
-  opacity: 0.8;
+.command-execution__prompt {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.command-execution__actions {
+.command-execution__prompt-identity {
+  color: color-mix(in srgb, Highlight 72%, canvastext 28%);
+}
+
+.command-execution__prompt-cwd {
+  color: color-mix(in srgb, LinkText 72%, canvastext 28%);
+}
+
+.command-execution__prompt-command {
+  color: canvastext;
+}
+
+.command-execution__footer {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  align-items: center;
+  gap: 0.55rem;
 }
 
-.command-execution__action {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.18rem 0.48rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, canvastext 8%, transparent);
-  font-size: 0.8rem;
+.command-execution__meta {
+  font-size: 0.9rem;
+  opacity: 0.8;
 }
 
 .command-execution__output {
