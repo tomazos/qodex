@@ -110,11 +110,12 @@ public:
     [[nodiscard]] bool replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage);
     [[nodiscard]] bool replaceViewStates(const QList<ViewStateRecord> &viewStates, QString *errorMessage);
     [[nodiscard]] bool saveSetting(const QString &key, const QString &valueJson, QString *errorMessage);
-    [[nodiscard]] bool appendApiLog(const ApiLogRecord &record, QString *errorMessage);
+    [[nodiscard]] std::optional<ApiLogListRecord> appendApiLog(const ApiLogRecord &record, QString *errorMessage);
 
 private:
     [[nodiscard]] bool initializeConnection(QString *errorMessage);
     [[nodiscard]] bool executeStatement(const QString &sql, const QList<QVariant> &bindings, QString *errorMessage) const;
+    [[nodiscard]] std::optional<ApiLogListRecord> loadApiLogListRecordById(qint64 id, QString *errorMessage) const;
 
     QString m_databasePath;
     QString m_connectionName;
@@ -122,3 +123,5 @@ private:
 };
 
 }  // namespace qodex::storage
+
+Q_DECLARE_METATYPE(qodex::storage::ApiLogListRecord)

@@ -49,11 +49,13 @@ public:
 public slots:
     void refresh();
     void scheduleRefresh();
+    void recordAppended(const qodex::storage::ApiLogListRecord &row);
 
 private:
     [[nodiscard]] static QFont monospaceFont();
     [[nodiscard]] static qodex::storage::ApiLogSortField sortFieldForColumn(Column column);
     [[nodiscard]] QString displayValueForColumn(const qodex::storage::ApiLogListRecord &row, Column column) const;
+    [[nodiscard]] bool canApplyIncrementalAppend() const;
     void reloadCacheWindow(int firstRow, int lastRow);
     void replaceCacheWindow(int newOffset, QList<qodex::storage::ApiLogListRecord> rows);
 

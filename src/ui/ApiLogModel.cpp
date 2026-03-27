@@ -216,6 +216,52 @@ void ApiLogModel::scheduleRefresh() {
     m_refreshTimer.start();
 }
 
+void ApiLogModel::recordAppended(const qodex::storage::ApiLogListRecord &row) {
+    if (!canApplyIncrementalAppend()) {
+        scheduleRefresh();
+        return;
+    }
+
+    const int oldTotalRowCount = m_totalRowCount;
+    if (m_sortOrder == Qt::DescendingOrder) {
+        if (m_preferredFirstRow > 0) {
+            ++m_preferredFirstRow;
+            ++m_preferredLastRow;
+        }
+        if (m_cacheOffset > 0) {
+            ++m_cacheOffset;
+        }
+    }
+
+    beginInsertRows(QModelIndex{}, oldTotalRowCount == 0 ? 0 : (m_sortOrder == Qt::DescendingOrder ? 0 : oldTotalRowCount),
+                    oldTotalRowCount == 0 ? 0 : (m_sortOrder == Qt::DescendingOrder ? 0 : oldTotalRowCount));
+    ++m_totalRowCount;
+
+    if (m_sortOrder == Qt::DescendingOrder) {
+        if (m_cacheOffset == 0) {
+            m_rows.prepend(row);
+            if (m_rows.size() > kCacheWindowSize) {
+                m_rows.removeLast();
+            }
+        }
+    } else {
+        const int previousLastRow = oldTotalRowCount - 1;
+        const int cacheEnd = m_cacheOffset + m_rows.size() - 1;
+        if (oldTotalRowCount == 0) {
+            m_cacheOffset = 0;
+            m_rows.append(row);
+        } else if (cacheEnd == previousLastRow) {
+            m_rows.append(row);
+            if (m_rows.size() > kCacheWindowSize) {
+                m_rows.removeFirst();
+                ++m_cacheOffset;
+            }
+        }
+    }
+
+    endInsertRows();
+}
+
 QFont ApiLogModel::monospaceFont() {
     static const QFont font = [] {
         QFont builtFont(QStringLiteral("monospace"));
@@ -293,6 +339,10 @@ QString ApiLogModel::displayValueForColumn(const qodex::storage::ApiLogListRecor
     }
 
     return {};
+}
+
+bool ApiLogModel::canApplyIncrementalAppend() const {
+    return m_sortColumn == TimeColumn;
 }
 
 void ApiLogModel::reloadCacheWindow(int firstRow, int lastRow) {

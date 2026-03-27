@@ -478,29 +478,52 @@ bool DatabaseManager::saveSetting(const QString &key, const QString &valueJson, 
     );
 }
 
-bool DatabaseManager::appendApiLog(const ApiLogRecord &record, QString *errorMessage) {
-    return executeStatement(
-        QStringLiteral(
-            "INSERT INTO api_log("
-            "session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
-            "thread_id, success, latency_ms, payload_json, summary_text"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
-        ),
-        {
-            nullableText(record.sessionId),
-            record.direction,
-            record.messageKind,
-            nullableText(record.method),
-            nullableText(record.jsonrpcId),
-            nullableText(record.correlationId),
-            nullableText(record.threadId),
-            nullableBool(record.success),
-            nullableInteger(record.latencyMs),
-            record.payloadJson,
-            record.summaryText,
-        },
-        errorMessage
-    );
+std::optional<ApiLogListRecord> DatabaseManager::appendApiLog(const ApiLogRecord &record, QString *errorMessage) {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "INSERT INTO api_log("
+        "session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
+        "thread_id, success, latency_ms, payload_json, summary_text"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+    ));
+    query.addBindValue(nullableText(record.sessionId));
+    query.addBindValue(record.direction);
+    query.addBindValue(record.messageKind);
+    query.addBindValue(nullableText(record.method));
+    query.addBindValue(nullableText(record.jsonrpcId));
+    query.addBindValue(nullableText(record.correlationId));
+    query.addBindValue(nullableText(record.threadId));
+    query.addBindValue(nullableBool(record.success));
+    query.addBindValue(nullableInteger(record.latencyMs));
+    query.addBindValue(record.payloadJson);
+    query.addBindValue(record.summaryText);
+
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+
+    const QVariant insertedIdVariant = query.lastInsertId();
+    if (!insertedIdVariant.isValid()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to determine inserted api_log row id.");
+        }
+        return std::nullopt;
+    }
+
+    return loadApiLogListRecordById(insertedIdVariant.toLongLong(), errorMessage);
 }
 
 bool DatabaseManager::initializeConnection(QString *errorMessage) {
@@ -557,6 +580,60 @@ bool DatabaseManager::executeStatement(const QString &sql, const QList<QVariant>
         return false;
     }
     return true;
+}
+
+std::optional<ApiLogListRecord> DatabaseManager::loadApiLogListRecordById(const qint64 id, QString *errorMessage) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "SELECT id, ts_utc, session_id, direction, message_kind, method, jsonrpc_id, correlation_id, "
+        "thread_id, success, latency_ms, summary_text, "
+        "CASE "
+        "    WHEN length(payload_json) > 160 THEN substr(payload_json, 1, 157) || '...' "
+        "    ELSE payload_json "
+        "END AS payload_preview "
+        "FROM api_log WHERE id = ?;"
+    ));
+    query.addBindValue(id);
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+    if (!query.next()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Inserted api_log row %1 could not be reloaded.").arg(id);
+        }
+        return std::nullopt;
+    }
+
+    return ApiLogListRecord{
+        .id = query.value(0).toLongLong(),
+        .timestampUtc = query.value(1).toString(),
+        .sessionId = query.value(2).toString(),
+        .direction = query.value(3).toString(),
+        .messageKind = query.value(4).toString(),
+        .method = query.value(5).toString(),
+        .jsonrpcId = query.value(6).toString(),
+        .correlationId = query.value(7).toString(),
+        .threadId = query.value(8).toString(),
+        .success = query.value(9).isNull() ? std::nullopt
+                                           : std::optional<bool>(query.value(9).toInt() != 0),
+        .latencyMs = query.value(10).isNull() ? std::nullopt
+                                              : std::optional<qint64>(query.value(10).toLongLong()),
+        .summaryText = query.value(11).toString(),
+        .payloadPreview = query.value(12).toString(),
+    };
 }
 
 }  // namespace qodex::storage

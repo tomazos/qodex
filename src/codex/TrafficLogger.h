@@ -23,7 +23,7 @@ public:
     [[nodiscard]] QString sessionId() const;
 
 signals:
-    void apiLogRecorded();
+    void apiLogRecorded(const qodex::storage::ApiLogListRecord &row);
 
 private:
     struct PendingRequestContext {

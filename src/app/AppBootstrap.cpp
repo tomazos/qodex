@@ -84,7 +84,7 @@ AppBootstrap::AppBootstrap(
             }
         }
     );
-    QObject::connect(&m_trafficLogger, &qodex::codex::TrafficLogger::apiLogRecorded, &m_apiLogModel, &qodex::ui::ApiLogModel::scheduleRefresh);
+    QObject::connect(&m_trafficLogger, &qodex::codex::TrafficLogger::apiLogRecorded, &m_apiLogModel, &qodex::ui::ApiLogModel::recordAppended);
     QObject::connect(
         &m_sessionController,
         &SessionController::startupProgressChanged,
