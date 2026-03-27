@@ -42,6 +42,7 @@ let linkInteractionController = null;
 let composerResizeFrameId = null;
 let lastSubmittedComposerText = null;
 let lastSubmittedComposerAtMs = 0;
+let currentThreadStatus = { kind: 'idle', text: 'Idle' };
 const pendingLinkResolutionRequests = new Map();
 
 function describeError(error) {
@@ -97,6 +98,35 @@ function upsertThreadItems(items) {
   }
 }
 
+function renderThreadStatus() {
+  if (!threadStatusElement) {
+    return;
+  }
+
+  const kind = typeof currentThreadStatus?.kind === 'string' ? currentThreadStatus.kind.trim() : 'idle';
+  const text = typeof currentThreadStatus?.text === 'string' && currentThreadStatus.text.trim().length > 0
+    ? currentThreadStatus.text.trim()
+    : 'Idle';
+
+  threadStatusElement.replaceChildren();
+  threadStatusElement.dataset.kind = kind;
+
+  if (kind === 'active' && text.startsWith('Active')) {
+    const activeLabel = document.createElement('span');
+    activeLabel.className = 'thread-status__active-label';
+    activeLabel.textContent = 'Active';
+    threadStatusElement.append(activeLabel);
+
+    const suffix = text.slice('Active'.length);
+    if (suffix.length > 0) {
+      threadStatusElement.append(document.createTextNode(suffix));
+    }
+    return;
+  }
+
+  threadStatusElement.textContent = text;
+}
+
 function applyThreadStatus(statusUpdate) {
   if (!threadStatusElement) {
     return;
@@ -108,8 +138,25 @@ function applyThreadStatus(statusUpdate) {
 
   const text = typeof statusUpdate.text === 'string' ? statusUpdate.text.trim() : '';
   const kind = typeof statusUpdate.kind === 'string' ? statusUpdate.kind.trim() : '';
-  threadStatusElement.textContent = text.length > 0 ? text : 'Idle';
-  threadStatusElement.dataset.kind = kind;
+  currentThreadStatus = {
+    kind: kind.length > 0 ? kind : 'idle',
+    text: text.length > 0 ? text : 'Idle',
+  };
+  renderThreadStatus();
+}
+
+function animateThreadStatus() {
+  if (!threadStatusElement || currentThreadStatus?.kind !== 'active') {
+    return;
+  }
+
+  const activeLabel = threadStatusElement.querySelector('.thread-status__active-label');
+  if (!activeLabel) {
+    return;
+  }
+
+  const hue = Math.floor(Math.random() * 360);
+  activeLabel.style.color = `color-mix(in srgb, hsl(${hue}deg 88% 56%) 62%, canvastext 38%)`;
 }
 
 function settlePendingLinkResolutions() {
@@ -285,6 +332,7 @@ async function initialize() {
     threadItemsContainer = document.getElementById('thread-items');
     emptyStateElement = document.getElementById('thread-empty-state');
     threadStatusElement = document.getElementById('thread-status');
+    renderThreadStatus();
     initializeComposer();
     messageRenderer = createMessageRenderer({ domWindow: window });
     commandExecutionRenderer = createCommandExecutionRenderer({ domWindow: window });
@@ -321,6 +369,7 @@ async function initialize() {
 
         upsertThreadItems(native.takePendingItems());
         applyThreadStatus(native.takePendingThreadStatus());
+        animateThreadStatus();
         settlePendingLinkResolutions();
         if (!pendingErrorDialogOpen) {
           const pendingError = native.takePendingError();

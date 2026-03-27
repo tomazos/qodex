@@ -456,3 +456,8 @@ main {
   font-size: 0.84rem;
   line-height: 1.35;
 }
+
+.thread-status__active-label {
+  font-weight: 600;
+  will-change: color;
+}
