@@ -120,24 +120,83 @@ function unwrapShellCommand(command) {
   }
 }
 
-function normalizeActionLabels(commandExecution) {
-  if (!Array.isArray(commandExecution?.actionLabels)) {
+function normalizeActions(commandExecution) {
+  if (!Array.isArray(commandExecution?.actions)) {
     return [];
   }
 
-  return commandExecution.actionLabels
-    .filter((label) => typeof label === 'string')
-    .map((label) => label.trim())
-    .filter((label) => label.length > 0);
+  return commandExecution.actions
+    .filter((action) => action && typeof action === 'object')
+    .map((action) => ({
+      kind: typeof action.kind === 'string' ? action.kind.trim() : '',
+      path: typeof action.path === 'string' ? action.path.trim() : '',
+      query: typeof action.query === 'string' ? action.query.trim() : '',
+      name: typeof action.name === 'string' ? action.name.trim() : '',
+      command: typeof action.command === 'string' ? action.command.trim() : '',
+    }))
+    .filter((action) => action.kind.length > 0);
 }
 
-function commandExecutionTitle(commandExecution) {
-  const actionLabels = normalizeActionLabels(commandExecution);
-  if (actionLabels.length > 0) {
-    return actionLabels[0];
+function appendTitleLink(document, title, href, text) {
+  if (typeof href !== 'string' || href.trim() === '' || typeof text !== 'string' || text.trim() === '') {
+    return false;
   }
 
-  return 'Run command';
+  const link = document.createElement('a');
+  link.className = 'command-execution__title-link';
+  link.href = href.trim();
+  link.textContent = text.trim();
+  title.append(link);
+  return true;
+}
+
+function appendTitleStrong(document, title, text) {
+  const strong = document.createElement('strong');
+  strong.textContent = text;
+  title.append(strong);
+}
+
+function renderTitle(document, title, commandExecution) {
+  const actions = normalizeActions(commandExecution);
+  const firstAction = actions.length > 0 ? actions[0] : null;
+  if (!firstAction) {
+    title.textContent = 'Run command';
+    return;
+  }
+
+  switch (firstAction.kind) {
+    case 'read':
+      appendTitleStrong(document, title, 'Read');
+      if (appendTitleLink(document, title, firstAction.path, firstAction.path || firstAction.name)) {
+        title.insertBefore(document.createTextNode(' '), title.lastChild);
+      }
+      return;
+    case 'listFiles':
+      if (firstAction.path !== '') {
+        appendTitleStrong(document, title, 'List');
+        title.append(document.createTextNode(' '));
+        appendTitleLink(document, title, firstAction.path, firstAction.path);
+        return;
+      }
+      title.textContent = 'List Files';
+      return;
+    case 'search':
+      if (firstAction.query !== '' && firstAction.path !== '') {
+        appendTitleStrong(document, title, 'Search');
+        title.append(document.createTextNode(` ${firstAction.query} in `));
+        appendTitleLink(document, title, firstAction.path, firstAction.path);
+        return;
+      }
+      if (firstAction.query !== '') {
+        appendTitleStrong(document, title, 'Search');
+        title.append(document.createTextNode(` ${firstAction.query}`));
+        return;
+      }
+      title.textContent = 'Search Files';
+      return;
+    default:
+      title.textContent = 'Run command';
+  }
 }
 
 function createCommandExecutionRenderer({ domWindow, shellIdentity }) {
@@ -156,7 +215,7 @@ function createCommandExecutionRenderer({ domWindow, shellIdentity }) {
       const normalizedStatus = normalizeStatus(commandExecution?.status);
       const title = document.createElement('div');
       title.className = 'command-execution__title';
-      title.textContent = commandExecutionTitle(commandExecution);
+      renderTitle(document, title, commandExecution);
       container.append(title);
 
       const prompt = document.createElement('div');

@@ -63,7 +63,11 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     commandExecution->set_duration_ms(215);
     commandExecution->set_process_id("12345");
     commandExecution->set_aggregated_output("Wed Mar 25 19:35:16 AEST 2026\n");
-    commandExecution->add_action_labels("Read /home/zos/file.txt");
+    qodex::threadui::ipc::common::CommandExecutionAction *commandAction = commandExecution->add_actions();
+    commandAction->set_kind(qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_READ);
+    commandAction->set_path("/home/zos/file.txt");
+    commandAction->set_name("file.txt");
+    commandAction->set_command("cat /home/zos/file.txt");
     qodex::threadui::ipc::common::Item *fileChangeItem = addItemsRequest.add_items();
     fileChangeItem->set_item_id("file-1");
     qodex::threadui::ipc::common::FileChange *fileChange = fileChangeItem->mutable_file_change();
@@ -104,8 +108,11 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QCOMPARE(items[2].commandExecution.durationMs, std::int64_t(215));
     QCOMPARE(items[2].commandExecution.processId, std::string("12345"));
     QCOMPARE(items[2].commandExecution.aggregatedOutput, std::string("Wed Mar 25 19:35:16 AEST 2026\n"));
-    QCOMPARE(items[2].commandExecution.actionLabels.size(), std::size_t(1));
-    QCOMPARE(items[2].commandExecution.actionLabels[0], std::string("Read /home/zos/file.txt"));
+    QCOMPARE(items[2].commandExecution.actions.size(), std::size_t(1));
+    QCOMPARE(items[2].commandExecution.actions[0].kind, std::string("read"));
+    QCOMPARE(items[2].commandExecution.actions[0].path, std::string("/home/zos/file.txt"));
+    QCOMPARE(items[2].commandExecution.actions[0].name, std::string("file.txt"));
+    QCOMPARE(items[2].commandExecution.actions[0].command, std::string("cat /home/zos/file.txt"));
     QCOMPARE(items[3].id, std::string("file-1"));
     QCOMPARE(items[3].kind, std::string("file_change"));
     QCOMPARE(items[3].fileChange.status, std::string("completed"));

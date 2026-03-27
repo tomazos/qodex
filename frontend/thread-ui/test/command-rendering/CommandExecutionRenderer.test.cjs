@@ -28,10 +28,20 @@ test('renders title, shell prompt, footer status, and output', () => {
     durationMs: 215n,
     processId: '12345',
     aggregatedOutput: 'Wed Mar 25 19:35:16 AEST 2026\n',
-    actionLabels: ['Read /home/zos/file.txt'],
+    actions: [
+      {
+        kind: 'read',
+        path: '/home/zos/file.txt',
+        query: '',
+        name: 'file.txt',
+        command: 'cat /home/zos/file.txt',
+      },
+    ],
   });
 
   assert.equal(element.querySelector('.command-execution__title').textContent, 'Read /home/zos/file.txt');
+  assert.equal(element.querySelector('.command-execution__title strong').textContent, 'Read');
+  assert.equal(element.querySelector('.command-execution__title a').getAttribute('href'), '/home/zos/file.txt');
   assert.equal(
     element.querySelector('.command-execution__prompt').textContent,
     'zos@zoidberg:~$ date'
@@ -55,7 +65,7 @@ test('renders failed commands with their failure badge and preserves output', ()
     durationMs: 0n,
     processId: '',
     aggregatedOutput: '1/1 Test #9: ThreadUiFileChangeRendererTest ...***Failed',
-    actionLabels: [],
+    actions: [],
   });
 
   assert.ok(element.querySelector('.command-execution__badge--failed'));
@@ -73,7 +83,7 @@ test('keeps non-home cwd values and falls back to a generic title when there is 
     durationMs: 0n,
     processId: '',
     aggregatedOutput: 'ok\n',
-    actionLabels: [],
+    actions: [],
   });
 
   assert.equal(element.querySelector('.command-execution__title').textContent, 'Run command');
@@ -94,8 +104,60 @@ test('renders a no-output placeholder when the command produced no aggregated ou
     durationMs: 0n,
     processId: '',
     aggregatedOutput: '',
-    actionLabels: [],
+    actions: [],
   });
 
   assert.equal(element.querySelector('.command-execution__output').textContent, '(no output)');
+});
+
+test('renders list files and search titles from structured command actions', () => {
+  const listElement = renderCommandExecution({
+    command: 'ls src',
+    cwd: '/home/zos/qodex',
+    status: 'completed',
+    hasExitCode: false,
+    exitCode: 0n,
+    hasDurationMs: false,
+    durationMs: 0n,
+    processId: '',
+    aggregatedOutput: '',
+    actions: [
+      {
+        kind: 'listFiles',
+        path: 'src',
+        query: '',
+        name: '',
+        command: 'ls src',
+      },
+    ],
+  });
+
+  assert.equal(listElement.querySelector('.command-execution__title').textContent, 'List src');
+  assert.equal(listElement.querySelector('.command-execution__title strong').textContent, 'List');
+  assert.equal(listElement.querySelector('.command-execution__title a').getAttribute('href'), 'src');
+
+  const searchElement = renderCommandExecution({
+    command: 'rg ThreadUi src',
+    cwd: '/home/zos/qodex',
+    status: 'completed',
+    hasExitCode: false,
+    exitCode: 0n,
+    hasDurationMs: false,
+    durationMs: 0n,
+    processId: '',
+    aggregatedOutput: '',
+    actions: [
+      {
+        kind: 'search',
+        path: 'src',
+        query: 'ThreadUi',
+        name: '',
+        command: 'rg ThreadUi src',
+      },
+    ],
+  });
+
+  assert.equal(searchElement.querySelector('.command-execution__title').textContent, 'Search ThreadUi in src');
+  assert.equal(searchElement.querySelector('.command-execution__title strong').textContent, 'Search');
+  assert.equal(searchElement.querySelector('.command-execution__title a').getAttribute('href'), 'src');
 });

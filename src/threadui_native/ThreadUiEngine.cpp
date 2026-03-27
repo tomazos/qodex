@@ -56,6 +56,23 @@ std::string fileChangeKindToString(const qodex::threadui::ipc::common::FileChang
     return "unknown";
 }
 
+std::string commandActionKindToString(const qodex::threadui::ipc::common::CommandExecutionActionKind kind) {
+    switch (kind) {
+    case qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_READ:
+        return "read";
+    case qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_LIST_FILES:
+        return "listFiles";
+    case qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_SEARCH:
+        return "search";
+    case qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_UNKNOWN:
+        return "unknown";
+    case qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_UNSPECIFIED:
+        break;
+    }
+
+    return "unspecified";
+}
+
 std::string linkKindToString(const qodex::threadui::ipc::common::LinkKind kind) {
     switch (kind) {
     case qodex::threadui::ipc::common::LINK_KIND_WEB:
@@ -335,11 +352,17 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
             displayItem.commandExecution.durationMs = item.command_execution().duration_ms();
             displayItem.commandExecution.processId = item.command_execution().process_id();
             displayItem.commandExecution.aggregatedOutput = item.command_execution().aggregated_output();
-            displayItem.commandExecution.actionLabels.reserve(
-                static_cast<std::size_t>(item.command_execution().action_labels_size())
+            displayItem.commandExecution.actions.reserve(
+                static_cast<std::size_t>(item.command_execution().actions_size())
             );
-            for (const std::string &label : item.command_execution().action_labels()) {
-                displayItem.commandExecution.actionLabels.push_back(label);
+            for (const auto &action : item.command_execution().actions()) {
+                displayItem.commandExecution.actions.push_back(qodex::threadui::native::DisplayCommandExecution::Action{
+                    .kind = commandActionKindToString(action.kind()),
+                    .path = action.path(),
+                    .query = action.query(),
+                    .name = action.name(),
+                    .command = action.command(),
+                });
             }
             pendingItems.push_back(std::move(displayItem));
             break;

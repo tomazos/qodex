@@ -258,6 +258,16 @@ main {
   overflow-wrap: anywhere;
 }
 
+.command-execution__title-link {
+  color: LinkText;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.command-execution__title-link:hover {
+  text-decoration: underline;
+}
+
 .command-execution__prompt,
 .command-execution__output {
   font-family: var(--font-mono);

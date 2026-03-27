@@ -84,52 +84,81 @@ std::string commandExecutionStatusToString(const qodex::codex::CommandExecutionS
     return "unknown";
 }
 
-QString commandActionLabel(const qodex::codex::Ref<qodex::codex::CommandAction> &action) {
-    if (!action) {
-        return {};
+qodex::threadui::ipc::common::CommandExecutionActionKind toThreadUiCommandActionKind(
+    qodex::codex::CommandAction::Kind kind
+) {
+    switch (kind) {
+    case qodex::codex::CommandAction::Kind::Read:
+        return qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_READ;
+    case qodex::codex::CommandAction::Kind::ListFiles:
+        return qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_LIST_FILES;
+    case qodex::codex::CommandAction::Kind::Search:
+        return qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_SEARCH;
+    case qodex::codex::CommandAction::Kind::Unknown:
+        return qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_UNKNOWN;
     }
+
+    return qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_UNSPECIFIED;
+}
+
+void appendCommandAction(
+    qodex::threadui::ipc::common::CommandExecution *displayItem,
+    const qodex::codex::Ref<qodex::codex::CommandAction> &action
+) {
+    if (displayItem == nullptr || !action) {
+        return;
+    }
+
+    qodex::threadui::ipc::common::CommandExecutionAction *displayAction = displayItem->add_actions();
+    displayAction->set_kind(toThreadUiCommandActionKind(action->kind));
 
     switch (action->kind) {
     case qodex::codex::CommandAction::Kind::Read: {
         const qodex::codex::Ref<qodex::codex::CommandActionRead> readAction =
             std::get<qodex::codex::Ref<qodex::codex::CommandActionRead>>(action->payload);
         if (!readAction) {
-            return {};
+            return;
         }
-        return readAction->path.isEmpty()
-            ? QStringLiteral("Read")
-            : QStringLiteral("Read %1").arg(readAction->path);
+        displayAction->set_command(readAction->command.toStdString());
+        displayAction->set_name(readAction->name.toStdString());
+        displayAction->set_path(readAction->path.toStdString());
+        return;
     }
     case qodex::codex::CommandAction::Kind::ListFiles: {
         const qodex::codex::Ref<qodex::codex::CommandActionListFiles> listFilesAction =
             std::get<qodex::codex::Ref<qodex::codex::CommandActionListFiles>>(action->payload);
-        if (!listFilesAction || !listFilesAction->path.hasValue() || listFilesAction->path.value().isEmpty()) {
-            return QStringLiteral("List files");
+        if (!listFilesAction) {
+            return;
         }
-        return QStringLiteral("List %1").arg(listFilesAction->path.value());
+        displayAction->set_command(listFilesAction->command.toStdString());
+        if (listFilesAction->path.hasValue()) {
+            displayAction->set_path(listFilesAction->path.value().toStdString());
+        }
+        return;
     }
     case qodex::codex::CommandAction::Kind::Search: {
         const qodex::codex::Ref<qodex::codex::CommandActionSearch> searchAction =
             std::get<qodex::codex::Ref<qodex::codex::CommandActionSearch>>(action->payload);
         if (!searchAction) {
-            return {};
+            return;
         }
-
-        if (searchAction->query.hasValue() && !searchAction->query.value().isEmpty()) {
-            return QStringLiteral("Search %1").arg(searchAction->query.value());
+        displayAction->set_command(searchAction->command.toStdString());
+        if (searchAction->query.hasValue()) {
+            displayAction->set_query(searchAction->query.value().toStdString());
         }
-
-        if (searchAction->path.hasValue() && !searchAction->path.value().isEmpty()) {
-            return QStringLiteral("Search in %1").arg(searchAction->path.value());
+        if (searchAction->path.hasValue()) {
+            displayAction->set_path(searchAction->path.value().toStdString());
         }
-
-        return QStringLiteral("Search");
+        return;
     }
     case qodex::codex::CommandAction::Kind::Unknown:
-        return {};
+        if (const auto *unknownAction =
+                std::get_if<qodex::codex::Ref<qodex::codex::CommandActionUnknown>>(&action->payload);
+            unknownAction != nullptr && *unknownAction) {
+            displayAction->set_command((*unknownAction)->command.toStdString());
+        }
+        return;
     }
-
-    return {};
 }
 
 bool appendCommandExecutionDisplayItem(
@@ -164,10 +193,7 @@ bool appendCommandExecutionDisplayItem(
     }
 
     for (const qodex::codex::Ref<qodex::codex::CommandAction> &action : payload.commandActions) {
-        const QString label = commandActionLabel(action).trimmed();
-        if (!label.isEmpty()) {
-            displayItem->add_action_labels(label.toStdString());
-        }
+        appendCommandAction(displayItem, action);
     }
 
     return !payload.command.isEmpty() || payload.aggregatedOutput.hasValue();

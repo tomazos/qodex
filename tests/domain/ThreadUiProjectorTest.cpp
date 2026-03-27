@@ -8,7 +8,9 @@
 #include "domain/threadmodel/CompletedUserMessage.h"
 
 using qodex::codex::CommandAction;
+using qodex::codex::CommandActionListFiles;
 using qodex::codex::CommandActionRead;
+using qodex::codex::CommandActionSearch;
 using qodex::codex::FileUpdateChange;
 using qodex::codex::PatchApplyStatus;
 using qodex::codex::PatchChangeKind;
@@ -171,10 +173,22 @@ void ThreadUiProjectorTest::projectsStructuredCommandExecutionAndFileChangeItems
         QString::fromStdString(projectedCommand->command_execution().aggregated_output()),
         QStringLiteral("On branch main\n")
     );
-    QCOMPARE(projectedCommand->command_execution().action_labels_size(), 1);
+    QCOMPARE(projectedCommand->command_execution().actions_size(), 1);
     QCOMPARE(
-        QString::fromStdString(projectedCommand->command_execution().action_labels(0)),
-        QStringLiteral("Read /home/zos/qodex/README.md")
+        projectedCommand->command_execution().actions(0).kind(),
+        qodex::threadui::ipc::common::COMMAND_EXECUTION_ACTION_KIND_READ
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedCommand->command_execution().actions(0).path()),
+        QStringLiteral("/home/zos/qodex/README.md")
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedCommand->command_execution().actions(0).name()),
+        QString()
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedCommand->command_execution().actions(0).command()),
+        QString()
     );
 
     ThreadItemFileChange fileChangePayload;

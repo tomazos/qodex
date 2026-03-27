@@ -446,7 +446,7 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
             napi_value durationMsValue = nullptr;
             napi_value processIdValue = nullptr;
             napi_value aggregatedOutputValue = nullptr;
-            napi_value actionLabelsArray = nullptr;
+            napi_value actionsArray = nullptr;
 
             if (napi_create_string_utf8(
                     env,
@@ -484,8 +484,8 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
                 ) != napi_ok ||
                 napi_create_array_with_length(
                     env,
-                    items[index].commandExecution.actionLabels.size(),
-                    &actionLabelsArray
+                    items[index].commandExecution.actions.size(),
+                    &actionsArray
                 ) != napi_ok ||
                 napi_set_named_property(env, itemObject, "command", commandValue) != napi_ok ||
                 napi_set_named_property(env, itemObject, "cwd", cwdValue) != napi_ok ||
@@ -496,21 +496,32 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
                 napi_set_named_property(env, itemObject, "durationMs", durationMsValue) != napi_ok ||
                 napi_set_named_property(env, itemObject, "processId", processIdValue) != napi_ok ||
                 napi_set_named_property(env, itemObject, "aggregatedOutput", aggregatedOutputValue) != napi_ok ||
-                napi_set_named_property(env, itemObject, "actionLabels", actionLabelsArray) != napi_ok) {
+                napi_set_named_property(env, itemObject, "actions", actionsArray) != napi_ok) {
                 napi_throw_error(env, nullptr, "Failed to create command execution value");
                 return nullptr;
             }
 
-            for (std::size_t actionIndex = 0; actionIndex < items[index].commandExecution.actionLabels.size(); ++actionIndex) {
-                napi_value labelValue = nullptr;
-                if (napi_create_string_utf8(
-                        env,
-                        items[index].commandExecution.actionLabels[actionIndex].c_str(),
-                        NAPI_AUTO_LENGTH,
-                        &labelValue
-                    ) != napi_ok ||
-                    napi_set_element(env, actionLabelsArray, actionIndex, labelValue) != napi_ok) {
-                    napi_throw_error(env, nullptr, "Failed to create command execution action label value");
+            for (std::size_t actionIndex = 0; actionIndex < items[index].commandExecution.actions.size(); ++actionIndex) {
+                const auto &action = items[index].commandExecution.actions[actionIndex];
+                napi_value actionObject = nullptr;
+                napi_value kindValue = nullptr;
+                napi_value pathValue = nullptr;
+                napi_value queryValue = nullptr;
+                napi_value nameValue = nullptr;
+                napi_value actionCommandValue = nullptr;
+                if (napi_create_object(env, &actionObject) != napi_ok ||
+                    napi_create_string_utf8(env, action.kind.c_str(), NAPI_AUTO_LENGTH, &kindValue) != napi_ok ||
+                    napi_create_string_utf8(env, action.path.c_str(), NAPI_AUTO_LENGTH, &pathValue) != napi_ok ||
+                    napi_create_string_utf8(env, action.query.c_str(), NAPI_AUTO_LENGTH, &queryValue) != napi_ok ||
+                    napi_create_string_utf8(env, action.name.c_str(), NAPI_AUTO_LENGTH, &nameValue) != napi_ok ||
+                    napi_create_string_utf8(env, action.command.c_str(), NAPI_AUTO_LENGTH, &actionCommandValue) != napi_ok ||
+                    napi_set_named_property(env, actionObject, "kind", kindValue) != napi_ok ||
+                    napi_set_named_property(env, actionObject, "path", pathValue) != napi_ok ||
+                    napi_set_named_property(env, actionObject, "query", queryValue) != napi_ok ||
+                    napi_set_named_property(env, actionObject, "name", nameValue) != napi_ok ||
+                    napi_set_named_property(env, actionObject, "command", actionCommandValue) != napi_ok ||
+                    napi_set_element(env, actionsArray, actionIndex, actionObject) != napi_ok) {
+                    napi_throw_error(env, nullptr, "Failed to create command execution action value");
                     return nullptr;
                 }
             }

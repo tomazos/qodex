@@ -23,6 +23,14 @@ struct DisplayFileChange {
 };
 
 struct DisplayCommandExecution {
+    struct Action {
+        std::string kind;
+        std::string path;
+        std::string query;
+        std::string name;
+        std::string command;
+    };
+
     std::string command;
     std::string cwd;
     std::string status;
@@ -32,7 +40,7 @@ struct DisplayCommandExecution {
     std::int64_t durationMs = 0;
     std::string processId;
     std::string aggregatedOutput;
-    std::vector<std::string> actionLabels;
+    std::vector<Action> actions;
 };
 
 struct DisplayItem {

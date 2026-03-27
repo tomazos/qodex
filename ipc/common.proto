@@ -73,6 +73,22 @@ message Reasoning {
   string text = 1;
 }
 
+enum CommandExecutionActionKind {
+  COMMAND_EXECUTION_ACTION_KIND_UNSPECIFIED = 0;
+  COMMAND_EXECUTION_ACTION_KIND_READ = 1;
+  COMMAND_EXECUTION_ACTION_KIND_LIST_FILES = 2;
+  COMMAND_EXECUTION_ACTION_KIND_SEARCH = 3;
+  COMMAND_EXECUTION_ACTION_KIND_UNKNOWN = 4;
+}
+
+message CommandExecutionAction {
+  CommandExecutionActionKind kind = 1;
+  string path = 2;
+  string query = 3;
+  string name = 4;
+  string command = 5;
+}
+
 message CommandExecution {
   string command = 1;
   string cwd = 2;
@@ -83,7 +99,7 @@ message CommandExecution {
   int64 duration_ms = 7;
   string process_id = 8;
   string aggregated_output = 9;
-  repeated string action_labels = 10;
+  repeated CommandExecutionAction actions = 10;
 }
 
 enum FileChangeKind {
