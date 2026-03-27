@@ -10,7 +10,6 @@ function createView({
   itemGapPx = 12,
   overscanPx = 600,
   measureElementHeight,
-  deferredMeasurementEnabled = false,
   scrollHeightGetter,
   requestAnimationFrameImpl,
   cancelAnimationFrameImpl,
@@ -115,7 +114,6 @@ function createView({
     itemGapPx,
     overscanPx,
     measureElementHeight,
-    deferredMeasurementEnabled,
   });
 
   return {
@@ -331,13 +329,11 @@ test('reuses the same DOM node when an item scrolls out of view and back', () =>
   assert.strictEqual(itemNodeAfter, itemNodeBefore);
 });
 
-test('defers non-visible transcript measurements and preserves a fixed canvas height while scrolling', () => {
+test('premeasures transcript item heights so scrolling does not discover new geometry', () => {
   const measuredItemIds = [];
-  const scheduledTimeouts = [];
   const { container, transcriptView } = createView({
     clientHeight: 300,
     overscanPx: 200,
-    deferredMeasurementEnabled: true,
     measureElementHeight(element, fallbackHeight) {
       measuredItemIds.push(element.dataset.itemId);
       if (element.dataset.itemId === 'item-3' || element.dataset.itemId === 'item-4') {
@@ -346,11 +342,6 @@ test('defers non-visible transcript measurements and preserves a fixed canvas he
 
       return fallbackHeight;
     },
-    setTimeoutImpl(callback) {
-      scheduledTimeouts.push(callback);
-      return scheduledTimeouts.length;
-    },
-    clearTimeoutImpl() {},
   });
 
   transcriptView.upsertItems(
@@ -364,23 +355,13 @@ test('defers non-visible transcript measurements and preserves a fixed canvas he
   const virtualRoot = container.querySelector('.thread-view__items-virtual');
   const canvasHeightBeforeScroll = virtualRoot.style.height;
   const measurementCountAfterUpsert = measuredItemIds.length;
-  assert.ok(measuredItemIds.includes('item-39'));
-  assert.ok(measuredItemIds.includes('item-38'));
-  assert.ok(!measuredItemIds.includes('item-0'));
+  assert.ok(measuredItemIds.includes('item-30'));
 
   scrollContainer(container, 560);
 
   assert.equal(container.scrollTop, 560);
   assert.equal(measuredItemIds.length, measurementCountAfterUpsert);
   assert.equal(virtualRoot.style.height, canvasHeightBeforeScroll);
-
-  while (scheduledTimeouts.length > 0) {
-    const timeout = scheduledTimeouts.shift();
-    timeout();
-  }
-
-  assert.ok(measuredItemIds.includes('item-0'));
-  transcriptView.dispose();
 });
 
 test('sticks to the transcript end after full-history resume settles measured heights', () => {

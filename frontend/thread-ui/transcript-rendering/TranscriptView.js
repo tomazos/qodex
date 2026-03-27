@@ -2,8 +2,6 @@ const DEFAULT_ESTIMATED_ITEM_HEIGHT_PX = 120;
 const DEFAULT_FALLBACK_VIEWPORT_HEIGHT_PX = 600;
 const DEFAULT_ITEM_GAP_PX = 12;
 const DEFAULT_OVERSCAN_PX = 600;
-const DEFAULT_BACKGROUND_MEASUREMENT_BATCH_SIZE = 8;
-const DEFAULT_SCROLL_IDLE_DELAY_MS = 120;
 
 function formatItemKindLabel(kind) {
   const normalizedKind = typeof kind === 'string' && kind.trim() !== '' ? kind : 'item';
@@ -59,9 +57,6 @@ function createTranscriptView({
   itemGapPx = DEFAULT_ITEM_GAP_PX,
   overscanPx = DEFAULT_OVERSCAN_PX,
   measureElementHeight = measureRenderedHeight,
-  deferredMeasurementEnabled = true,
-  backgroundMeasurementBatchSize = DEFAULT_BACKGROUND_MEASUREMENT_BATCH_SIZE,
-  scrollIdleDelayMs = DEFAULT_SCROLL_IDLE_DELAY_MS,
 }) {
   if (!domWindow || !container) {
     throw new Error('createTranscriptView requires a DOM window and transcript container.');
@@ -70,16 +65,8 @@ function createTranscriptView({
   const { document } = domWindow;
   const normalizedItemGapPx = Number.isFinite(itemGapPx) ? Math.max(0, itemGapPx) : DEFAULT_ITEM_GAP_PX;
   const normalizedOverscanPx = Number.isFinite(overscanPx) ? Math.max(0, overscanPx) : DEFAULT_OVERSCAN_PX;
-  const normalizedBackgroundMeasurementBatchSize = Number.isFinite(backgroundMeasurementBatchSize)
-    ? Math.max(1, Math.floor(backgroundMeasurementBatchSize))
-    : DEFAULT_BACKGROUND_MEASUREMENT_BATCH_SIZE;
-  const normalizedScrollIdleDelayMs = Number.isFinite(scrollIdleDelayMs)
-    ? Math.max(0, scrollIdleDelayMs)
-    : DEFAULT_SCROLL_IDLE_DELAY_MS;
   const itemRecordsById = new Map();
   const itemOrder = [];
-  const pendingMeasurementItemIds = [];
-  const pendingMeasurementItemIdSet = new Set();
   const virtualRoot = document.createElement('div');
   const mountedItemsHost = document.createElement('div');
   const measurementHost = document.createElement('div');
@@ -89,12 +76,9 @@ function createTranscriptView({
   let stickToBottomFrameId = null;
   let stickToBottomTimeoutId = null;
   let lateStickToBottomTimeoutId = null;
-  let measurementBatchTimeoutId = null;
   let lastRenderedRangeKey = '';
   let lastMeasuredViewportWidth = null;
   let cachedTotalTranscriptHeight = 0;
-  let pendingMeasurementReadIndex = 0;
-  let lastScrollEventTimestampMs = 0;
 
   virtualRoot.className = 'thread-view__items-virtual';
   virtualRoot.hidden = true;
@@ -181,14 +165,6 @@ function createTranscriptView({
 
   function effectiveScrollHeight() {
     return Math.max(container.scrollHeight, totalTranscriptHeight());
-  }
-
-  function currentTimestampMs() {
-    if (domWindow.performance && typeof domWindow.performance.now === 'function') {
-      return domWindow.performance.now();
-    }
-
-    return Date.now();
   }
 
   function currentMeasurementWidthPx() {
@@ -395,58 +371,6 @@ function createTranscriptView({
     mountedItemsHost.style.height = `${canvasHeightPx}px`;
   }
 
-  function compactPendingMeasurements() {
-    if (pendingMeasurementReadIndex === 0) {
-      return;
-    }
-
-    if (pendingMeasurementReadIndex >= pendingMeasurementItemIds.length) {
-      pendingMeasurementItemIds.length = 0;
-      pendingMeasurementReadIndex = 0;
-      return;
-    }
-
-    if (pendingMeasurementReadIndex >= 32) {
-      pendingMeasurementItemIds.splice(0, pendingMeasurementReadIndex);
-      pendingMeasurementReadIndex = 0;
-    }
-  }
-
-  function hasPendingMeasurements() {
-    return pendingMeasurementItemIdSet.size > 0;
-  }
-
-  function discardPendingMeasurement(itemId) {
-    pendingMeasurementItemIdSet.delete(itemId);
-  }
-
-  function enqueuePendingMeasurement(itemId) {
-    if (!deferredMeasurementEnabled || typeof itemId !== 'string' || itemId.length === 0) {
-      return;
-    }
-
-    if (pendingMeasurementItemIdSet.has(itemId)) {
-      return;
-    }
-
-    pendingMeasurementItemIdSet.add(itemId);
-    pendingMeasurementItemIds.push(itemId);
-  }
-
-  function enqueuePendingMeasurementsForAllItems() {
-    if (!deferredMeasurementEnabled) {
-      return;
-    }
-
-    for (const itemId of itemOrder) {
-      enqueuePendingMeasurement(itemId);
-    }
-  }
-
-  function isScrollInteractionActive() {
-    return currentTimestampMs() - lastScrollEventTimestampMs < normalizedScrollIdleDelayMs;
-  }
-
   function captureScrollAnchor() {
     if (itemOrder.length === 0) {
       return null;
@@ -595,8 +519,18 @@ function createTranscriptView({
       lastMeasuredViewportWidth !== null &&
       measuredViewportWidth !== lastMeasuredViewportWidth
     ) {
-      lastMeasuredViewportWidth = measuredViewportWidth;
-      handleViewportWidthChange();
+      const shouldStickToBottom = isScrolledNearBottom();
+      const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
+      remeasureAllHeights();
+      if (scrollAnchor) {
+        restoreScrollAnchor(scrollAnchor);
+      }
+      if (shouldStickToBottom) {
+        scrollToBottom();
+      }
+
+      const resizedRange = computeVisibleRange();
+      mountVisibleRange(resizedRange);
     }
 
     if (Number.isFinite(measuredViewportWidth) && measuredViewportWidth > 0) {
@@ -636,137 +570,6 @@ function createTranscriptView({
     }
 
     domWindow.clearTimeout(timeoutId);
-  }
-
-  function scheduleBackgroundMeasurement(delayMs = 0) {
-    if (!deferredMeasurementEnabled || measurementBatchTimeoutId !== null || !hasPendingMeasurements()) {
-      return;
-    }
-
-    measurementBatchTimeoutId = requestTimeout(() => {
-      measurementBatchTimeoutId = null;
-      processBackgroundMeasurementBatch();
-    }, delayMs);
-  }
-
-  function applyMeasuredHeightsForRecordIds(recordIds) {
-    if (!Array.isArray(recordIds) || recordIds.length === 0) {
-      return false;
-    }
-
-    const shouldStickToBottom = isScrolledNearBottom();
-    const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
-    let anyHeightChanged = false;
-
-    for (const itemId of recordIds) {
-      const record = itemRecordsById.get(itemId);
-      if (!record) {
-        continue;
-      }
-
-      const fallbackHeight = estimateItemHeight(record.item);
-      const measuredHeight = measureItemHeight(record.item, fallbackHeight);
-      if (measuredHeight !== record.height) {
-        record.height = measuredHeight;
-        anyHeightChanged = true;
-      }
-    }
-
-    if (!anyHeightChanged) {
-      return false;
-    }
-
-    recomputeLayoutMetrics();
-    if (scrollAnchor) {
-      restoreScrollAnchor(scrollAnchor);
-    }
-    if (shouldStickToBottom) {
-      scrollToBottom();
-    }
-    renderVisibleWindow();
-    return true;
-  }
-
-  function measureVisibleRangeSynchronously() {
-    if (!deferredMeasurementEnabled || itemOrder.length === 0) {
-      return false;
-    }
-
-    const range = computeVisibleRange();
-    const itemIds = [];
-    for (let index = range.startIndex; index < range.endIndexExclusive; index += 1) {
-      const itemId = itemOrder[index];
-      itemIds.push(itemId);
-      discardPendingMeasurement(itemId);
-    }
-
-    compactPendingMeasurements();
-    return applyMeasuredHeightsForRecordIds(itemIds);
-  }
-
-  function processBackgroundMeasurementBatch() {
-    if (!deferredMeasurementEnabled || !hasPendingMeasurements()) {
-      return;
-    }
-
-    if (isScrollInteractionActive()) {
-      scheduleBackgroundMeasurement(normalizedScrollIdleDelayMs);
-      return;
-    }
-
-    const batchItemIds = [];
-    while (
-      batchItemIds.length < normalizedBackgroundMeasurementBatchSize &&
-      pendingMeasurementReadIndex < pendingMeasurementItemIds.length
-    ) {
-      const itemId = pendingMeasurementItemIds[pendingMeasurementReadIndex++];
-      if (!pendingMeasurementItemIdSet.delete(itemId)) {
-        continue;
-      }
-
-      batchItemIds.push(itemId);
-    }
-
-    compactPendingMeasurements();
-    applyMeasuredHeightsForRecordIds(batchItemIds);
-
-    if (hasPendingMeasurements()) {
-      scheduleBackgroundMeasurement(normalizedScrollIdleDelayMs);
-    }
-  }
-
-  function handleViewportWidthChange() {
-    const shouldStickToBottom = isScrolledNearBottom();
-    const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
-
-    resetEstimatedHeights();
-    if (scrollAnchor) {
-      restoreScrollAnchor(scrollAnchor);
-    }
-    if (shouldStickToBottom) {
-      scrollToBottom();
-    }
-
-    updateVirtualCanvasHeight();
-    mountVisibleRange(computeVisibleRange());
-
-    if (deferredMeasurementEnabled) {
-      enqueuePendingMeasurementsForAllItems();
-      measureVisibleRangeSynchronously();
-      scheduleBackgroundMeasurement(normalizedScrollIdleDelayMs);
-      return;
-    }
-
-    remeasureAllHeights();
-    if (scrollAnchor) {
-      restoreScrollAnchor(scrollAnchor);
-    }
-    if (shouldStickToBottom) {
-      scrollToBottom();
-    }
-
-    updateVirtualCanvasHeight();
-    mountVisibleRange(computeVisibleRange());
   }
 
   function scheduleRenderVisibleWindow() {
@@ -822,16 +625,14 @@ function createTranscriptView({
       let record = itemRecordsById.get(normalizedItem.id);
 
       if (!record) {
-        const estimatedHeight = estimateItemHeight(normalizedItem);
         itemOrder.push(normalizedItem.id);
         itemRecordsById.set(normalizedItem.id, {
           item: normalizedItem,
           signature,
           element: null,
-          height: deferredMeasurementEnabled ? estimatedHeight : measureItemHeight(normalizedItem, estimatedHeight),
+          height: measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem)),
           top: 0,
         });
-        enqueuePendingMeasurement(normalizedItem.id);
         continue;
       }
 
@@ -841,11 +642,7 @@ function createTranscriptView({
 
       record.item = normalizedItem;
       record.signature = signature;
-      {
-        const estimatedHeight = estimateItemHeight(normalizedItem);
-        record.height = deferredMeasurementEnabled ? estimatedHeight : measureItemHeight(normalizedItem, estimatedHeight);
-      }
-      enqueuePendingMeasurement(normalizedItem.id);
+      record.height = measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem));
       if (record.element) {
         renderIntoArticle(record.element, normalizedItem);
       }
@@ -858,22 +655,23 @@ function createTranscriptView({
       stickToBottom();
       scheduleStickToBottom();
     }
-
-    if (deferredMeasurementEnabled) {
-      measureVisibleRangeSynchronously();
-      scheduleBackgroundMeasurement(normalizedScrollIdleDelayMs);
-    }
   }
 
   function handleScroll() {
-    lastScrollEventTimestampMs = currentTimestampMs();
     scheduleRenderVisibleWindow();
-    if (hasPendingMeasurements()) {
-      scheduleBackgroundMeasurement(normalizedScrollIdleDelayMs);
-    }
   }
 
   function handleResize() {
+    const shouldStickToBottom = isScrolledNearBottom();
+    const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
+    resetEstimatedHeights();
+    remeasureAllHeights();
+    if (scrollAnchor) {
+      restoreScrollAnchor(scrollAnchor);
+    }
+    if (shouldStickToBottom) {
+      scrollToBottom();
+    }
     scheduleRenderVisibleWindow();
   }
 
@@ -895,12 +693,10 @@ function createTranscriptView({
       cancelFrame(stickToBottomFrameId);
       cancelTimeout(stickToBottomTimeoutId);
       cancelTimeout(lateStickToBottomTimeoutId);
-      cancelTimeout(measurementBatchTimeoutId);
       renderFrameId = null;
       stickToBottomFrameId = null;
       stickToBottomTimeoutId = null;
       lateStickToBottomTimeoutId = null;
-      measurementBatchTimeoutId = null;
       container.removeEventListener('scroll', handleScroll);
       domWindow.removeEventListener('resize', handleResize);
       measurementHost.remove();
