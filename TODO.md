@@ -1,13 +1,5 @@
 # TODO
 
-## Transcript Virtualization
-
-- Consider transcript virtualization once ThreadUI is rendering enough rich item types that very large threads become expensive.
-- This is separate from incremental updates: virtualization is about limiting mounted DOM, not just smarter patching.
-- Benefit:
-  - better performance on extremely long threads
-  - reduced layout/paint cost in Electron
-
 ## Local File Link Policy
 
 - Decide whether ThreadUI markdown links to local files should keep opening via the OS directly, or go through a qodex-owned policy layer.

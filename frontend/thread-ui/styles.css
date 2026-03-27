@@ -43,6 +43,24 @@ main {
   height: 100%;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-view__items-virtual {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.thread-view__spacer {
+  flex: 0 0 auto;
+  height: 0;
+}
+
+.thread-view__mounted {
   display: grid;
   gap: 0.75rem;
   align-content: start;

@@ -61,6 +61,7 @@ Implemented today:
 - thread-ui prompt composer with `SendUserInput` routed to `turn/start` or `turn/steer`
 - basic thread-ui rendering of completed items, now including all completed item kinds
 - stable `item_id` projection into ThreadUI and incremental DOM upsert behavior for transcript items
+- transcript virtualization in ThreadUI so very large threads keep a bounded mounted DOM window
 - thread-list `Resume Thread` context menu action and double-click-to-resume behavior
 - automated tests covering transport, generated client wiring, storage, models, and single-instance behavior
 - automated thread-ui IPC tests covering listener startup, login, add-items delivery, and send-user-input routing

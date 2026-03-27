@@ -5,7 +5,12 @@ const { JSDOM } = require('jsdom');
 
 const { createTranscriptView } = require('../../transcript-rendering/TranscriptView');
 
-function createView() {
+function createView({
+  clientHeight = 600,
+  itemGapPx = 12,
+  overscanPx = 600,
+  measureElementHeight,
+} = {}) {
   const dom = new JSDOM(`
     <!doctype html>
     <html>
@@ -41,6 +46,25 @@ function createView() {
 
   const container = dom.window.document.getElementById('thread-items');
   const emptyStateElement = dom.window.document.getElementById('thread-empty-state');
+  let scrollTop = 0;
+
+  Object.defineProperty(container, 'clientHeight', {
+    configurable: true,
+    get() {
+      return clientHeight;
+    },
+  });
+
+  Object.defineProperty(container, 'scrollTop', {
+    configurable: true,
+    get() {
+      return scrollTop;
+    },
+    set(value) {
+      scrollTop = Number.isFinite(value) ? value : 0;
+    },
+  });
+
   const transcriptView = createTranscriptView({
     domWindow: dom.window,
     container,
@@ -48,6 +72,9 @@ function createView() {
     messageRenderer,
     commandExecutionRenderer,
     fileChangeRenderer,
+    itemGapPx,
+    overscanPx,
+    measureElementHeight,
   });
 
   return {
@@ -55,6 +82,11 @@ function createView() {
     container,
     transcriptView,
   };
+}
+
+function scrollContainer(container, top) {
+  container.scrollTop = top;
+  container.dispatchEvent(new container.ownerDocument.defaultView.Event('scroll'));
 }
 
 test('upserts items by stable id without recreating unaffected nodes', () => {
@@ -131,4 +163,86 @@ test('accepts transcript items containing nested bigint fields', () => {
   ]);
 
   assert.match(commandNode.textContent, /ctest --output-on-failure/);
+});
+
+test('virtualizes long transcripts to a bounded mounted window', () => {
+  const heightsById = new Map();
+  for (let index = 0; index < 100; index += 1) {
+    heightsById.set(`item-${index}`, 100);
+  }
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    measureElementHeight(element, fallbackHeight) {
+      return heightsById.get(element.dataset.itemId) || fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 100 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'user',
+      text: `Message ${index}`,
+    })),
+  );
+
+  const mountedBeforeScroll = Array.from(container.querySelectorAll('.thread-item'))
+    .map((element) => element.dataset.itemId);
+
+  assert.ok(mountedBeforeScroll.length > 0);
+  assert.ok(mountedBeforeScroll.length < 20);
+  assert.deepEqual(mountedBeforeScroll, ['item-0', 'item-1', 'item-2']);
+
+  scrollContainer(container, 560);
+
+  const mountedAfterScroll = Array.from(container.querySelectorAll('.thread-item'))
+    .map((element) => element.dataset.itemId);
+
+  assert.ok(mountedAfterScroll.length > 0);
+  assert.ok(mountedAfterScroll.length < 20);
+  assert.notDeepEqual(mountedAfterScroll, mountedBeforeScroll);
+  assert.ok(!mountedAfterScroll.includes('item-0'));
+  assert.deepEqual(
+    mountedAfterScroll,
+    mountedAfterScroll
+      .map((itemId) => Number.parseInt(itemId.replace('item-', ''), 10))
+      .sort((left, right) => left - right)
+      .map((index) => `item-${index}`),
+  );
+});
+
+test('reuses the same DOM node when an item scrolls out of view and back', () => {
+  const heightsById = new Map();
+  for (let index = 0; index < 40; index += 1) {
+    heightsById.set(`item-${index}`, 100);
+  }
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    measureElementHeight(element, fallbackHeight) {
+      return heightsById.get(element.dataset.itemId) || fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 40 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'agent',
+      text: `Reply ${index}`,
+    })),
+  );
+
+  const itemNodeBefore = container.querySelector('[data-item-id="item-0"]');
+  assert.ok(itemNodeBefore);
+
+  scrollContainer(container, 560);
+  assert.equal(container.querySelector('[data-item-id="item-0"]'), null);
+
+  scrollContainer(container, 0);
+  const itemNodeAfter = container.querySelector('[data-item-id="item-0"]');
+
+  assert.ok(itemNodeAfter);
+  assert.strictEqual(itemNodeAfter, itemNodeBefore);
 });
