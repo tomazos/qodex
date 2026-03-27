@@ -100,7 +100,11 @@ private:
     [[nodiscard]] qodex::domain::threadmodel::Turn *turnForIdMutable(const QString &turnId);
     [[nodiscard]] qodex::domain::threadmodel::Turn *ensureTurn(const QString &turnId);
     void applyProtocolThreadStatus(const qodex::codex::ThreadStatus &status);
-    void setDerivedThreadStatus(const QString &kind, const QString &text, const QStringList &activeFlags = {});
+    void setDerivedThreadStatus(
+        qodex::threadui::ipc::common::ThreadStatusKind kind,
+        const QString &text,
+        const QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> &activeFlags = {}
+    );
     void queueThreadStatus();
     [[nodiscard]] qodex::codex::JsonRpcId dispatchPendingThreadUiUserInputRequest(
         const PendingThreadUiUserInputRequest &pendingRequest
@@ -131,9 +135,10 @@ private:
     QString m_title;
     QString m_cwd;
     QString m_activeTurnId;
-    QString m_threadStatusKind = QStringLiteral("idle");
+    qodex::threadui::ipc::common::ThreadStatusKind m_threadStatusKind =
+        qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE;
     QString m_threadStatusText = QStringLiteral("Idle");
-    QStringList m_threadActiveFlags;
+    QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> m_threadActiveFlags;
     qodex::codex::CodexClient *m_client = nullptr;
     ThreadUiProcess *m_threadUiProcess = nullptr;
     QHash<QString, PendingThreadUiUserInputRequest> m_pendingThreadUiUserInputRequests;

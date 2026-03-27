@@ -88,6 +88,36 @@ std::string linkActionKindToString(const qodex::threadui::ipc::common::LinkActio
     return "none";
 }
 
+std::string threadStatusKindToString(const qodex::threadui::ipc::common::ThreadStatusKind kind) {
+    switch (kind) {
+    case qodex::threadui::ipc::common::THREAD_STATUS_KIND_NOT_LOADED:
+        return "not_loaded";
+    case qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE:
+        return "idle";
+    case qodex::threadui::ipc::common::THREAD_STATUS_KIND_SYSTEM_ERROR:
+        return "system_error";
+    case qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE:
+        return "active";
+    case qodex::threadui::ipc::common::THREAD_STATUS_KIND_UNSPECIFIED:
+        break;
+    }
+
+    return "unknown";
+}
+
+std::string threadStatusActiveFlagToString(const qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlag) {
+    switch (activeFlag) {
+    case qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_APPROVAL:
+        return "waiting_on_approval";
+    case qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_USER_INPUT:
+        return "waiting_on_user_input";
+    case qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_UNSPECIFIED:
+        break;
+    }
+
+    return "unknown";
+}
+
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
     return !launchConfig.host.empty() && launchConfig.port != 0;
 }
@@ -566,12 +596,16 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
             std::string *
         ) {
             qodex::threadui::native::ThreadStatusUpdate statusUpdate;
-            statusUpdate.kind = request.kind();
+            statusUpdate.kind = threadStatusKindToString(request.kind());
             statusUpdate.text = request.text();
             statusUpdate.activeTurnId = request.active_turn_id();
             statusUpdate.activeFlags.reserve(static_cast<std::size_t>(request.active_flags_size()));
-            for (const std::string &activeFlag : request.active_flags()) {
-                statusUpdate.activeFlags.push_back(activeFlag);
+            for (const int activeFlagValue : request.active_flags()) {
+                statusUpdate.activeFlags.push_back(
+                    threadStatusActiveFlagToString(
+                        static_cast<qodex::threadui::ipc::common::ThreadStatusActiveFlag>(activeFlagValue)
+                    )
+                );
             }
             queueThreadStatus(std::move(statusUpdate));
             sendSetThreadStatusResponse(

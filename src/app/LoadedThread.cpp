@@ -16,19 +16,19 @@ bool isNoActiveTurnToSteerError(const qodex::codex::JsonRpcErrorObject &error) {
         error.message.trimmed().compare(QStringLiteral("no active turn to steer"), Qt::CaseInsensitive) == 0;
 }
 
-QString threadStatusKindString(const qodex::codex::ThreadStatus &status) {
+qodex::threadui::ipc::common::ThreadStatusKind threadStatusKindEnum(const qodex::codex::ThreadStatus &status) {
     switch (status.kind) {
     case qodex::codex::ThreadStatus::Kind::NotLoaded:
-        return QStringLiteral("not_loaded");
+        return qodex::threadui::ipc::common::THREAD_STATUS_KIND_NOT_LOADED;
     case qodex::codex::ThreadStatus::Kind::Idle:
-        return QStringLiteral("idle");
+        return qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE;
     case qodex::codex::ThreadStatus::Kind::SystemError:
-        return QStringLiteral("system_error");
+        return qodex::threadui::ipc::common::THREAD_STATUS_KIND_SYSTEM_ERROR;
     case qodex::codex::ThreadStatus::Kind::Active:
-        return QStringLiteral("active");
+        return qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE;
     }
 
-    return QStringLiteral("unknown");
+    return qodex::threadui::ipc::common::THREAD_STATUS_KIND_UNSPECIFIED;
 }
 
 QString activeFlagText(const qodex::codex::ThreadActiveFlag activeFlag) {
@@ -42,20 +42,20 @@ QString activeFlagText(const qodex::codex::ThreadActiveFlag activeFlag) {
     return QStringLiteral("Unknown");
 }
 
-QString activeFlagIdentifier(const qodex::codex::ThreadActiveFlag activeFlag) {
+qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlagEnum(const qodex::codex::ThreadActiveFlag activeFlag) {
     switch (activeFlag) {
     case qodex::codex::ThreadActiveFlag::WaitingOnApproval:
-        return QStringLiteral("waiting_on_approval");
+        return qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_APPROVAL;
     case qodex::codex::ThreadActiveFlag::WaitingOnUserInput:
-        return QStringLiteral("waiting_on_user_input");
+        return qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_USER_INPUT;
     }
 
-    return QStringLiteral("unknown");
+    return qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_UNSPECIFIED;
 }
 
 QString threadStatusText(
     const qodex::codex::ThreadStatus &status,
-    QStringList *activeFlags = nullptr
+    QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> *activeFlags = nullptr
 ) {
     if (activeFlags != nullptr) {
         activeFlags->clear();
@@ -71,17 +71,17 @@ QString threadStatusText(
     case qodex::codex::ThreadStatus::Kind::Active:
     {
         QStringList activeFlagTexts;
-        QStringList activeFlagIds;
+        QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> activeFlagEnums;
         if (const auto *payload = std::get_if<qodex::codex::Ref<qodex::codex::ThreadStatusActive>>(&status.payload);
             payload != nullptr && *payload) {
             for (const qodex::codex::ThreadActiveFlag activeFlag : (*payload)->activeFlags) {
                 activeFlagTexts.append(activeFlagText(activeFlag));
-                activeFlagIds.append(activeFlagIdentifier(activeFlag));
+                activeFlagEnums.append(activeFlagEnum(activeFlag));
             }
         }
 
         if (activeFlags != nullptr) {
-            *activeFlags = activeFlagIds;
+            *activeFlags = activeFlagEnums;
         }
         return activeFlagTexts.isEmpty()
             ? QStringLiteral("Active")
@@ -205,9 +205,9 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
     if (response.thread && response.thread->status) {
         applyProtocolThreadStatus(*response.thread->status);
     } else if (!m_activeTurnId.isEmpty()) {
-        setDerivedThreadStatus(QStringLiteral("active"), QStringLiteral("Active"));
+        setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE, QStringLiteral("Active"));
     } else {
-        setDerivedThreadStatus(QStringLiteral("idle"), QStringLiteral("Idle"));
+        setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE, QStringLiteral("Idle"));
     }
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
@@ -224,7 +224,7 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
 void LoadedThread::onThreadClosed() {
     m_cwd.clear();
     m_activeTurnId.clear();
-    setDerivedThreadStatus(QStringLiteral("not_loaded"), QStringLiteral("Not Loaded"));
+    setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_NOT_LOADED, QStringLiteral("Not Loaded"));
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
     m_turnsById.clear();
@@ -260,8 +260,10 @@ void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams
     const QString previousActiveTurnId = m_activeTurnId;
     m_activeTurnId = params.turn->id;
     setDerivedThreadStatus(
-        QStringLiteral("active"),
-        m_threadStatusKind == QStringLiteral("active") ? m_threadStatusText : QStringLiteral("Active"),
+        qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE,
+        m_threadStatusKind == qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE
+            ? m_threadStatusText
+            : QStringLiteral("Active"),
         m_threadActiveFlags
     );
     if (m_activeTurnId != previousActiveTurnId) {
@@ -288,7 +290,7 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
         if (m_activeTurnId.isEmpty() || m_activeTurnId == params.turn->id) {
             m_activeTurnId.clear();
         }
-        setDerivedThreadStatus(QStringLiteral("idle"), QStringLiteral("Idle"));
+        setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE, QStringLiteral("Idle"));
         if (m_activeTurnId != previousActiveTurnId) {
             emit threadPresentationChanged();
         }
@@ -298,7 +300,7 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
 
     const QString previousActiveTurnId = m_activeTurnId;
     m_activeTurnId.clear();
-    setDerivedThreadStatus(QStringLiteral("idle"), QStringLiteral("Idle"));
+    setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE, QStringLiteral("Idle"));
     if (m_activeTurnId != previousActiveTurnId) {
         emit threadPresentationChanged();
     }
@@ -641,8 +643,10 @@ void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResp
         const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId = response.turn->id;
         setDerivedThreadStatus(
-            QStringLiteral("active"),
-            m_threadStatusKind == QStringLiteral("active") ? m_threadStatusText : QStringLiteral("Active"),
+            qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE,
+            m_threadStatusKind == qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE
+                ? m_threadStatusText
+                : QStringLiteral("Active"),
             m_threadActiveFlags
         );
         if (m_activeTurnId != previousActiveTurnId) {
@@ -677,8 +681,10 @@ void LoadedThread::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResp
         const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId = response.turnId;
         setDerivedThreadStatus(
-            QStringLiteral("active"),
-            m_threadStatusKind == QStringLiteral("active") ? m_threadStatusText : QStringLiteral("Active"),
+            qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE,
+            m_threadStatusKind == qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE
+                ? m_threadStatusText
+                : QStringLiteral("Active"),
             m_threadActiveFlags
         );
         if (m_activeTurnId != previousActiveTurnId) {
@@ -705,7 +711,7 @@ void LoadedThread::onTurnSteerFailed(const JsonRpcId &id, const JsonRpcErrorObje
         pendingRequest.retriedAfterNoActiveTurnSteerFailure = true;
         const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId.clear();
-        setDerivedThreadStatus(QStringLiteral("idle"), QStringLiteral("Idle"));
+        setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE, QStringLiteral("Idle"));
         if (m_activeTurnId != previousActiveTurnId) {
             emit threadPresentationChanged();
         }
@@ -838,27 +844,27 @@ void LoadedThread::rebuildModelFromThread(const Thread &thread) {
 }
 
 void LoadedThread::applyProtocolThreadStatus(const ThreadStatus &status) {
-    QStringList activeFlags;
-    setDerivedThreadStatus(threadStatusKindString(status), threadStatusText(status, &activeFlags), activeFlags);
+    QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> activeFlags;
+    setDerivedThreadStatus(threadStatusKindEnum(status), threadStatusText(status, &activeFlags), activeFlags);
 }
 
 void LoadedThread::setDerivedThreadStatus(
-    const QString &kind,
+    const qodex::threadui::ipc::common::ThreadStatusKind kind,
     const QString &text,
-    const QStringList &activeFlags
+    const QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> &activeFlags
 ) {
-    m_threadStatusKind = kind.trimmed().isEmpty() ? QStringLiteral("unknown") : kind.trimmed();
+    m_threadStatusKind = kind;
     m_threadStatusText = text.trimmed().isEmpty() ? QStringLiteral("Unknown") : text.trimmed();
     m_threadActiveFlags = activeFlags;
 }
 
 void LoadedThread::queueThreadStatus() {
     qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest request;
-    request.set_kind(m_threadStatusKind.toStdString());
+    request.set_kind(m_threadStatusKind);
     request.set_text(m_threadStatusText.toStdString());
     request.set_active_turn_id(m_activeTurnId.toStdString());
-    for (const QString &activeFlag : m_threadActiveFlags) {
-        request.add_active_flags(activeFlag.toStdString());
+    for (const qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlag : m_threadActiveFlags) {
+        request.add_active_flags(activeFlag);
     }
     m_threadUiProcess->queueSetThreadStatus(request);
 }

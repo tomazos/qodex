@@ -19,9 +19,9 @@ message AddItemsResponse {
 }
 
 message SetThreadStatusRequest {
-  string kind = 1;
+  qodex.threadui.ipc.common.ThreadStatusKind kind = 1;
   string text = 2;
-  repeated string active_flags = 3;
+  repeated qodex.threadui.ipc.common.ThreadStatusActiveFlag active_flags = 3;
   string active_turn_id = 4;
 }
 

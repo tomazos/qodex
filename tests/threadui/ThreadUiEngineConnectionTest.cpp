@@ -137,9 +137,9 @@ void ThreadUiEngineConnectionTest::receivesThreadStatusUpdatesOverIpc() {
     QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
 
     qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest request;
-    request.set_kind("active");
+    request.set_kind(qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE);
     request.set_text("Active - Waiting on approval");
-    request.add_active_flags("waiting_on_approval");
+    request.add_active_flags(qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_APPROVAL);
     request.set_active_turn_id("turn-123");
 
     QVERIFY2(server.sendSetThreadStatus(launchConfig.token, request, &errorMessage), qPrintable(errorMessage));
