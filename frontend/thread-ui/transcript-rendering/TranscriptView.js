@@ -161,6 +161,13 @@ function createTranscriptView({
     container.scrollTop = container.scrollHeight;
   }
 
+  function stickToBottom() {
+    scrollToBottom();
+    renderVisibleWindow();
+    scrollToBottom();
+    renderVisibleWindow();
+  }
+
   function renderIntoArticle(article, item) {
     const kind = normalizeKind(item);
     const markupKind = isMarkupKind(kind);
@@ -499,8 +506,7 @@ function createTranscriptView({
     renderVisibleWindow();
 
     if (shouldStickToBottom) {
-      scrollToBottom();
-      renderVisibleWindow();
+      stickToBottom();
     }
   }
 

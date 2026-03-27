@@ -10,6 +10,7 @@ function createView({
   itemGapPx = 12,
   overscanPx = 600,
   measureElementHeight,
+  scrollHeightGetter,
 } = {}) {
   const dom = new JSDOM(`
     <!doctype html>
@@ -62,6 +63,17 @@ function createView({
     },
     set(value) {
       scrollTop = Number.isFinite(value) ? value : 0;
+    },
+  });
+
+  Object.defineProperty(container, 'scrollHeight', {
+    configurable: true,
+    get() {
+      if (typeof scrollHeightGetter === 'function') {
+        return scrollHeightGetter();
+      }
+
+      return 0;
     },
   });
 
@@ -245,4 +257,40 @@ test('reuses the same DOM node when an item scrolls out of view and back', () =>
 
   assert.ok(itemNodeAfter);
   assert.strictEqual(itemNodeAfter, itemNodeBefore);
+});
+
+test('sticks to the transcript end after full-history resume settles measured heights', () => {
+  let scrollHeightValue = 0;
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    scrollHeightGetter() {
+      return scrollHeightValue;
+    },
+    measureElementHeight(element, fallbackHeight) {
+      const itemIndex = Number.parseInt(element.dataset.itemId.replace('item-', ''), 10);
+      if (itemIndex <= 2) {
+        scrollHeightValue = 2500;
+        return 100;
+      }
+
+      if (itemIndex >= 17) {
+        scrollHeightValue = 4000;
+        return 200;
+      }
+
+      return fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 20 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'agent',
+      text: `Reply ${index}`,
+    })),
+  );
+
+  assert.equal(container.scrollTop, 4000);
+  assert.ok(container.querySelector('[data-item-id="item-19"]'));
 });
