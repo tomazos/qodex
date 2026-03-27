@@ -25,7 +25,6 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setAlternatingRowColors(true);
     m_tableView->setWordWrap(false);
-    m_tableView->setSortingEnabled(true);
     m_tableView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tableView->setTextElideMode(Qt::ElideRight);
     m_tableView->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
@@ -33,8 +32,9 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
 
     auto *header = m_tableView->horizontalHeader();
     header->setStretchLastSection(false);
-    header->setSectionsClickable(true);
+    header->setSectionsClickable(false);
     header->setSortIndicatorShown(true);
+    header->setSortIndicator(ApiLogModel::TimeColumn, Qt::DescendingOrder);
     header->setContextMenuPolicy(Qt::CustomContextMenu);
     header->setSectionsMovable(true);
     for (int column = ApiLogModel::TimeColumn; column < ApiLogModel::ColumnCount; ++column) {
@@ -43,7 +43,7 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
 
     applyDefaultColumnState();
     resizeDefaultColumns();
-    m_tableView->sortByColumn(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+    m_model->sort(ApiLogModel::TimeColumn, Qt::DescendingOrder);
 
     layout->addWidget(m_tableView, 1);
 
@@ -80,8 +80,6 @@ QByteArray ApiLogPane::saveViewState() const {
     QByteArray state;
     QDataStream stream(&state, QIODevice::WriteOnly);
     stream << m_tableView->horizontalHeader()->saveState();
-    stream << qint32(m_tableView->horizontalHeader()->sortIndicatorSection());
-    stream << qint32(m_tableView->horizontalHeader()->sortIndicatorOrder());
     return state;
 }
 
@@ -91,13 +89,8 @@ bool ApiLogPane::restoreViewState(const QByteArray &state) {
     }
 
     QByteArray headerState;
-    qint32 sortSection = ApiLogModel::TimeColumn;
-    qint32 sortOrder = Qt::DescendingOrder;
-
     QDataStream stream(state);
     stream >> headerState;
-    stream >> sortSection;
-    stream >> sortOrder;
 
     if (stream.status() != QDataStream::Ok) {
         return false;
@@ -109,8 +102,9 @@ bool ApiLogPane::restoreViewState(const QByteArray &state) {
     }
 
     m_restoredViewState = true;
-    if (sortSection >= 0 && sortSection < ApiLogModel::ColumnCount) {
-        m_tableView->sortByColumn(sortSection, static_cast<Qt::SortOrder>(sortOrder));
+    m_tableView->horizontalHeader()->setSortIndicator(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+    if (m_model != nullptr) {
+        m_model->sort(ApiLogModel::TimeColumn, Qt::DescendingOrder);
     }
     return true;
 }
