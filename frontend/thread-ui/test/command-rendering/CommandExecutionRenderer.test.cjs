@@ -171,3 +171,41 @@ test('renders list files and search titles from structured command actions', () 
     'zos@zoidberg:~/qodex$ rg "renderTitle" frontend/thread-ui/command-rendering/CommandExecutionRenderer.js'
   );
 });
+
+test('unwraps multi-line bash -lc commands in both double-quoted and single-quoted forms', () => {
+  const doubleQuoted = renderCommandExecution({
+    command: '/bin/bash -lc "printf \\"first\\nsecond\\n\\""',
+    cwd: '/home/zos/qodex',
+    status: 'completed',
+    hasExitCode: false,
+    exitCode: 0n,
+    hasDurationMs: false,
+    durationMs: 0n,
+    processId: '',
+    aggregatedOutput: '',
+    actions: [],
+  });
+
+  assert.equal(
+    doubleQuoted.querySelector('.command-execution__prompt').textContent,
+    'zos@zoidberg:~/qodex$ printf "first\nsecond\n"'
+  );
+
+  const singleQuoted = renderCommandExecution({
+    command: '/bin/bash -lc \'printf "first"\nprintf "second"\'',
+    cwd: '/home/zos/qodex',
+    status: 'completed',
+    hasExitCode: false,
+    exitCode: 0n,
+    hasDurationMs: false,
+    durationMs: 0n,
+    processId: '',
+    aggregatedOutput: '',
+    actions: [],
+  });
+
+  assert.equal(
+    singleQuoted.querySelector('.command-execution__prompt').textContent,
+    'zos@zoidberg:~/qodex$ printf "first"\nprintf "second"'
+  );
+});
