@@ -86,7 +86,11 @@ function upsertThreadItems(items) {
   if (!transcriptView || !Array.isArray(items) || items.length === 0) {
     return;
   }
+  const hadNoMountedTranscriptItems = threadItemsContainer?.querySelector('.thread-item') === null;
   transcriptView.upsertItems(items);
+  if (hadNoMountedTranscriptItems) {
+    transcriptView.scrollToEndSoon();
+  }
 }
 
 function resizeComposerInput() {

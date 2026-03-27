@@ -14,6 +14,8 @@ function createView({
   requestAnimationFrameImpl,
   cancelAnimationFrameImpl,
   scrollIntoViewImpl,
+  setTimeoutImpl,
+  clearTimeoutImpl,
 } = {}) {
   const dom = new JSDOM(`
     <!doctype html>
@@ -58,6 +60,14 @@ function createView({
 
   if (typeof cancelAnimationFrameImpl === 'function') {
     dom.window.cancelAnimationFrame = cancelAnimationFrameImpl;
+  }
+
+  if (typeof setTimeoutImpl === 'function') {
+    dom.window.setTimeout = setTimeoutImpl;
+  }
+
+  if (typeof clearTimeoutImpl === 'function') {
+    dom.window.clearTimeout = clearTimeoutImpl;
   }
 
   if (typeof scrollIntoViewImpl === 'function') {
@@ -356,6 +366,56 @@ test('sticks to the transcript end after scroll metrics become available on the 
   while (scheduledFrames.length > 0) {
     const frame = scheduledFrames.shift();
     frame();
+  }
+
+  assert.equal(container.scrollTop, 4000);
+  assert.ok(container.querySelector('[data-item-id="item-19"]'));
+});
+
+test('scrollToEndSoon sticks to the transcript end after scroll metrics become available on a later macrotask', () => {
+  let nextTimeoutId = 1;
+  let timeoutPhase = 0;
+  const scheduledTimeouts = [];
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    scrollHeightGetter() {
+      return timeoutPhase === 0 ? 0 : 4000;
+    },
+    requestAnimationFrameImpl() {
+      return 1;
+    },
+    cancelAnimationFrameImpl() {},
+    setTimeoutImpl(callback) {
+      const timeoutId = nextTimeoutId++;
+      scheduledTimeouts.push(() => {
+        timeoutPhase += 1;
+        callback();
+      });
+      return timeoutId;
+    },
+    clearTimeoutImpl() {},
+    scrollIntoViewImpl() {
+      if (timeoutPhase > 0) {
+        container.scrollTop = 4000;
+      }
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 20 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'agent',
+      text: `Reply ${index}`,
+    })),
+  );
+  transcriptView.scrollToEndSoon();
+
+  assert.notEqual(container.scrollTop, 4000);
+  while (scheduledTimeouts.length > 0) {
+    const timeout = scheduledTimeouts.shift();
+    timeout();
   }
 
   assert.equal(container.scrollTop, 4000);

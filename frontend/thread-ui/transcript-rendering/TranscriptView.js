@@ -75,6 +75,8 @@ function createTranscriptView({
   let anonymousItemSequence = 1;
   let renderFrameId = null;
   let stickToBottomFrameId = null;
+  let stickToBottomTimeoutId = null;
+  let lateStickToBottomTimeoutId = null;
   let lastRenderedRangeKey = '';
   let lastMeasuredViewportWidth = null;
 
@@ -170,6 +172,10 @@ function createTranscriptView({
     container.scrollTop = approximateBottomScrollTop();
   }
 
+  function scrollToDomBottom() {
+    container.scrollTop = container.scrollHeight;
+  }
+
   function alignLastItemIntoView() {
     if (itemOrder.length === 0) {
       return;
@@ -198,8 +204,26 @@ function createTranscriptView({
     renderVisibleWindow();
   }
 
+  function nudgeDomScrollToBottom() {
+    scrollToDomBottom();
+    scheduleRenderVisibleWindow();
+  }
+
   function scheduleStickToBottom() {
     cancelFrame(stickToBottomFrameId);
+    cancelTimeout(stickToBottomTimeoutId);
+    cancelTimeout(lateStickToBottomTimeoutId);
+
+    stickToBottomTimeoutId = requestTimeout(() => {
+      stickToBottomTimeoutId = null;
+      nudgeDomScrollToBottom();
+    }, 0);
+
+    lateStickToBottomTimeoutId = requestTimeout(() => {
+      lateStickToBottomTimeoutId = null;
+      nudgeDomScrollToBottom();
+    }, 50);
+
     stickToBottomFrameId = requestFrame(() => {
       stickToBottomFrameId = null;
       stickToBottom();
@@ -482,6 +506,23 @@ function createTranscriptView({
     domWindow.cancelAnimationFrame(frameId);
   }
 
+  function requestTimeout(callback, delayMs) {
+    if (typeof domWindow.setTimeout === 'function') {
+      return domWindow.setTimeout(callback, delayMs);
+    }
+
+    callback();
+    return null;
+  }
+
+  function cancelTimeout(timeoutId) {
+    if (timeoutId === null || typeof domWindow.clearTimeout !== 'function') {
+      return;
+    }
+
+    domWindow.clearTimeout(timeoutId);
+  }
+
   function scheduleRenderVisibleWindow() {
     if (renderFrameId !== null) {
       return;
@@ -567,11 +608,23 @@ function createTranscriptView({
 
   return {
     upsertItems,
+    scrollToEndSoon() {
+      requestTimeout(() => {
+        scrollToDomBottom();
+      }, 0);
+      requestTimeout(() => {
+        scrollToDomBottom();
+      }, 50);
+    },
     dispose() {
       cancelFrame(renderFrameId);
       cancelFrame(stickToBottomFrameId);
+      cancelTimeout(stickToBottomTimeoutId);
+      cancelTimeout(lateStickToBottomTimeoutId);
       renderFrameId = null;
       stickToBottomFrameId = null;
+      stickToBottomTimeoutId = null;
+      lateStickToBottomTimeoutId = null;
       container.removeEventListener('scroll', handleScroll);
       domWindow.removeEventListener('resize', handleResize);
     },
