@@ -102,9 +102,13 @@ function applyThreadStatus(statusUpdate) {
     return;
   }
 
-  const text = typeof statusUpdate?.text === 'string' ? statusUpdate.text.trim() : '';
-  const kind = typeof statusUpdate?.kind === 'string' ? statusUpdate.kind.trim() : '';
-  threadStatusElement.textContent = text;
+  if (!statusUpdate || typeof statusUpdate !== 'object') {
+    return;
+  }
+
+  const text = typeof statusUpdate.text === 'string' ? statusUpdate.text.trim() : '';
+  const kind = typeof statusUpdate.kind === 'string' ? statusUpdate.kind.trim() : '';
+  threadStatusElement.textContent = text.length > 0 ? text : 'Idle';
   threadStatusElement.dataset.kind = kind;
 }
 
