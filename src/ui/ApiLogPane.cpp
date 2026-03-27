@@ -50,6 +50,9 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     connect(m_tableView, &QWidget::customContextMenuRequested, this, &ApiLogPane::showContextMenu);
     connect(m_tableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, &ApiLogPane::showHeaderContextMenu);
     connect(m_tableView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { ensureVisibleRowsLoaded(); });
+    connect(m_model, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &, int, int) {
+        QTimer::singleShot(0, this, &ApiLogPane::ensureVisibleRowsLoaded);
+    });
     connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex &index) {
         if (!index.isValid()) {
             return;
