@@ -30,6 +30,7 @@ private:
     ApiLogModel *m_model = nullptr;
     QTableView *m_tableView = nullptr;
     bool m_restoredViewState = false;
+    bool m_keepScrolledToBottomOnInsert = false;
 };
 
 }  // namespace qodex::ui

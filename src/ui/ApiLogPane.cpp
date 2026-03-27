@@ -50,8 +50,23 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     connect(m_tableView, &QWidget::customContextMenuRequested, this, &ApiLogPane::showContextMenu);
     connect(m_tableView->horizontalHeader(), &QWidget::customContextMenuRequested, this, &ApiLogPane::showHeaderContextMenu);
     connect(m_tableView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) { ensureVisibleRowsLoaded(); });
+    connect(m_model, &QAbstractItemModel::rowsAboutToBeInserted, this, [this](const QModelIndex &, int, int) {
+        if (m_tableView == nullptr || m_tableView->verticalScrollBar() == nullptr) {
+            m_keepScrolledToBottomOnInsert = false;
+            return;
+        }
+
+        QScrollBar *scrollBar = m_tableView->verticalScrollBar();
+        m_keepScrolledToBottomOnInsert = scrollBar->value() >= scrollBar->maximum() - 1;
+    });
     connect(m_model, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &, int, int) {
-        QTimer::singleShot(0, this, &ApiLogPane::ensureVisibleRowsLoaded);
+        QTimer::singleShot(0, this, [this] {
+            ensureVisibleRowsLoaded();
+            if (m_keepScrolledToBottomOnInsert && m_tableView != nullptr) {
+                m_tableView->scrollToBottom();
+            }
+            m_keepScrolledToBottomOnInsert = false;
+        });
     });
     connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex &index) {
         if (!index.isValid()) {
