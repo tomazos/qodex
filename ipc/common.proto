@@ -8,6 +8,41 @@ enum ResultStatus {
   RESULT_STATUS_ERROR = 2;
 }
 
+enum LinkKind {
+  LINK_KIND_UNSPECIFIED = 0;
+  LINK_KIND_UNKNOWN = 1;
+  LINK_KIND_WEB = 2;
+  LINK_KIND_FILE = 3;
+  LINK_KIND_MAILTO = 4;
+}
+
+enum LinkActionKind {
+  LINK_ACTION_KIND_UNSPECIFIED = 0;
+  LINK_ACTION_KIND_NONE = 1;
+  LINK_ACTION_KIND_OPEN = 2;
+  LINK_ACTION_KIND_OPEN_EXTERNALLY = 3;
+  LINK_ACTION_KIND_REVEAL_IN_FOLDER = 4;
+}
+
+message ResolvedLink {
+  string raw_href = 1;
+  string normalized_href = 2;
+  string tooltip = 3;
+  LinkKind kind = 4;
+  string resolved_path = 5;
+  bool exists = 6;
+  bool is_directory = 7;
+  bool has_line = 8;
+  int64 line = 9;
+  bool has_column = 10;
+  int64 column = 11;
+  LinkActionKind default_action = 12;
+  bool can_open = 13;
+  bool can_open_externally = 14;
+  bool can_reveal_in_folder = 15;
+  bool can_copy_resolved_path = 16;
+}
+
 message UserMessage {
   string text = 1;
 }

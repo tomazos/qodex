@@ -149,6 +149,30 @@ bool ThreadUiProcess::replyToUserInputRequest(
     return m_threadUiIpcServer->sendUserInputResponse(m_launchToken, requestId, status, message, errorMessage);
 }
 
+bool ThreadUiProcess::replyToResolveLinkRequest(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message,
+    const qodex::threadui::ipc::common::ResolvedLink &resolvedLink,
+    QString *errorMessage
+) {
+    if (m_threadUiIpcServer == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI IPC server is not available.");
+        }
+        return false;
+    }
+
+    return m_threadUiIpcServer->sendResolveLinkResponse(
+        m_launchToken,
+        requestId,
+        status,
+        message,
+        resolvedLink,
+        errorMessage
+    );
+}
+
 void ThreadUiProcess::handleAuthenticated() {
     m_authenticated = true;
     flushPendingAddItems();
@@ -160,6 +184,10 @@ void ThreadUiProcess::handleDisconnected() {
 
 void ThreadUiProcess::handleUserInputRequested(const std::uint64_t requestId, const QString &text) {
     emit userInputRequested(requestId, text);
+}
+
+void ThreadUiProcess::handleResolveLinkRequested(const std::uint64_t requestId, const QString &href) {
+    emit resolveLinkRequested(requestId, href);
 }
 
 void ThreadUiProcess::startProcess() {

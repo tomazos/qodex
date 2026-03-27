@@ -49,6 +49,7 @@ private:
     void onThreadUiAuthenticated(const QString &token);
     void onThreadUiDisconnected(const QString &token);
     void onSendUserInputRequested(const QString &token, std::uint64_t requestId, const QString &text);
+    void onResolveLinkRequested(const QString &token, std::uint64_t requestId, const QString &href);
 
 private:
     QString m_threadUiAppDir;

@@ -3,6 +3,7 @@ const path = require('path');
 const { ipcRenderer } = require('electron');
 
 const { createCommandExecutionRenderer } = require('./command-rendering/CommandExecutionRenderer');
+const { createLinkInteractionController } = require('./link-handling/LinkInteractionController');
 const { createFileChangeRenderer } = require('./diff-rendering/FileChangeRenderer');
 const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
 const { createTranscriptView } = require('./transcript-rendering/TranscriptView');
@@ -36,9 +37,11 @@ let messageRenderer = null;
 let commandExecutionRenderer = null;
 let fileChangeRenderer = null;
 let transcriptView = null;
+let linkInteractionController = null;
 let composerResizeFrameId = null;
 let lastSubmittedComposerText = null;
 let lastSubmittedComposerAtMs = 0;
+const pendingLinkResolutionRequests = new Map();
 
 function describeError(error) {
   if (error instanceof Error) {
@@ -91,6 +94,62 @@ function upsertThreadItems(items) {
   if (hadNoMountedTranscriptItems) {
     transcriptView.scrollToEndSoon();
   }
+}
+
+function settlePendingLinkResolutions() {
+  const resolvedLinks = native.takePendingResolvedLinks();
+  if (!Array.isArray(resolvedLinks) || resolvedLinks.length === 0) {
+    return;
+  }
+
+  for (const resolvedLink of resolvedLinks) {
+    const requestKey = typeof resolvedLink?.requestId === 'bigint'
+      ? resolvedLink.requestId.toString()
+      : String(resolvedLink?.requestId ?? '');
+    const pendingRequest = pendingLinkResolutionRequests.get(requestKey);
+    if (!pendingRequest) {
+      continue;
+    }
+
+    pendingLinkResolutionRequests.delete(requestKey);
+    pendingRequest.resolve(resolvedLink);
+  }
+}
+
+function resolveLinkDescriptor(rawHref) {
+  if (typeof rawHref !== 'string' || rawHref.trim() === '') {
+    return Promise.resolve({
+      ok: false,
+      rawHref: '',
+      normalizedHref: '',
+      tooltip: '',
+      defaultAction: 'none',
+    });
+  }
+
+  const requestId = native.resolveLink(rawHref.trim());
+  const requestKey = typeof requestId === 'bigint' ? requestId.toString() : String(requestId ?? '');
+  if (requestKey === '' || requestKey === '0') {
+    return Promise.resolve({
+      ok: false,
+      rawHref,
+      normalizedHref: rawHref,
+      tooltip: rawHref,
+      defaultAction: 'none',
+    });
+  }
+
+  return new Promise((resolve) => {
+    pendingLinkResolutionRequests.set(requestKey, { resolve });
+  });
+}
+
+async function performLinkAction(payload) {
+  await ipcRenderer.invoke('thread-ui:perform-link-action', payload);
+}
+
+async function showLinkContextMenu(payload) {
+  await ipcRenderer.invoke('thread-ui:show-link-context-menu', payload);
 }
 
 function resizeComposerInput() {
@@ -221,6 +280,12 @@ async function initialize() {
       commandExecutionRenderer,
       fileChangeRenderer,
     });
+    linkInteractionController = createLinkInteractionController({
+      container: threadItemsContainer,
+      resolveLink: resolveLinkDescriptor,
+      performLinkAction,
+      showLinkContextMenu,
+    });
     native.initialize(normalizeLaunchConfig(await ipcRenderer.invoke('thread-ui:get-launch-config')));
     await ipcRenderer.invoke('thread-ui:notify-ready');
 
@@ -238,6 +303,7 @@ async function initialize() {
         }
 
         upsertThreadItems(native.takePendingItems());
+        settlePendingLinkResolutions();
         if (!pendingErrorDialogOpen) {
           const pendingError = native.takePendingError();
           if (typeof pendingError === 'string' && pendingError.length > 0) {
@@ -273,6 +339,13 @@ function shutdown() {
     window.cancelAnimationFrame(composerResizeFrameId);
     composerResizeFrameId = null;
   }
+
+  if (linkInteractionController) {
+    linkInteractionController.dispose();
+    linkInteractionController = null;
+  }
+
+  pendingLinkResolutionRequests.clear();
 
   native.shutdown();
 }

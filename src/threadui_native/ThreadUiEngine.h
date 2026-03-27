@@ -42,6 +42,28 @@ struct DisplayItem {
     DisplayFileChange fileChange;
 };
 
+struct ResolvedLink {
+    std::uint64_t requestId = 0;
+    bool ok = false;
+    std::string message;
+    std::string rawHref;
+    std::string normalizedHref;
+    std::string tooltip;
+    std::string kind;
+    std::string resolvedPath;
+    bool exists = false;
+    bool isDirectory = false;
+    bool hasLine = false;
+    std::int64_t line = 0;
+    bool hasColumn = false;
+    std::int64_t column = 0;
+    std::string defaultAction;
+    bool canOpen = false;
+    bool canOpenExternally = false;
+    bool canRevealInFolder = false;
+    bool canCopyResolvedPath = false;
+};
+
 struct LaunchConfig {
     std::string host;
     std::uint16_t port = 0;
@@ -52,8 +74,10 @@ void initialize(const LaunchConfig &launchConfig = {});
 void tick();
 void shutdown();
 void sendUserInput(const std::string &text);
+[[nodiscard]] std::uint64_t resolveLink(const std::string &href);
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback);
 [[nodiscard]] std::vector<DisplayItem> takePendingItems();
+[[nodiscard]] std::vector<ResolvedLink> takePendingResolvedLinks();
 [[nodiscard]] std::string takeFatalError();
 [[nodiscard]] std::string takePendingError();
 

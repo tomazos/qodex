@@ -3,6 +3,7 @@
 #include <asio.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <iostream>
@@ -30,6 +31,8 @@ std::mutex pendingErrorMutex;
 std::string pendingError;
 std::mutex pendingItemsMutex;
 std::vector<qodex::threadui::native::DisplayItem> pendingItems;
+std::mutex pendingResolvedLinksMutex;
+std::vector<qodex::threadui::native::ResolvedLink> pendingResolvedLinks;
 struct IpcClientState;
 std::unique_ptr<IpcClientState> ipcClientState;
 namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
@@ -48,6 +51,38 @@ std::string fileChangeKindToString(const qodex::threadui::ipc::common::FileChang
     }
 
     return "unknown";
+}
+
+std::string linkKindToString(const qodex::threadui::ipc::common::LinkKind kind) {
+    switch (kind) {
+    case qodex::threadui::ipc::common::LINK_KIND_WEB:
+        return "web";
+    case qodex::threadui::ipc::common::LINK_KIND_FILE:
+        return "file";
+    case qodex::threadui::ipc::common::LINK_KIND_MAILTO:
+        return "mailto";
+    case qodex::threadui::ipc::common::LINK_KIND_UNKNOWN:
+    case qodex::threadui::ipc::common::LINK_KIND_UNSPECIFIED:
+        break;
+    }
+
+    return "unknown";
+}
+
+std::string linkActionKindToString(const qodex::threadui::ipc::common::LinkActionKind kind) {
+    switch (kind) {
+    case qodex::threadui::ipc::common::LINK_ACTION_KIND_OPEN:
+        return "open";
+    case qodex::threadui::ipc::common::LINK_ACTION_KIND_OPEN_EXTERNALLY:
+        return "open_externally";
+    case qodex::threadui::ipc::common::LINK_ACTION_KIND_REVEAL_IN_FOLDER:
+        return "reveal_in_folder";
+    case qodex::threadui::ipc::common::LINK_ACTION_KIND_NONE:
+    case qodex::threadui::ipc::common::LINK_ACTION_KIND_UNSPECIFIED:
+        break;
+    }
+
+    return "none";
 }
 
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
@@ -74,7 +109,8 @@ struct IpcClientState final {
     std::string inputBuffer;
     std::deque<std::string> writeQueue;
     std::unordered_set<std::uint64_t> pendingSendUserInputRequestIds;
-    std::uint64_t nextRequestId = 1;
+    std::unordered_set<std::uint64_t> pendingResolveLinkRequestIds;
+    std::atomic<std::uint64_t> nextRequestId{1};
     std::uint64_t pendingLoginRequestId = 0;
     bool stopRequested = false;
     bool connected = false;
@@ -111,6 +147,11 @@ void recordPendingError(const std::string &message) {
     if (pendingError.empty()) {
         pendingError = message;
     }
+}
+
+void queueResolvedLink(qodex::threadui::native::ResolvedLink resolvedLink) {
+    std::lock_guard lock(pendingResolvedLinksMutex);
+    pendingResolvedLinks.push_back(std::move(resolvedLink));
 }
 
 void beginWriteQueuedFrames(IpcClientState *state);
@@ -423,6 +464,48 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
                 }
                 return true;
             }
+
+            bool onResolveLinkResponse(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::ResolveLinkResponse &response,
+                std::string *errorMessage
+            ) {
+                if (!state->pendingResolveLinkRequestIds.contains(requestId)) {
+                    if (errorMessage != nullptr) {
+                        *errorMessage = "Received a ResolveLink response for an unknown request id.";
+                    }
+                    return false;
+                }
+
+                state->pendingResolveLinkRequestIds.erase(requestId);
+                qodex::threadui::native::ResolvedLink resolvedLink;
+                resolvedLink.requestId = requestId;
+                resolvedLink.ok = response.status() == qodex::threadui::ipc::common::RESULT_STATUS_OK;
+                resolvedLink.message = response.message();
+
+                if (response.has_resolved_link()) {
+                    const auto &payload = response.resolved_link();
+                    resolvedLink.rawHref = payload.raw_href();
+                    resolvedLink.normalizedHref = payload.normalized_href();
+                    resolvedLink.tooltip = payload.tooltip();
+                    resolvedLink.kind = linkKindToString(payload.kind());
+                    resolvedLink.resolvedPath = payload.resolved_path();
+                    resolvedLink.exists = payload.exists();
+                    resolvedLink.isDirectory = payload.is_directory();
+                    resolvedLink.hasLine = payload.has_line();
+                    resolvedLink.line = payload.line();
+                    resolvedLink.hasColumn = payload.has_column();
+                    resolvedLink.column = payload.column();
+                    resolvedLink.defaultAction = linkActionKindToString(payload.default_action());
+                    resolvedLink.canOpen = payload.can_open();
+                    resolvedLink.canOpenExternally = payload.can_open_externally();
+                    resolvedLink.canRevealInFolder = payload.can_reveal_in_folder();
+                    resolvedLink.canCopyResolvedPath = payload.can_copy_resolved_path();
+                }
+
+                queueResolvedLink(std::move(resolvedLink));
+                return true;
+            }
         } handler{state};
 
         std::string dispatchErrorMessage;
@@ -570,6 +653,7 @@ void scheduleConnect(IpcClientState *state) {
                     state->authenticated = false;
                     state->pendingLoginRequestId = 0;
                     state->pendingSendUserInputRequestIds.clear();
+                    state->pendingResolveLinkRequestIds.clear();
                     state->inputBuffer.clear();
                     state->writeQueue.clear();
                     state->writeInProgress = false;
@@ -649,6 +733,10 @@ void initialize(const LaunchConfig &launchConfig) {
         std::lock_guard lock(pendingItemsMutex);
         pendingItems.clear();
     }
+    {
+        std::lock_guard lock(pendingResolvedLinksMutex);
+        pendingResolvedLinks.clear();
+    }
 
     std::cout << "Qodex thread UI engine initialized.";
     if (hasIpcTarget(currentLaunchConfig)) {
@@ -669,6 +757,13 @@ std::vector<DisplayItem> takePendingItems() {
     std::vector<DisplayItem> items = std::move(pendingItems);
     pendingItems.clear();
     return items;
+}
+
+std::vector<ResolvedLink> takePendingResolvedLinks() {
+    std::lock_guard lock(pendingResolvedLinksMutex);
+    std::vector<ResolvedLink> links = std::move(pendingResolvedLinks);
+    pendingResolvedLinks.clear();
+    return links;
 }
 
 std::string takeFatalError() {
@@ -723,6 +818,57 @@ void sendUserInput(const std::string &text) {
     });
 }
 
+std::uint64_t resolveLink(const std::string &href) {
+    if (!initialized || href.empty() || !ipcClientState) {
+        return 0;
+    }
+
+    IpcClientState *state = ipcClientState.get();
+    const std::uint64_t requestId = state->nextRequestId++;
+    asio::post(state->ioContext, [state, href, requestId] {
+        if (state->stopRequested) {
+            qodex::threadui::native::ResolvedLink resolvedLink;
+            resolvedLink.requestId = requestId;
+            resolvedLink.ok = false;
+            resolvedLink.message = "Thread UI is shutting down.";
+            resolvedLink.rawHref = href;
+            queueResolvedLink(std::move(resolvedLink));
+            return;
+        }
+
+        if (!state->connected) {
+            qodex::threadui::native::ResolvedLink resolvedLink;
+            resolvedLink.requestId = requestId;
+            resolvedLink.ok = false;
+            resolvedLink.message = "Thread UI is not connected to qodex.";
+            resolvedLink.rawHref = href;
+            queueResolvedLink(std::move(resolvedLink));
+            return;
+        }
+
+        if (!state->authenticated) {
+            qodex::threadui::native::ResolvedLink resolvedLink;
+            resolvedLink.requestId = requestId;
+            resolvedLink.ok = false;
+            resolvedLink.message = "Thread UI is still connecting to qodex.";
+            resolvedLink.rawHref = href;
+            queueResolvedLink(std::move(resolvedLink));
+            return;
+        }
+
+        qodex::threadui::ipc::ui_to_qodex::ResolveLinkRequest request;
+        request.set_href(href);
+
+        state->pendingResolveLinkRequestIds.insert(requestId);
+        queueEnvelopeForWrite(
+            state,
+            qodex::threadui::ipc::makeRequestEnvelope<UiToQodexRpc::ResolveLink>(requestId, request)
+        );
+    });
+
+    return requestId;
+}
+
 void tick() {
     if (!initialized) {
         return;
@@ -759,6 +905,10 @@ void shutdown() {
     {
         std::lock_guard lock(pendingItemsMutex);
         pendingItems.clear();
+    }
+    {
+        std::lock_guard lock(pendingResolvedLinksMutex);
+        pendingResolvedLinks.clear();
     }
     std::cout << "Qodex thread UI engine shutdown." << std::endl;
 }

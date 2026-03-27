@@ -53,6 +53,20 @@ qodex::threadui::ipc::common::RpcEnvelope makeSendUserInputResponseEnvelope(
     return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::SendUserInput>(requestId, response);
 }
 
+qodex::threadui::ipc::common::RpcEnvelope makeResolveLinkResponseEnvelope(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message,
+    const qodex::threadui::ipc::common::ResolvedLink &resolvedLink
+) {
+    qodex::threadui::ipc::ui_to_qodex::ResolveLinkResponse response;
+    response.set_status(status);
+    response.set_message(message.toStdString());
+    *response.mutable_resolved_link() = resolvedLink;
+
+    return qodex::threadui::ipc::makeResponseEnvelope<UiToQodexRpc::ResolveLink>(requestId, response);
+}
+
 qodex::threadui::ipc::common::RpcEnvelope makeAddItemsRequestEnvelope(
     const std::uint64_t requestId,
     const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request
@@ -219,6 +233,32 @@ bool ThreadUiIpcServer::sendUserInputResponse(
     return true;
 }
 
+bool ThreadUiIpcServer::sendResolveLinkResponse(
+    const QString &token,
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message,
+    const qodex::threadui::ipc::common::ResolvedLink &resolvedLink,
+    QString *errorMessage
+) {
+    QTcpSocket *socket = m_authenticatedConnectionsByToken.value(token, nullptr);
+    if (socket == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection is not authenticated yet.");
+        }
+        return false;
+    }
+
+    if (!sendEnvelope(socket, makeResolveLinkResponseEnvelope(requestId, status, message, resolvedLink))) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to send UiToQodex.ResolveLink response.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void ThreadUiIpcServer::onNewConnection() {
     if (m_server == nullptr) {
         return;
@@ -318,6 +358,7 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                 QTcpSocket *socket;
                 const QString &token;
                 std::function<void(const QString &, std::uint64_t, const QString &)> emitSendUserInputRequested;
+                std::function<void(const QString &, std::uint64_t, const QString &)> emitResolveLinkRequested;
 
                 bool onLoginRequest(
                     const std::uint64_t requestId,
@@ -347,11 +388,23 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                     emitSendUserInputRequested(token, requestId, QString::fromStdString(request.text()));
                     return true;
                 }
+
+                bool onResolveLinkRequest(
+                    const std::uint64_t requestId,
+                    const qodex::threadui::ipc::ui_to_qodex::ResolveLinkRequest &request,
+                    std::string *
+                ) {
+                    emitResolveLinkRequested(token, requestId, QString::fromStdString(request.href()));
+                    return true;
+                }
             } handler{
                 socket,
                 connectionState.authenticatedToken,
                 [this](const QString &token, const std::uint64_t requestId, const QString &text) {
                     emit sendUserInputRequested(token, requestId, text);
+                },
+                [this](const QString &token, const std::uint64_t requestId, const QString &href) {
+                    emit resolveLinkRequested(token, requestId, href);
                 },
             };
 
@@ -443,6 +496,26 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                 );
                 if (errorMessage != nullptr) {
                     *errorMessage = "UiToQodex.SendUserInput is only valid after authentication.";
+                }
+                return false;
+            }
+
+            bool onResolveLinkRequest(
+                const std::uint64_t requestId,
+                const qodex::threadui::ipc::ui_to_qodex::ResolveLinkRequest &,
+                std::string *errorMessage
+            ) {
+                sendEnvelope(
+                    socket,
+                    makeResolveLinkResponseEnvelope(
+                        requestId,
+                        RESULT_STATUS_ERROR,
+                        QStringLiteral("UiToQodex.ResolveLink is only valid after authentication."),
+                        {}
+                    )
+                );
+                if (errorMessage != nullptr) {
+                    *errorMessage = "UiToQodex.ResolveLink is only valid after authentication.";
                 }
                 return false;
             }

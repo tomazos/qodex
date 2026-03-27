@@ -76,15 +76,18 @@ set_source_files_properties(
 set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/package.json"
     "${QODEX_THREAD_UI_SOURCE_DIR}/package-lock.json"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/context-menu/LinkContextMenu.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/main.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/init.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/index.html"
     "${QODEX_THREAD_UI_SOURCE_DIR}/command-rendering/CommandExecutionRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/diff-rendering/FileChangeRenderer.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/link-handling/LinkInteractionController.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/message-rendering/MessageRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/run-commonmark-conformance.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/command-rendering/CommandExecutionRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/diff-rendering/FileChangeRenderer.test.cjs"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test/link-handling/LinkInteractionController.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/CommonMarkConformance.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/MessageRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/transcript-rendering/TranscriptView.test.cjs"
@@ -583,6 +586,8 @@ qt_add_executable(qodex
     src/codex/TrafficLogger.cpp
     src/codex/TrafficLogger.h
     src/domain/CodexTypes.h
+    src/domain/ThreadUiLinkPolicy.cpp
+    src/domain/ThreadUiLinkPolicy.h
     src/domain/ThreadUiProjector.cpp
     src/domain/ThreadUiProjector.h
     src/domain/ThreadStore.cpp
@@ -785,6 +790,21 @@ if(BUILD_TESTING)
 
     add_test(NAME DbQueryCommandTest COMMAND DbQueryCommandTest)
 
+    qt_add_executable(ThreadUiLinkPolicyTest
+        tests/domain/ThreadUiLinkPolicyTest.cpp
+        src/domain/ThreadUiLinkPolicy.cpp
+        src/domain/ThreadUiLinkPolicy.h
+    )
+
+    target_include_directories(ThreadUiLinkPolicyTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(ThreadUiLinkPolicyTest PRIVATE Qt6::Core Qt6::Test qodex_thread_ui_ipc)
+    add_dependencies(ThreadUiLinkPolicyTest qodex_thread_ui_ipc_codegen)
+
+    add_test(NAME ThreadUiLinkPolicyTest COMMAND ThreadUiLinkPolicyTest)
+
     qt_add_executable(ThreadUiProjectorTest
         tests/domain/ThreadUiProjectorTest.cpp
         src/domain/ThreadUiProjector.cpp
@@ -882,6 +902,12 @@ if(BUILD_TESTING)
     add_test(
         NAME ThreadUiFileChangeRendererTest
         COMMAND "${NODE_EXECUTABLE}" --test ./test/diff-rendering/FileChangeRenderer.test.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
+
+    add_test(
+        NAME ThreadUiLinkInteractionControllerTest
+        COMMAND "${NODE_EXECUTABLE}" --test ./test/link-handling/LinkInteractionController.test.cjs
         WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
     )
 

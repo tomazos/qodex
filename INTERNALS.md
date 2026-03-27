@@ -181,14 +181,16 @@ Electron-side native addon.
 
 Electron application source.
 
-- [main.js](./frontend/thread-ui/main.js): Electron main process, window creation, fatal-error handling, context menu, external-link policy
-- [init.js](./frontend/thread-ui/init.js): renderer bootstrap, transcript wiring, composer behavior, native-addon polling
+- [main.js](./frontend/thread-ui/main.js): Electron main process, window creation, fatal-error handling, context menus, and execution of qodex-resolved link actions
+- [init.js](./frontend/thread-ui/init.js): renderer bootstrap, transcript wiring, composer behavior, native-addon polling, and qodex-backed link interaction plumbing
 - [index.html](./frontend/thread-ui/index.html), [styles.css](./frontend/thread-ui/styles.css): UI structure and styling
 - [transcript-rendering/TranscriptView.js](./frontend/thread-ui/transcript-rendering/TranscriptView.js): stable-id transcript upsert and virtualization layer that preserves per-item DOM identity while keeping only a bounded window mounted
 - [message-rendering/MessageRenderer.js](./frontend/thread-ui/message-rendering/MessageRenderer.js): markdown/KaTeX renderer
 - [diff-rendering/FileChangeRenderer.js](./frontend/thread-ui/diff-rendering/FileChangeRenderer.js): file-change diff presentation
 - [command-rendering/CommandExecutionRenderer.js](./frontend/thread-ui/command-rendering/CommandExecutionRenderer.js): command execution presentation
 - [context-menu/ContextMenu.js](./frontend/thread-ui/context-menu/ContextMenu.js): standard right-click edit menu logic
+- [context-menu/LinkContextMenu.js](./frontend/thread-ui/context-menu/LinkContextMenu.js): native link-specific context menu template
+- [link-handling/LinkInteractionController.js](./frontend/thread-ui/link-handling/LinkInteractionController.js): shared hover/click/context-menu link behavior driven by qodex link resolution
 
 The Electron app is staged into `build/runtime/thread-ui/app` by CMake and launched from there by qodex.
 
@@ -201,6 +203,8 @@ ThreadUI IPC schema.
 - [qodex_to_ui.proto](./ipc/qodex_to_ui.proto)
 
 These define the qodex-owned local RPC/message schema. They are not gRPC services at runtime; they are IDL inputs to qodex’s custom code generation.
+
+ThreadUI link handling now also goes through this IPC layer: the renderer asks qodex to resolve a link target, then uses the returned descriptor for tooltip text, default click behavior, and the link context menu.
 
 ### `scripts/`
 

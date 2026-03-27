@@ -57,16 +57,25 @@ public:
         const QString &message,
         QString *errorMessage = nullptr
     );
+    [[nodiscard]] bool replyToResolveLinkRequest(
+        std::uint64_t requestId,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message,
+        const qodex::threadui::ipc::common::ResolvedLink &resolvedLink,
+        QString *errorMessage = nullptr
+    );
 
     void handleAuthenticated();
     void handleDisconnected();
     void handleUserInputRequested(std::uint64_t requestId, const QString &text);
+    void handleResolveLinkRequested(std::uint64_t requestId, const QString &href);
 
 signals:
     void activeStateChanged();
     void statusMessageRequested(const QString &message);
     void processExitedExternally(const QString &threadId);
     void userInputRequested(std::uint64_t requestId, const QString &text);
+    void resolveLinkRequested(std::uint64_t requestId, const QString &href);
 
 private:
     void startProcess();

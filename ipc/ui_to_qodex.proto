@@ -7,6 +7,7 @@ import "common.proto";
 service UiToQodex {
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc SendUserInput(SendUserInputRequest) returns (SendUserInputResponse);
+  rpc ResolveLink(ResolveLinkRequest) returns (ResolveLinkResponse);
 }
 
 message LoginRequest {
@@ -25,4 +26,14 @@ message SendUserInputRequest {
 message SendUserInputResponse {
   qodex.threadui.ipc.common.ResultStatus status = 1;
   string message = 2;
+}
+
+message ResolveLinkRequest {
+  string href = 1;
+}
+
+message ResolveLinkResponse {
+  qodex.threadui.ipc.common.ResultStatus status = 1;
+  string message = 2;
+  qodex.threadui.ipc.common.ResolvedLink resolved_link = 3;
 }

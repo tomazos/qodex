@@ -48,11 +48,20 @@ public:
         const QString &message,
         QString *errorMessage = nullptr
     );
+    [[nodiscard]] bool sendResolveLinkResponse(
+        const QString &token,
+        std::uint64_t requestId,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message,
+        const qodex::threadui::ipc::common::ResolvedLink &resolvedLink,
+        QString *errorMessage = nullptr
+    );
 
 signals:
     void threadUiAuthenticated(const QString &token);
     void threadUiDisconnected(const QString &token);
     void sendUserInputRequested(const QString &token, std::uint64_t requestId, const QString &text);
+    void resolveLinkRequested(const QString &token, std::uint64_t requestId, const QString &href);
 
 private:
     struct ConnectionState {

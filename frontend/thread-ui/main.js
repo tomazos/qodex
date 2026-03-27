@@ -1,8 +1,9 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } = require('electron');
 const readline = require('node:readline');
 const { URL, fileURLToPath } = require('node:url');
 const path = require('path');
 const { buildContextMenuTemplate } = require('./context-menu/ContextMenu');
+const { buildLinkContextMenuTemplate } = require('./context-menu/LinkContextMenu');
 
 const windowIconPath = path.join(__dirname, 'assets', 'qodex-icon-256x256.png');
 
@@ -148,6 +149,58 @@ async function openOutsideThreadUi(url) {
     if (error) {
       console.error(`Failed to open external file URL ${url}: ${error}`);
     }
+  }
+}
+
+function normalizedLinkAddress(payload) {
+  if (typeof payload?.resolvedLink?.normalizedHref === 'string' && payload.resolvedLink.normalizedHref.length > 0) {
+    return payload.resolvedLink.normalizedHref;
+  }
+
+  return typeof payload?.rawHref === 'string' ? payload.rawHref : '';
+}
+
+async function performLinkAction(payload) {
+  const actionKind = typeof payload?.actionKind === 'string' ? payload.actionKind : '';
+  const resolvedLink = payload?.resolvedLink && typeof payload.resolvedLink === 'object' ? payload.resolvedLink : {};
+  const rawHref = typeof payload?.rawHref === 'string' ? payload.rawHref : '';
+  const linkText = typeof payload?.linkText === 'string' ? payload.linkText : '';
+
+  switch (actionKind) {
+  case 'open':
+    if (typeof resolvedLink.resolvedPath === 'string' && resolvedLink.resolvedPath.length > 0) {
+      const error = await shell.openPath(resolvedLink.resolvedPath);
+      if (error) {
+        await showErrorDialog(`Failed to open ${resolvedLink.resolvedPath}: ${error}`);
+      }
+    }
+    return;
+  case 'open_externally':
+  {
+    const address = normalizedLinkAddress({ resolvedLink, rawHref });
+    if (address.length > 0) {
+      await shell.openExternal(address);
+    }
+    return;
+  }
+  case 'reveal_in_folder':
+    if (typeof resolvedLink.resolvedPath === 'string' && resolvedLink.resolvedPath.length > 0) {
+      shell.showItemInFolder(resolvedLink.resolvedPath);
+    }
+    return;
+  case 'copy_link_text':
+    clipboard.writeText(linkText);
+    return;
+  case 'copy_link_address':
+    clipboard.writeText(normalizedLinkAddress({ resolvedLink, rawHref }));
+    return;
+  case 'copy_resolved_path':
+    if (typeof resolvedLink.resolvedPath === 'string') {
+      clipboard.writeText(resolvedLink.resolvedPath);
+    }
+    return;
+  default:
+    return;
   }
 }
 
@@ -299,6 +352,26 @@ ipcMain.handle('thread-ui:notify-ready', () => {
       app.exit(0);
     });
   }
+});
+ipcMain.handle('thread-ui:perform-link-action', async (_event, payload) => {
+  await performLinkAction(payload);
+  return true;
+});
+ipcMain.handle('thread-ui:show-link-context-menu', async (event, payload) => {
+  const menu = Menu.buildFromTemplate(buildLinkContextMenuTemplate({
+    resolvedLink: payload?.resolvedLink || {},
+    rawHref: typeof payload?.rawHref === 'string' ? payload.rawHref : '',
+    linkText: typeof payload?.linkText === 'string' ? payload.linkText : '',
+    onAction: performLinkAction,
+  }));
+
+  if (menu.items.length === 0) {
+    return false;
+  }
+
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  menu.popup({ window: senderWindow || mainWindow || undefined });
+  return true;
 });
 
 app.whenReady().then(() => {

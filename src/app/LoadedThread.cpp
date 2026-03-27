@@ -50,6 +50,7 @@ LoadedThread::LoadedThread(
     Q_ASSERT(m_threadUiProcess != nullptr);
 
     QObject::connect(m_threadUiProcess, &ThreadUiProcess::userInputRequested, this, &LoadedThread::onThreadUiUserInputRequested);
+    QObject::connect(m_threadUiProcess, &ThreadUiProcess::resolveLinkRequested, this, &LoadedThread::onThreadUiResolveLinkRequested);
     QObject::connect(m_client, &qodex::codex::CodexClient::turnStartSucceeded, this, &LoadedThread::onTurnStartSucceeded);
     QObject::connect(m_client, &qodex::codex::CodexClient::turnStartFailed, this, &LoadedThread::onTurnStartFailed);
     QObject::connect(m_client, &qodex::codex::CodexClient::turnSteerSucceeded, this, &LoadedThread::onTurnSteerSucceeded);
@@ -83,6 +84,7 @@ QList<const qodex::domain::threadmodel::Turn *> LoadedThread::orderedTurns() con
 
 void LoadedThread::resume(const QString &title, const ThreadResumeResponse &response) {
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
+    m_cwd = response.thread ? response.thread->cwd : QString{};
     m_activeTurnId = response.thread ? activeTurnIdForThread(*response.thread) : QString{};
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
@@ -96,6 +98,7 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
 }
 
 void LoadedThread::onThreadClosed() {
+    m_cwd.clear();
     m_activeTurnId.clear();
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
@@ -289,6 +292,16 @@ void LoadedThread::onThreadUiUserInputRequested(const std::uint64_t requestId, c
     }
 }
 
+void LoadedThread::onThreadUiResolveLinkRequested(const std::uint64_t requestId, const QString &href) {
+    const qodex::threadui::ipc::common::ResolvedLink resolvedLink = m_threadUiLinkPolicy.resolveLink(href, m_cwd);
+    replyToThreadUiResolveLinkRequest(
+        requestId,
+        qodex::threadui::ipc::common::RESULT_STATUS_OK,
+        QStringLiteral("Link resolved."),
+        resolvedLink
+    );
+}
+
 void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResponse &response) {
     const auto pendingRequest = m_pendingThreadUiUserInputRequests.take(id.toKey());
     if (pendingRequest.requestId == 0) {
@@ -423,6 +436,20 @@ void LoadedThread::replyToThreadUiUserInputRequest(
     if (!m_threadUiProcess->replyToUserInputRequest(pendingRequest.requestId, status, message, &errorMessage)) {
         emit statusMessageRequested(
             QStringLiteral("Failed to reply to %1 input request: %2").arg(m_title, errorMessage)
+        );
+    }
+}
+
+void LoadedThread::replyToThreadUiResolveLinkRequest(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const QString &message,
+    const qodex::threadui::ipc::common::ResolvedLink &resolvedLink
+) {
+    QString errorMessage;
+    if (!m_threadUiProcess->replyToResolveLinkRequest(requestId, status, message, resolvedLink, &errorMessage)) {
+        emit statusMessageRequested(
+            QStringLiteral("Failed to reply to %1 link request: %2").arg(m_title, errorMessage)
         );
     }
 }

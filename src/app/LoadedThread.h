@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include "CodexClient.h"
+#include "domain/ThreadUiLinkPolicy.h"
 #include "CodexProtocol.h"
 #include "domain/ThreadUiProjector.h"
 #include "domain/threadmodel/Turn.h"
@@ -67,6 +68,7 @@ signals:
 
 private slots:
     void onThreadUiUserInputRequested(std::uint64_t requestId, const QString &text);
+    void onThreadUiResolveLinkRequested(std::uint64_t requestId, const QString &href);
     void onTurnStartSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::TurnStartResponse &response);
     void onTurnStartFailed(const qodex::codex::JsonRpcId &id, const qodex::codex::JsonRpcErrorObject &error);
     void onTurnSteerSucceeded(const qodex::codex::JsonRpcId &id, const qodex::codex::TurnSteerResponse &response);
@@ -102,6 +104,12 @@ private:
         qodex::threadui::ipc::common::ResultStatus status,
         const QString &message
     );
+    void replyToThreadUiResolveLinkRequest(
+        std::uint64_t requestId,
+        qodex::threadui::ipc::common::ResultStatus status,
+        const QString &message,
+        const qodex::threadui::ipc::common::ResolvedLink &resolvedLink
+    );
     void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
     template <typename T>
@@ -111,6 +119,7 @@ private:
 
     QString m_threadId;
     QString m_title;
+    QString m_cwd;
     QString m_activeTurnId;
     qodex::codex::CodexClient *m_client = nullptr;
     ThreadUiProcess *m_threadUiProcess = nullptr;
@@ -118,6 +127,7 @@ private:
     QStringList m_turnOrder;
     std::map<QString, std::unique_ptr<qodex::domain::threadmodel::Turn>> m_turnsById;
     qodex::domain::ThreadUiProjector m_threadUiProjector;
+    qodex::domain::ThreadUiLinkPolicy m_threadUiLinkPolicy;
 };
 
 }  // namespace qodex::app

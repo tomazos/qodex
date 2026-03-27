@@ -49,6 +49,12 @@ ThreadUiProcessManager::ThreadUiProcessManager(qodex::threadui::ThreadUiIpcServe
         this,
         &ThreadUiProcessManager::onSendUserInputRequested
     );
+    QObject::connect(
+        m_threadUiIpcServer,
+        &qodex::threadui::ThreadUiIpcServer::resolveLinkRequested,
+        this,
+        &ThreadUiProcessManager::onResolveLinkRequested
+    );
 }
 
 ThreadUiProcessManager::~ThreadUiProcessManager() {
@@ -281,6 +287,20 @@ void ThreadUiProcessManager::onSendUserInputRequested(
     }
 
     process->handleUserInputRequested(requestId, text);
+}
+
+void ThreadUiProcessManager::onResolveLinkRequested(
+    const QString &token,
+    const std::uint64_t requestId,
+    const QString &href
+) {
+    ThreadUiProcess *process = processForLaunchToken(token);
+    if (process == nullptr) {
+        emit statusMessageRequested(QStringLiteral("Ignoring ResolveLink request from unknown Thread UI connection."));
+        return;
+    }
+
+    process->handleResolveLinkRequested(requestId, href);
 }
 
 }  // namespace qodex::app

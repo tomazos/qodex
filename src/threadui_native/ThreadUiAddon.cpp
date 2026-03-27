@@ -309,6 +309,43 @@ napi_value sendUserInputWrapped(napi_env env, napi_callback_info info) {
     return getUndefined(env);
 }
 
+napi_value resolveLinkWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 1) {
+        throwTypeError(env, "resolveLink expects exactly 1 argument");
+        return nullptr;
+    }
+
+    size_t hrefLength = 0;
+    if (napi_get_value_string_utf8(env, args[0], nullptr, 0, &hrefLength) != napi_ok) {
+        throwTypeError(env, "resolveLink expects a string");
+        return nullptr;
+    }
+
+    std::string href(hrefLength + 1, '\0');
+    size_t copiedLength = 0;
+    if (napi_get_value_string_utf8(env, args[0], href.data(), href.size(), &copiedLength) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read resolveLink href");
+        return nullptr;
+    }
+
+    href.resize(copiedLength);
+    napi_value requestIdValue = nullptr;
+    if (napi_create_bigint_uint64(env, qodex::threadui::native::resolveLink(href), &requestIdValue) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create resolveLink request id");
+        return nullptr;
+    }
+
+    return requestIdValue;
+}
+
 napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -482,6 +519,113 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
     return array;
 }
 
+napi_value takePendingResolvedLinksWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "takePendingResolvedLinks expects no arguments");
+        return nullptr;
+    }
+
+    const std::vector<qodex::threadui::native::ResolvedLink> resolvedLinks =
+        qodex::threadui::native::takePendingResolvedLinks();
+    napi_value array = nullptr;
+    if (napi_create_array_with_length(env, resolvedLinks.size(), &array) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create pending resolved links array");
+        return nullptr;
+    }
+
+    for (std::size_t index = 0; index < resolvedLinks.size(); ++index) {
+        const auto &resolvedLink = resolvedLinks[index];
+        napi_value object = nullptr;
+        napi_value requestIdValue = nullptr;
+        napi_value okValue = nullptr;
+        napi_value messageValue = nullptr;
+        napi_value rawHrefValue = nullptr;
+        napi_value normalizedHrefValue = nullptr;
+        napi_value tooltipValue = nullptr;
+        napi_value kindValue = nullptr;
+        napi_value resolvedPathValue = nullptr;
+        napi_value existsValue = nullptr;
+        napi_value isDirectoryValue = nullptr;
+        napi_value hasLineValue = nullptr;
+        napi_value lineValue = nullptr;
+        napi_value hasColumnValue = nullptr;
+        napi_value columnValue = nullptr;
+        napi_value defaultActionValue = nullptr;
+        napi_value canOpenValue = nullptr;
+        napi_value canOpenExternallyValue = nullptr;
+        napi_value canRevealInFolderValue = nullptr;
+        napi_value canCopyResolvedPathValue = nullptr;
+
+        if (napi_create_object(env, &object) != napi_ok ||
+            napi_create_bigint_uint64(env, resolvedLink.requestId, &requestIdValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.ok, &okValue) != napi_ok ||
+            napi_create_string_utf8(env, resolvedLink.message.c_str(), NAPI_AUTO_LENGTH, &messageValue) != napi_ok ||
+            napi_create_string_utf8(env, resolvedLink.rawHref.c_str(), NAPI_AUTO_LENGTH, &rawHrefValue) != napi_ok ||
+            napi_create_string_utf8(
+                env,
+                resolvedLink.normalizedHref.c_str(),
+                NAPI_AUTO_LENGTH,
+                &normalizedHrefValue
+            ) != napi_ok ||
+            napi_create_string_utf8(env, resolvedLink.tooltip.c_str(), NAPI_AUTO_LENGTH, &tooltipValue) != napi_ok ||
+            napi_create_string_utf8(env, resolvedLink.kind.c_str(), NAPI_AUTO_LENGTH, &kindValue) != napi_ok ||
+            napi_create_string_utf8(
+                env,
+                resolvedLink.resolvedPath.c_str(),
+                NAPI_AUTO_LENGTH,
+                &resolvedPathValue
+            ) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.exists, &existsValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.isDirectory, &isDirectoryValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.hasLine, &hasLineValue) != napi_ok ||
+            napi_create_bigint_int64(env, resolvedLink.line, &lineValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.hasColumn, &hasColumnValue) != napi_ok ||
+            napi_create_bigint_int64(env, resolvedLink.column, &columnValue) != napi_ok ||
+            napi_create_string_utf8(
+                env,
+                resolvedLink.defaultAction.c_str(),
+                NAPI_AUTO_LENGTH,
+                &defaultActionValue
+            ) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.canOpen, &canOpenValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.canOpenExternally, &canOpenExternallyValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.canRevealInFolder, &canRevealInFolderValue) != napi_ok ||
+            napi_get_boolean(env, resolvedLink.canCopyResolvedPath, &canCopyResolvedPathValue) != napi_ok ||
+            napi_set_named_property(env, object, "requestId", requestIdValue) != napi_ok ||
+            napi_set_named_property(env, object, "ok", okValue) != napi_ok ||
+            napi_set_named_property(env, object, "message", messageValue) != napi_ok ||
+            napi_set_named_property(env, object, "rawHref", rawHrefValue) != napi_ok ||
+            napi_set_named_property(env, object, "normalizedHref", normalizedHrefValue) != napi_ok ||
+            napi_set_named_property(env, object, "tooltip", tooltipValue) != napi_ok ||
+            napi_set_named_property(env, object, "kind", kindValue) != napi_ok ||
+            napi_set_named_property(env, object, "resolvedPath", resolvedPathValue) != napi_ok ||
+            napi_set_named_property(env, object, "exists", existsValue) != napi_ok ||
+            napi_set_named_property(env, object, "isDirectory", isDirectoryValue) != napi_ok ||
+            napi_set_named_property(env, object, "hasLine", hasLineValue) != napi_ok ||
+            napi_set_named_property(env, object, "line", lineValue) != napi_ok ||
+            napi_set_named_property(env, object, "hasColumn", hasColumnValue) != napi_ok ||
+            napi_set_named_property(env, object, "column", columnValue) != napi_ok ||
+            napi_set_named_property(env, object, "defaultAction", defaultActionValue) != napi_ok ||
+            napi_set_named_property(env, object, "canOpen", canOpenValue) != napi_ok ||
+            napi_set_named_property(env, object, "canOpenExternally", canOpenExternallyValue) != napi_ok ||
+            napi_set_named_property(env, object, "canRevealInFolder", canRevealInFolderValue) != napi_ok ||
+            napi_set_named_property(env, object, "canCopyResolvedPath", canCopyResolvedPathValue) != napi_ok ||
+            napi_set_element(env, array, index, object) != napi_ok) {
+            napi_throw_error(env, nullptr, "Failed to create pending resolved link value");
+            return nullptr;
+        }
+    }
+
+    return array;
+}
+
 napi_value takeFatalErrorWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -574,10 +718,12 @@ napi_value init(napi_env env, napi_value exports) {
         exportFunction(env, exports, "initialize", initializeWrapped) != napi_ok ||
         exportFunction(env, exports, "setFrameCountDisplayCallback", setFrameCountDisplayCallbackWrapped) != napi_ok ||
         exportFunction(env, exports, "sendUserInput", sendUserInputWrapped) != napi_ok ||
+        exportFunction(env, exports, "resolveLink", resolveLinkWrapped) != napi_ok ||
         exportFunction(env, exports, "tick", tickWrapped) != napi_ok ||
         exportFunction(env, exports, "takeFatalError", takeFatalErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingError", takePendingErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingItems", takePendingItemsWrapped) != napi_ok ||
+        exportFunction(env, exports, "takePendingResolvedLinks", takePendingResolvedLinksWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");
         return nullptr;

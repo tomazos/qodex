@@ -17,6 +17,7 @@ class ThreadUiEngineConnectionTest final : public QObject {
 private slots:
     void establishesTcpConnectionToQodexListener();
     void sendsUserInputRequestsAndReportsErrors();
+    void resolvesLinksOverIpc();
     void rejectsUserInputWhenNoAuthenticatedConnectionExists();
 };
 
@@ -204,6 +205,96 @@ void ThreadUiEngineConnectionTest::sendsUserInputRequestsAndReportsErrors() {
     }
 
     QCOMPARE(pendingError, std::string("SendUserInput failed: Rejected."));
+
+    qodex::threadui::native::shutdown();
+
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
+}
+
+void ThreadUiEngineConnectionTest::resolvesLinksOverIpc() {
+    ThreadUiIpcServer server;
+
+    QString errorMessage;
+    QVERIFY2(server.listen(&errorMessage), qPrintable(errorMessage));
+
+    const qodex::threadui::ThreadUiLaunchConfig launchConfig = server.allocateLaunchConfig();
+
+    qodex::threadui::native::initialize(LaunchConfig{
+        .host = launchConfig.host.toStdString(),
+        .port = launchConfig.port,
+        .token = launchConfig.token.toStdString(),
+    });
+
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
+
+    int requestCount = 0;
+    QString lastToken;
+    std::uint64_t lastRequestId = 0;
+    QString lastHref;
+    QObject::connect(
+        &server,
+        &ThreadUiIpcServer::resolveLinkRequested,
+        this,
+        [&requestCount, &lastToken, &lastRequestId, &lastHref](
+            const QString &token,
+            const std::uint64_t requestId,
+            const QString &href
+        ) {
+            ++requestCount;
+            lastToken = token;
+            lastRequestId = requestId;
+            lastHref = href;
+        }
+    );
+
+    const std::uint64_t requestId = qodex::threadui::native::resolveLink("https://github.com/tomazos/qodex/issues/6");
+    QVERIFY(requestId != 0);
+
+    QTRY_COMPARE(requestCount, 1);
+    QCOMPARE(lastToken, launchConfig.token);
+    QCOMPARE(lastRequestId, requestId);
+    QCOMPARE(lastHref, QStringLiteral("https://github.com/tomazos/qodex/issues/6"));
+
+    qodex::threadui::ipc::common::ResolvedLink resolvedLink;
+    resolvedLink.set_raw_href("https://github.com/tomazos/qodex/issues/6");
+    resolvedLink.set_normalized_href("https://github.com/tomazos/qodex/issues/6");
+    resolvedLink.set_tooltip("https://github.com/tomazos/qodex/issues/6\nDefault: Open externally");
+    resolvedLink.set_kind(qodex::threadui::ipc::common::LINK_KIND_WEB);
+    resolvedLink.set_default_action(qodex::threadui::ipc::common::LINK_ACTION_KIND_OPEN_EXTERNALLY);
+    resolvedLink.set_can_open_externally(true);
+
+    QVERIFY2(
+        server.sendResolveLinkResponse(
+            launchConfig.token,
+            requestId,
+            qodex::threadui::ipc::common::RESULT_STATUS_OK,
+            QStringLiteral("Resolved."),
+            resolvedLink,
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    std::vector<qodex::threadui::native::ResolvedLink> pendingResolvedLinks;
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 1000 && pendingResolvedLinks.empty()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        pendingResolvedLinks = qodex::threadui::native::takePendingResolvedLinks();
+        if (pendingResolvedLinks.empty()) {
+            QTest::qWait(20);
+        }
+    }
+
+    QCOMPARE(pendingResolvedLinks.size(), std::size_t(1));
+    QCOMPARE(pendingResolvedLinks[0].requestId, requestId);
+    QCOMPARE(pendingResolvedLinks[0].ok, true);
+    QCOMPARE(pendingResolvedLinks[0].message, std::string("Resolved."));
+    QCOMPARE(pendingResolvedLinks[0].rawHref, std::string("https://github.com/tomazos/qodex/issues/6"));
+    QCOMPARE(pendingResolvedLinks[0].normalizedHref, std::string("https://github.com/tomazos/qodex/issues/6"));
+    QCOMPARE(pendingResolvedLinks[0].kind, std::string("web"));
+    QCOMPARE(pendingResolvedLinks[0].defaultAction, std::string("open_externally"));
+    QCOMPARE(pendingResolvedLinks[0].canOpenExternally, true);
 
     qodex::threadui::native::shutdown();
 
