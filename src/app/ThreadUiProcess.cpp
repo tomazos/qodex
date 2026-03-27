@@ -133,6 +133,11 @@ void ThreadUiProcess::queueAddItems(const qodex::threadui::ipc::qodex_to_ui::Add
     flushPendingAddItems();
 }
 
+void ThreadUiProcess::queueSetThreadStatus(const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request) {
+    m_pendingSetThreadStatusRequest = request;
+    flushPendingSetThreadStatus();
+}
+
 bool ThreadUiProcess::replyToUserInputRequest(
     const std::uint64_t requestId,
     const qodex::threadui::ipc::common::ResultStatus status,
@@ -175,6 +180,7 @@ bool ThreadUiProcess::replyToResolveLinkRequest(
 
 void ThreadUiProcess::handleAuthenticated() {
     m_authenticated = true;
+    flushPendingSetThreadStatus();
     flushPendingAddItems();
 }
 
@@ -304,6 +310,22 @@ void ThreadUiProcess::flushPendingAddItems() {
     }
 
     m_pendingAddItemsRequest.reset();
+}
+
+void ThreadUiProcess::flushPendingSetThreadStatus() {
+    if (!m_authenticated || !m_pendingSetThreadStatusRequest.has_value() || m_threadUiIpcServer == nullptr) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!m_threadUiIpcServer->sendSetThreadStatus(m_launchToken, *m_pendingSetThreadStatusRequest, &errorMessage)) {
+        emit statusMessageRequested(
+            QStringLiteral("Failed to deliver thread status to %1: %2").arg(title(), errorMessage)
+        );
+        return;
+    }
+
+    m_pendingSetThreadStatusRequest.reset();
 }
 
 void ThreadUiProcess::drainStandardOutput() {

@@ -41,6 +41,11 @@ public:
         const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request,
         QString *errorMessage = nullptr
     );
+    [[nodiscard]] bool sendSetThreadStatus(
+        const QString &token,
+        const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request,
+        QString *errorMessage = nullptr
+    );
     [[nodiscard]] bool sendUserInputResponse(
         const QString &token,
         std::uint64_t requestId,
@@ -69,6 +74,7 @@ private:
         QString authenticatedToken;
         std::uint64_t nextOutgoingRequestId = 1;
         QSet<quint64> pendingAddItemsRequestIds;
+        QSet<quint64> pendingSetThreadStatusRequestIds;
     };
 
     void onNewConnection();

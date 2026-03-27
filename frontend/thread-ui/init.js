@@ -32,6 +32,7 @@ let threadItemsContainer = null;
 let emptyStateElement = null;
 let composerForm = null;
 let composerInput = null;
+let threadStatusElement = null;
 let pendingErrorDialogOpen = false;
 let messageRenderer = null;
 let commandExecutionRenderer = null;
@@ -94,6 +95,17 @@ function upsertThreadItems(items) {
   if (hadNoMountedTranscriptItems) {
     transcriptView.scrollToEndSoon();
   }
+}
+
+function applyThreadStatus(statusUpdate) {
+  if (!threadStatusElement) {
+    return;
+  }
+
+  const text = typeof statusUpdate?.text === 'string' ? statusUpdate.text.trim() : '';
+  const kind = typeof statusUpdate?.kind === 'string' ? statusUpdate.kind.trim() : '';
+  threadStatusElement.textContent = text;
+  threadStatusElement.dataset.kind = kind;
 }
 
 function settlePendingLinkResolutions() {
@@ -268,6 +280,7 @@ async function initialize() {
     running = true;
     threadItemsContainer = document.getElementById('thread-items');
     emptyStateElement = document.getElementById('thread-empty-state');
+    threadStatusElement = document.getElementById('thread-status');
     initializeComposer();
     messageRenderer = createMessageRenderer({ domWindow: window });
     commandExecutionRenderer = createCommandExecutionRenderer({ domWindow: window });
@@ -303,6 +316,7 @@ async function initialize() {
         }
 
         upsertThreadItems(native.takePendingItems());
+        applyThreadStatus(native.takePendingThreadStatus());
         settlePendingLinkResolutions();
         if (!pendingErrorDialogOpen) {
           const pendingError = native.takePendingError();

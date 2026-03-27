@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,13 @@ struct ResolvedLink {
     bool canCopyResolvedPath = false;
 };
 
+struct ThreadStatusUpdate {
+    std::string kind;
+    std::string text;
+    std::vector<std::string> activeFlags;
+    std::string activeTurnId;
+};
+
 struct LaunchConfig {
     std::string host;
     std::uint16_t port = 0;
@@ -78,6 +86,7 @@ void sendUserInput(const std::string &text);
 void setFrameCountDisplayCallback(FrameCountDisplayCallback callback);
 [[nodiscard]] std::vector<DisplayItem> takePendingItems();
 [[nodiscard]] std::vector<ResolvedLink> takePendingResolvedLinks();
+[[nodiscard]] std::optional<ThreadStatusUpdate> takePendingThreadStatus();
 [[nodiscard]] std::string takeFatalError();
 [[nodiscard]] std::string takePendingError();
 

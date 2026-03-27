@@ -6,6 +6,7 @@ import "common.proto";
 
 service QodexToUi {
   rpc AddItems(AddItemsRequest) returns (AddItemsResponse);
+  rpc SetThreadStatus(SetThreadStatusRequest) returns (SetThreadStatusResponse);
 }
 
 message AddItemsRequest {
@@ -13,6 +14,18 @@ message AddItemsRequest {
 }
 
 message AddItemsResponse {
+  qodex.threadui.ipc.common.ResultStatus status = 1;
+  string message = 2;
+}
+
+message SetThreadStatusRequest {
+  string kind = 1;
+  string text = 2;
+  repeated string active_flags = 3;
+  string active_turn_id = 4;
+}
+
+message SetThreadStatusResponse {
   qodex.threadui.ipc.common.ResultStatus status = 1;
   string message = 2;
 }

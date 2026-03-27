@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <unordered_set>
 #include <utility>
@@ -33,6 +34,8 @@ std::mutex pendingItemsMutex;
 std::vector<qodex::threadui::native::DisplayItem> pendingItems;
 std::mutex pendingResolvedLinksMutex;
 std::vector<qodex::threadui::native::ResolvedLink> pendingResolvedLinks;
+std::mutex pendingThreadStatusMutex;
+std::optional<qodex::threadui::native::ThreadStatusUpdate> pendingThreadStatus;
 struct IpcClientState;
 std::unique_ptr<IpcClientState> ipcClientState;
 namespace QodexToUiRpc = qodex::threadui::ipc::qodex_to_ui::rpc::QodexToUi;
@@ -152,6 +155,11 @@ void recordPendingError(const std::string &message) {
 void queueResolvedLink(qodex::threadui::native::ResolvedLink resolvedLink) {
     std::lock_guard lock(pendingResolvedLinksMutex);
     pendingResolvedLinks.push_back(std::move(resolvedLink));
+}
+
+void queueThreadStatus(qodex::threadui::native::ThreadStatusUpdate statusUpdate) {
+    std::lock_guard lock(pendingThreadStatusMutex);
+    pendingThreadStatus = std::move(statusUpdate);
 }
 
 void beginWriteQueuedFrames(IpcClientState *state);
@@ -412,6 +420,25 @@ void sendAddItemsResponse(
     );
 }
 
+void sendSetThreadStatusResponse(
+    IpcClientState *state,
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::common::ResultStatus status,
+    const std::string &message
+) {
+    if (state == nullptr || state->stopRequested) {
+        return;
+    }
+
+    qodex::threadui::ipc::qodex_to_ui::SetThreadStatusResponse response;
+    response.set_status(status);
+    response.set_message(message);
+    queueEnvelopeForWrite(
+        state,
+        qodex::threadui::ipc::makeResponseEnvelope<QodexToUiRpc::SetThreadStatus>(requestId, response)
+    );
+}
+
 void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::RpcEnvelope &envelope) {
     if (state == nullptr || state->stopRequested) {
         return;
@@ -532,12 +559,42 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
             );
             return true;
         }
+
+        bool onSetThreadStatusRequest(
+            const std::uint64_t requestId,
+            const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request,
+            std::string *
+        ) {
+            qodex::threadui::native::ThreadStatusUpdate statusUpdate;
+            statusUpdate.kind = request.kind();
+            statusUpdate.text = request.text();
+            statusUpdate.activeTurnId = request.active_turn_id();
+            statusUpdate.activeFlags.reserve(static_cast<std::size_t>(request.active_flags_size()));
+            for (const std::string &activeFlag : request.active_flags()) {
+                statusUpdate.activeFlags.push_back(activeFlag);
+            }
+            queueThreadStatus(std::move(statusUpdate));
+            sendSetThreadStatusResponse(
+                state,
+                requestId,
+                qodex::threadui::ipc::common::RESULT_STATUS_OK,
+                "Thread status updated."
+            );
+            return true;
+        }
     } handler{state};
 
     std::string dispatchErrorMessage;
     if (!QodexToUiRpc::dispatchRequestEnvelope(envelope, handler, &dispatchErrorMessage)) {
         if (envelope.method() == QodexToUiRpc::AddItems::kMethodName) {
             sendAddItemsResponse(
+                state,
+                envelope.request_id(),
+                qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
+                dispatchErrorMessage
+            );
+        } else if (envelope.method() == QodexToUiRpc::SetThreadStatus::kMethodName) {
+            sendSetThreadStatusResponse(
                 state,
                 envelope.request_id(),
                 qodex::threadui::ipc::common::RESULT_STATUS_ERROR,
@@ -737,6 +794,10 @@ void initialize(const LaunchConfig &launchConfig) {
         std::lock_guard lock(pendingResolvedLinksMutex);
         pendingResolvedLinks.clear();
     }
+    {
+        std::lock_guard lock(pendingThreadStatusMutex);
+        pendingThreadStatus.reset();
+    }
 
     std::cout << "Qodex thread UI engine initialized.";
     if (hasIpcTarget(currentLaunchConfig)) {
@@ -764,6 +825,13 @@ std::vector<ResolvedLink> takePendingResolvedLinks() {
     std::vector<ResolvedLink> links = std::move(pendingResolvedLinks);
     pendingResolvedLinks.clear();
     return links;
+}
+
+std::optional<ThreadStatusUpdate> takePendingThreadStatus() {
+    std::lock_guard lock(pendingThreadStatusMutex);
+    std::optional<ThreadStatusUpdate> statusUpdate = std::move(pendingThreadStatus);
+    pendingThreadStatus.reset();
+    return statusUpdate;
 }
 
 std::string takeFatalError() {
@@ -909,6 +977,10 @@ void shutdown() {
     {
         std::lock_guard lock(pendingResolvedLinksMutex);
         pendingResolvedLinks.clear();
+    }
+    {
+        std::lock_guard lock(pendingThreadStatusMutex);
+        pendingThreadStatus.reset();
     }
     std::cout << "Qodex thread UI engine shutdown." << std::endl;
 }

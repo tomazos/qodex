@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 
+#include <optional>
+
 #include "common.pb.h"
 #include "qodex_to_ui.pb.h"
 #include "threadui/ThreadUiIpcServer.h"
@@ -16,6 +18,7 @@ class ThreadUiEngineConnectionTest final : public QObject {
 
 private slots:
     void establishesTcpConnectionToQodexListener();
+    void receivesThreadStatusUpdatesOverIpc();
     void sendsUserInputRequestsAndReportsErrors();
     void resolvesLinksOverIpc();
     void rejectsUserInputWhenNoAuthenticatedConnectionExists();
@@ -114,6 +117,53 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     qodex::threadui::native::shutdown();
 
     QTRY_COMPARE(server.unauthenticatedConnectionCount(), 0);
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
+}
+
+void ThreadUiEngineConnectionTest::receivesThreadStatusUpdatesOverIpc() {
+    ThreadUiIpcServer server;
+
+    QString errorMessage;
+    QVERIFY2(server.listen(&errorMessage), qPrintable(errorMessage));
+
+    const qodex::threadui::ThreadUiLaunchConfig launchConfig = server.allocateLaunchConfig();
+
+    qodex::threadui::native::initialize(LaunchConfig{
+        .host = launchConfig.host.toStdString(),
+        .port = launchConfig.port,
+        .token = launchConfig.token.toStdString(),
+    });
+
+    QTRY_COMPARE(server.authenticatedConnectionCount(), 1);
+
+    qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest request;
+    request.set_kind("active");
+    request.set_text("Active - Waiting on approval");
+    request.add_active_flags("waiting_on_approval");
+    request.set_active_turn_id("turn-123");
+
+    QVERIFY2(server.sendSetThreadStatus(launchConfig.token, request, &errorMessage), qPrintable(errorMessage));
+
+    std::optional<qodex::threadui::native::ThreadStatusUpdate> statusUpdate;
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 1000 && !statusUpdate.has_value()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        statusUpdate = qodex::threadui::native::takePendingThreadStatus();
+        if (!statusUpdate.has_value()) {
+            QTest::qWait(20);
+        }
+    }
+
+    QVERIFY(statusUpdate.has_value());
+    QCOMPARE(statusUpdate->kind, std::string("active"));
+    QCOMPARE(statusUpdate->text, std::string("Active - Waiting on approval"));
+    QCOMPARE(statusUpdate->activeTurnId, std::string("turn-123"));
+    QCOMPARE(statusUpdate->activeFlags.size(), std::size_t(1));
+    QCOMPARE(statusUpdate->activeFlags[0], std::string("waiting_on_approval"));
+
+    qodex::threadui::native::shutdown();
+
     QTRY_COMPARE(server.authenticatedConnectionCount(), 0);
 }
 

@@ -442,3 +442,11 @@ main {
   outline: 2px solid Highlight;
   outline-offset: 2px;
 }
+
+.thread-status {
+  min-height: 1lh;
+  padding-top: 0.5rem;
+  color: color-mix(in srgb, canvastext 68%, canvas 32%);
+  text-align: left;
+  font-size: 0.92rem;
+}

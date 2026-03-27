@@ -1,6 +1,7 @@
 #include <node_api.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -626,6 +627,66 @@ napi_value takePendingResolvedLinksWrapped(napi_env env, napi_callback_info info
     return array;
 }
 
+napi_value takePendingThreadStatusWrapped(napi_env env, napi_callback_info info) {
+    size_t argc = 0;
+
+    if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to read function arguments");
+        return nullptr;
+    }
+
+    if (argc != 0) {
+        throwTypeError(env, "takePendingThreadStatus expects no arguments");
+        return nullptr;
+    }
+
+    const std::optional<qodex::threadui::native::ThreadStatusUpdate> statusUpdate =
+        qodex::threadui::native::takePendingThreadStatus();
+    if (!statusUpdate.has_value()) {
+        return getUndefined(env);
+    }
+
+    napi_value object = nullptr;
+    napi_value kindValue = nullptr;
+    napi_value textValue = nullptr;
+    napi_value activeFlagsArray = nullptr;
+    napi_value activeTurnIdValue = nullptr;
+
+    if (napi_create_object(env, &object) != napi_ok ||
+        napi_create_string_utf8(env, statusUpdate->kind.c_str(), NAPI_AUTO_LENGTH, &kindValue) != napi_ok ||
+        napi_create_string_utf8(env, statusUpdate->text.c_str(), NAPI_AUTO_LENGTH, &textValue) != napi_ok ||
+        napi_create_array_with_length(env, statusUpdate->activeFlags.size(), &activeFlagsArray) != napi_ok ||
+        napi_create_string_utf8(
+            env,
+            statusUpdate->activeTurnId.c_str(),
+            NAPI_AUTO_LENGTH,
+            &activeTurnIdValue
+        ) != napi_ok ||
+        napi_set_named_property(env, object, "kind", kindValue) != napi_ok ||
+        napi_set_named_property(env, object, "text", textValue) != napi_ok ||
+        napi_set_named_property(env, object, "activeFlags", activeFlagsArray) != napi_ok ||
+        napi_set_named_property(env, object, "activeTurnId", activeTurnIdValue) != napi_ok) {
+        napi_throw_error(env, nullptr, "Failed to create pending thread status value");
+        return nullptr;
+    }
+
+    for (std::size_t index = 0; index < statusUpdate->activeFlags.size(); ++index) {
+        napi_value flagValue = nullptr;
+        if (napi_create_string_utf8(
+                env,
+                statusUpdate->activeFlags[index].c_str(),
+                NAPI_AUTO_LENGTH,
+                &flagValue
+            ) != napi_ok ||
+            napi_set_element(env, activeFlagsArray, index, flagValue) != napi_ok) {
+            napi_throw_error(env, nullptr, "Failed to create pending thread status active flag value");
+            return nullptr;
+        }
+    }
+
+    return object;
+}
+
 napi_value takeFatalErrorWrapped(napi_env env, napi_callback_info info) {
     size_t argc = 0;
 
@@ -723,6 +784,7 @@ napi_value init(napi_env env, napi_value exports) {
         exportFunction(env, exports, "takeFatalError", takeFatalErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingError", takePendingErrorWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingItems", takePendingItemsWrapped) != napi_ok ||
+        exportFunction(env, exports, "takePendingThreadStatus", takePendingThreadStatusWrapped) != napi_ok ||
         exportFunction(env, exports, "takePendingResolvedLinks", takePendingResolvedLinksWrapped) != napi_ok ||
         exportFunction(env, exports, "shutdown", shutdownWrapped) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to export native functions");

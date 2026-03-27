@@ -74,6 +74,13 @@ qodex::threadui::ipc::common::RpcEnvelope makeAddItemsRequestEnvelope(
     return qodex::threadui::ipc::makeRequestEnvelope<QodexToUiRpc::AddItems>(requestId, request);
 }
 
+qodex::threadui::ipc::common::RpcEnvelope makeSetThreadStatusRequestEnvelope(
+    const std::uint64_t requestId,
+    const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request
+) {
+    return qodex::threadui::ipc::makeRequestEnvelope<QodexToUiRpc::SetThreadStatus>(requestId, request);
+}
+
 bool sendEnvelope(
     QTcpSocket *socket,
     const qodex::threadui::ipc::common::RpcEnvelope &envelope
@@ -201,6 +208,42 @@ bool ThreadUiIpcServer::sendAddItems(
         connectionState.pendingAddItemsRequestIds.remove(requestId);
         if (errorMessage != nullptr) {
             *errorMessage = QStringLiteral("Failed to send QodexToUi.AddItems request.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool ThreadUiIpcServer::sendSetThreadStatus(
+    const QString &token,
+    const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request,
+    QString *errorMessage
+) {
+    QTcpSocket *socket = m_authenticatedConnectionsByToken.value(token, nullptr);
+    if (socket == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection is not authenticated yet.");
+        }
+        return false;
+    }
+
+    auto connectionStateIt = m_connectionStates.find(socket);
+    if (connectionStateIt == m_connectionStates.end()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread UI connection state was not found.");
+        }
+        return false;
+    }
+
+    auto &connectionState = connectionStateIt.value();
+    const std::uint64_t requestId = connectionState.nextOutgoingRequestId++;
+    connectionState.pendingSetThreadStatusRequestIds.insert(requestId);
+
+    if (!sendEnvelope(socket, makeSetThreadStatusRequestEnvelope(requestId, request))) {
+        connectionState.pendingSetThreadStatusRequestIds.remove(requestId);
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to send QodexToUi.SetThreadStatus request.");
         }
         return false;
     }
@@ -340,6 +383,27 @@ void ThreadUiIpcServer::onSocketReadyRead(QTcpSocket *socket) {
                         connectionState.pendingAddItemsRequestIds.remove(requestId);
                         if (response.status() != RESULT_STATUS_OK) {
                             qWarning("Thread UI rejected AddItems request: %s", response.message().c_str());
+                        }
+                        return true;
+                    }
+
+                    bool onSetThreadStatusResponse(
+                        const std::uint64_t requestId,
+                        const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusResponse &response,
+                        std::string *errorMessage
+                    ) {
+                        if (!connectionState.pendingSetThreadStatusRequestIds.contains(requestId)) {
+                            if (errorMessage != nullptr) {
+                                *errorMessage =
+                                    "Received a SetThreadStatus response for unknown request id " +
+                                    std::to_string(requestId) + '.';
+                            }
+                            return false;
+                        }
+
+                        connectionState.pendingSetThreadStatusRequestIds.remove(requestId);
+                        if (response.status() != RESULT_STATUS_OK) {
+                            qWarning("Thread UI rejected SetThreadStatus request: %s", response.message().c_str());
                         }
                         return true;
                     }

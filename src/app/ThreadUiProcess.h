@@ -51,6 +51,7 @@ public:
     void terminate();
     [[nodiscard]] bool activate(QString *errorMessage = nullptr);
     void queueAddItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest &request);
+    void queueSetThreadStatus(const qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest &request);
     [[nodiscard]] bool replyToUserInputRequest(
         std::uint64_t requestId,
         qodex::threadui::ipc::common::ResultStatus status,
@@ -81,6 +82,7 @@ private:
     void startProcess();
     void resetProcess();
     void flushPendingAddItems();
+    void flushPendingSetThreadStatus();
     void drainStandardOutput();
     void drainStandardError();
     [[nodiscard]] QString effectiveTitle() const;
@@ -97,6 +99,7 @@ private:
     bool m_authenticated = false;
     QProcess *m_process = nullptr;
     std::optional<qodex::threadui::ipc::qodex_to_ui::AddItemsRequest> m_pendingAddItemsRequest;
+    std::optional<qodex::threadui::ipc::qodex_to_ui::SetThreadStatusRequest> m_pendingSetThreadStatusRequest;
 };
 
 }  // namespace qodex::app
