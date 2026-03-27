@@ -24,6 +24,7 @@ public:
     [[nodiscard]] qodex::codex::TurnStatus status() const;
     [[nodiscard]] const qodex::codex::Nullable<qodex::codex::Ref<qodex::codex::TurnError>> &error() const;
     [[nodiscard]] QList<const AbstractItem *> orderedItems() const;
+    [[nodiscard]] int itemRow(const QString &itemId) const;
     [[nodiscard]] const AbstractItem *itemById(const QString &itemId) const;
     [[nodiscard]] AbstractItem *itemById(const QString &itemId);
 

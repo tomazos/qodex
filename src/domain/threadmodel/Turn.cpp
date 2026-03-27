@@ -259,6 +259,10 @@ QList<const AbstractItem *> Turn::orderedItems() const {
     return items;
 }
 
+int Turn::itemRow(const QString &itemId) const {
+    return m_itemOrder.indexOf(itemId);
+}
+
 const AbstractItem *Turn::itemById(const QString &itemId) const {
     const auto it = m_itemsById.find(itemId);
     return it == m_itemsById.end() ? nullptr : it->second.get();

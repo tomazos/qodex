@@ -53,7 +53,8 @@ public:
 signals:
     void startupProgressChanged(const QString &message, int progress);
     void startupFinished();
-    void loadedThreadsChanged();
+    void loadedThreadAdded(qodex::app::LoadedThread *loadedThread, int row);
+    void loadedThreadAboutToBeRemoved(qodex::app::LoadedThread *loadedThread, int row);
     void modelsChanged();
 
 private slots:

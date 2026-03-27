@@ -3,6 +3,7 @@
 #include "app/ThreadUiProcess.h"
 #include "domain/threadmodel/AbstractItem.h"
 #include "domain/threadmodel/CompletedItem.h"
+#include "domain/threadmodel/InprogressItem.h"
 
 namespace qodex::app {
 
@@ -13,6 +14,43 @@ constexpr qint64 kJsonRpcInvalidRequestErrorCode = -32600;
 bool isNoActiveTurnToSteerError(const qodex::codex::JsonRpcErrorObject &error) {
     return error.code == kJsonRpcInvalidRequestErrorCode &&
         error.message.trimmed().compare(QStringLiteral("no active turn to steer"), Qt::CaseInsensitive) == 0;
+}
+
+QString threadItemId(const qodex::codex::ThreadItem &item) {
+    switch (item.kind) {
+    case qodex::codex::ThreadItem::Kind::UserMessage:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemUserMessage>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::AgentMessage:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemAgentMessage>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::Plan:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemPlan>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::Reasoning:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemReasoning>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::CommandExecution:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemCommandExecution>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::FileChange:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemFileChange>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::McpToolCall:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemMcpToolCall>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::DynamicToolCall:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemDynamicToolCall>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::CollabAgentToolCall:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemCollabAgentToolCall>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::WebSearch:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemWebSearch>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::ImageView:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemImageView>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::ImageGeneration:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemImageGeneration>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::EnteredReviewMode:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemEnteredReviewMode>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::ExitedReviewMode:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemExitedReviewMode>>(item.payload)->id;
+    case qodex::codex::ThreadItem::Kind::ContextCompaction:
+        return std::get<qodex::codex::Ref<qodex::codex::ThreadItemContextCompaction>>(item.payload)->id;
+    }
+
+    return {};
 }
 
 }  // namespace
@@ -37,12 +75,14 @@ using qodex::domain::threadmodel::AbstractItem;
 
 LoadedThread::LoadedThread(
     const QString &threadId,
+    const QString &initialTitle,
     qodex::codex::CodexClient *client,
     ThreadUiProcess *threadUiProcess,
     QObject *parent
 )
     : QObject(parent),
       m_threadId(threadId),
+      m_title(initialTitle.trimmed().isEmpty() ? threadId : initialTitle.trimmed()),
       m_client(client),
       m_threadUiProcess(threadUiProcess) {
     Q_ASSERT(!m_threadId.isEmpty());
@@ -94,7 +134,7 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
     }
     m_threadUiProcess->relaunch(m_title);
     m_threadUiProcess->queueAddItems(m_threadUiProjector.projectTurns(orderedTurns()));
-    emit stateChanged();
+    emit snapshotRebuilt();
 }
 
 void LoadedThread::onThreadClosed() {
@@ -103,14 +143,17 @@ void LoadedThread::onThreadClosed() {
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
     m_turnsById.clear();
-    emit stateChanged();
+    emit snapshotRebuilt();
 }
 
 void LoadedThread::onThreadStatusChanged(const ThreadStatus &status) {
+    const QString previousActiveTurnId = m_activeTurnId;
     if (status.kind != ThreadStatus::Kind::Active) {
         m_activeTurnId.clear();
     }
-    emit stateChanged();
+    if (m_activeTurnId != previousActiveTurnId) {
+        emit threadPresentationChanged();
+    }
 }
 
 void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams &params) {
@@ -118,9 +161,19 @@ void LoadedThread::onTurnStartedNotification(const TurnStartedNotificationParams
         return;
     }
 
+    const bool turnWasMissing = turnForId(params.turn->id) == nullptr;
     ensureTurn(params.turn->id)->applyMetadata(*params.turn);
+    if (turnWasMissing) {
+        emit turnInserted(params.turn->id, turnRow(params.turn->id));
+    } else {
+        emit turnChanged(params.turn->id);
+    }
+
+    const QString previousActiveTurnId = m_activeTurnId;
     m_activeTurnId = params.turn->id;
-    emit stateChanged();
+    if (m_activeTurnId != previousActiveTurnId) {
+        emit threadPresentationChanged();
+    }
 }
 
 void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationParams &params) {
@@ -129,16 +182,29 @@ void LoadedThread::onTurnCompletedNotification(const TurnCompletedNotificationPa
     }
 
     if (params.turn && !params.turn->id.isEmpty()) {
+        const bool turnWasMissing = turnForId(params.turn->id) == nullptr;
         ensureTurn(params.turn->id)->applyMetadata(*params.turn);
+        if (turnWasMissing) {
+            emit turnInserted(params.turn->id, turnRow(params.turn->id));
+        } else {
+            emit turnChanged(params.turn->id);
+        }
+
+        const QString previousActiveTurnId = m_activeTurnId;
         if (m_activeTurnId.isEmpty() || m_activeTurnId == params.turn->id) {
             m_activeTurnId.clear();
         }
-        emit stateChanged();
+        if (m_activeTurnId != previousActiveTurnId) {
+            emit threadPresentationChanged();
+        }
         return;
     }
 
+    const QString previousActiveTurnId = m_activeTurnId;
     m_activeTurnId.clear();
-    emit stateChanged();
+    if (m_activeTurnId != previousActiveTurnId) {
+        emit threadPresentationChanged();
+    }
 }
 
 void LoadedThread::onItemStartedNotification(const qodex::codex::ItemStartedNotificationParams &params) {
@@ -146,9 +212,24 @@ void LoadedThread::onItemStartedNotification(const qodex::codex::ItemStartedNoti
         return;
     }
 
-    const auto *startedItem = ensureTurn(params.turnId)->applyStartedItem(*params.item);
-    Q_UNUSED(startedItem);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const QString itemId = threadItemId(*params.item);
+    const bool itemWasMissing = turn->itemById(itemId) == nullptr;
+    if (const auto *startedItem = turn->applyStartedItem(*params.item)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, startedItem->id(), turn->itemRow(startedItem->id()));
+        } else {
+            emit itemChanged(params.turnId, startedItem->id());
+        }
+    }
 }
 
 void LoadedThread::onItemCompletedNotification(const qodex::codex::ItemCompletedNotificationParams &params) {
@@ -156,10 +237,25 @@ void LoadedThread::onItemCompletedNotification(const qodex::codex::ItemCompleted
         return;
     }
 
-    if (auto *item = ensureTurn(params.turnId)->applyCompletedItem(*params.item)) {
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const QString itemId = threadItemId(*params.item);
+    const bool itemWasMissing = turn->itemById(itemId) == nullptr;
+    if (auto *item = turn->applyCompletedItem(*params.item)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, item->id(), turn->itemRow(item->id()));
+        } else {
+            emit itemChanged(params.turnId, item->id());
+        }
         queueDisplayItemIfSupported(*item);
     }
-    emit stateChanged();
 }
 
 void LoadedThread::onItemAgentMessageDeltaNotification(
@@ -169,8 +265,23 @@ void LoadedThread::onItemAgentMessageDeltaNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyAgentMessageDelta(params.itemId, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyAgentMessageDelta(params.itemId, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemCommandExecutionOutputDeltaNotification(
@@ -180,8 +291,23 @@ void LoadedThread::onItemCommandExecutionOutputDeltaNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyCommandExecutionOutputDelta(params.itemId, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyCommandExecutionOutputDelta(params.itemId, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemCommandExecutionTerminalInteractionNotification(
@@ -191,8 +317,23 @@ void LoadedThread::onItemCommandExecutionTerminalInteractionNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyCommandExecutionTerminalInteraction(params.itemId, params.processId, params.stdin);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyCommandExecutionTerminalInteraction(params.itemId, params.processId, params.stdin)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemFileChangeOutputDeltaNotification(
@@ -202,8 +343,23 @@ void LoadedThread::onItemFileChangeOutputDeltaNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyFileChangeOutputDelta(params.itemId, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyFileChangeOutputDelta(params.itemId, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemMcpToolCallProgressNotification(
@@ -213,8 +369,23 @@ void LoadedThread::onItemMcpToolCallProgressNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyMcpToolCallProgress(params.itemId, params.message);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyMcpToolCallProgress(params.itemId, params.message)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemPlanDeltaNotification(const qodex::codex::ItemPlanDeltaNotificationParams &params) {
@@ -222,8 +393,23 @@ void LoadedThread::onItemPlanDeltaNotification(const qodex::codex::ItemPlanDelta
         return;
     }
 
-    ensureTurn(params.turnId)->applyPlanDelta(params.itemId, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyPlanDelta(params.itemId, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemReasoningSummaryPartAddedNotification(
@@ -233,8 +419,23 @@ void LoadedThread::onItemReasoningSummaryPartAddedNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyReasoningSummaryPartAdded(params.itemId, params.summaryIndex);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyReasoningSummaryPartAdded(params.itemId, params.summaryIndex)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemReasoningSummaryTextDeltaNotification(
@@ -244,8 +445,23 @@ void LoadedThread::onItemReasoningSummaryTextDeltaNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyReasoningSummaryTextDelta(params.itemId, params.summaryIndex, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyReasoningSummaryTextDelta(params.itemId, params.summaryIndex, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onItemReasoningTextDeltaNotification(
@@ -255,8 +471,23 @@ void LoadedThread::onItemReasoningTextDeltaNotification(
         return;
     }
 
-    ensureTurn(params.turnId)->applyReasoningTextDelta(params.itemId, params.contentIndex, params.delta);
-    emit stateChanged();
+    const bool turnWasMissing = turnForId(params.turnId) == nullptr;
+    auto *turn = ensureTurn(params.turnId);
+    if (turn == nullptr) {
+        return;
+    }
+    if (turnWasMissing) {
+        emit turnInserted(params.turnId, turnRow(params.turnId));
+    }
+
+    const bool itemWasMissing = turn->itemById(params.itemId) == nullptr;
+    if (turn->applyReasoningTextDelta(params.itemId, params.contentIndex, params.delta)) {
+        if (itemWasMissing) {
+            emit itemInserted(params.turnId, params.itemId, turn->itemRow(params.itemId));
+        } else {
+            emit itemChanged(params.turnId, params.itemId);
+        }
+    }
 }
 
 void LoadedThread::onThreadUiUserInputRequested(const std::uint64_t requestId, const QString &text) {
@@ -309,9 +540,12 @@ void LoadedThread::onTurnStartSucceeded(const JsonRpcId &id, const TurnStartResp
     }
 
     if (response.turn && !response.turn->id.isEmpty()) {
+        const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId = response.turn->id;
+        if (m_activeTurnId != previousActiveTurnId) {
+            emit threadPresentationChanged();
+        }
     }
-    emit stateChanged();
 
     replyToThreadUiUserInputRequest(
         pendingRequest,
@@ -336,9 +570,12 @@ void LoadedThread::onTurnSteerSucceeded(const JsonRpcId &id, const TurnSteerResp
     }
 
     if (!response.turnId.isEmpty()) {
+        const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId = response.turnId;
+        if (m_activeTurnId != previousActiveTurnId) {
+            emit threadPresentationChanged();
+        }
     }
-    emit stateChanged();
 
     replyToThreadUiUserInputRequest(
         pendingRequest,
@@ -356,8 +593,11 @@ void LoadedThread::onTurnSteerFailed(const JsonRpcId &id, const JsonRpcErrorObje
     if (!pendingRequest.retriedAfterNoActiveTurnSteerFailure && isNoActiveTurnToSteerError(error)) {
         pendingRequest.dispatchKind = PendingThreadUiUserInputDispatchKind::TurnStart;
         pendingRequest.retriedAfterNoActiveTurnSteerFailure = true;
+        const QString previousActiveTurnId = m_activeTurnId;
         m_activeTurnId.clear();
-        emit stateChanged();
+        if (m_activeTurnId != previousActiveTurnId) {
+            emit threadPresentationChanged();
+        }
 
         QString retryErrorMessage;
         if (requeuePendingThreadUiUserInputRequest(pendingRequest, &retryErrorMessage)) {
@@ -485,7 +725,11 @@ void LoadedThread::rebuildModelFromThread(const Thread &thread) {
     }
 }
 
-qodex::domain::threadmodel::Turn *LoadedThread::turnForId(const QString &turnId) {
+int LoadedThread::turnRow(const QString &turnId) const {
+    return m_turnOrder.indexOf(turnId);
+}
+
+qodex::domain::threadmodel::Turn *LoadedThread::turnForIdMutable(const QString &turnId) {
     const auto it = m_turnsById.find(turnId);
     return it == m_turnsById.end() ? nullptr : it->second.get();
 }
@@ -500,7 +744,7 @@ qodex::domain::threadmodel::Turn *LoadedThread::ensureTurn(const QString &turnId
         return nullptr;
     }
 
-    if (auto *existingTurn = turnForId(turnId)) {
+    if (auto *existingTurn = turnForIdMutable(turnId)) {
         return existingTurn;
     }
 

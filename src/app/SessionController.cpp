@@ -1120,24 +1120,31 @@ LoadedThread *SessionController::ensureLoadedThread(const QString &threadId, con
         return nullptr;
     }
 
-    loadedThread = new LoadedThread(threadId, m_client, threadUiProcess, this);
+    loadedThread = new LoadedThread(threadId, title, m_client, threadUiProcess, this);
     QObject::connect(loadedThread, &LoadedThread::statusMessageRequested, this, [this](const QString &message) {
         m_mainWindow->setStatusMessage(message);
     });
-    QObject::connect(loadedThread, &LoadedThread::stateChanged, this, &SessionController::loadedThreadsChanged);
     m_loadedThreads.insert(threadId, loadedThread);
-    emit loadedThreadsChanged();
+    const QList<const LoadedThread *> orderedThreads = loadedThreads();
+    const int row = orderedThreads.indexOf(loadedThread);
+    emit loadedThreadAdded(loadedThread, row);
     return loadedThread;
 }
 
 void SessionController::unloadThread(const QString &threadId) {
     m_pendingThreadUiCloseUnsubscribes.remove(threadId);
-    LoadedThread *loadedThread = m_loadedThreads.take(threadId);
+    LoadedThread *loadedThread = loadedThreadForId(threadId);
+    if (loadedThread != nullptr) {
+        const QList<const LoadedThread *> orderedThreads = loadedThreads();
+        const int row = orderedThreads.indexOf(loadedThread);
+        emit loadedThreadAboutToBeRemoved(loadedThread, row);
+    }
+
+    loadedThread = m_loadedThreads.take(threadId);
     if (loadedThread != nullptr) {
         loadedThread->deleteLater();
     }
     m_threadUiProcessManager->destroyThreadUiForThread(threadId);
-    emit loadedThreadsChanged();
 }
 
 qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {

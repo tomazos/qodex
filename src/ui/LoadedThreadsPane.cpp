@@ -36,10 +36,42 @@ LoadedThreadsPane::LoadedThreadsPane(LoadedThreadsModel *model, QWidget *parent)
     layout->addWidget(m_treeView, 1);
 
     if (m_model != nullptr) {
-        connect(m_model, &LoadedThreadsModel::treeRebuilt, this, [this] {
-            if (m_treeView != nullptr) {
-                expandToTurnLevel();
-                resizeSnugColumns();
+        connect(m_model, &QAbstractItemModel::modelReset, this, [this] {
+            if (m_treeView == nullptr) {
+                return;
+            }
+            expandToTurnLevel();
+            resizeSnugColumns();
+        });
+        connect(m_model, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &parent, int first, int last) {
+            if (m_treeView == nullptr || m_model == nullptr) {
+                return;
+            }
+
+            if (!parent.isValid()) {
+                for (int row = first; row <= last; ++row) {
+                    const QModelIndex threadIndex = m_model->index(row, 0);
+                    if (!threadIndex.isValid()) {
+                        continue;
+                    }
+                    m_treeView->expand(threadIndex);
+                    for (int turnRow = 0; turnRow < m_model->rowCount(threadIndex); ++turnRow) {
+                        const QModelIndex turnIndex = m_model->index(turnRow, 0, threadIndex);
+                        if (turnIndex.isValid()) {
+                            m_treeView->expand(turnIndex);
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (!parent.parent().isValid()) {
+                for (int row = first; row <= last; ++row) {
+                    const QModelIndex turnIndex = m_model->index(row, 0, parent);
+                    if (turnIndex.isValid()) {
+                        m_treeView->expand(turnIndex);
+                    }
+                }
             }
         });
     }

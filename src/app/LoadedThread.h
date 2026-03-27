@@ -28,6 +28,7 @@ class LoadedThread final : public QObject {
 public:
     LoadedThread(
         const QString &threadId,
+        const QString &initialTitle,
         qodex::codex::CodexClient *client,
         ThreadUiProcess *threadUiProcess,
         QObject *parent = nullptr
@@ -37,6 +38,7 @@ public:
     [[nodiscard]] const QString &title() const;
     [[nodiscard]] const QString &activeTurnId() const;
     [[nodiscard]] QList<const qodex::domain::threadmodel::Turn *> orderedTurns() const;
+    [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
     void resume(const QString &title, const qodex::codex::ThreadResumeResponse &response);
     void onThreadClosed();
     void onThreadStatusChanged(const qodex::codex::ThreadStatus &status);
@@ -64,7 +66,12 @@ public:
 
 signals:
     void statusMessageRequested(const QString &message);
-    void stateChanged();
+    void snapshotRebuilt();
+    void threadPresentationChanged();
+    void turnInserted(const QString &turnId, int row);
+    void turnChanged(const QString &turnId);
+    void itemInserted(const QString &turnId, const QString &itemId, int row);
+    void itemChanged(const QString &turnId, const QString &itemId);
 
 private slots:
     void onThreadUiUserInputRequested(std::uint64_t requestId, const QString &text);
@@ -89,8 +96,8 @@ private:
 
     [[nodiscard]] QString activeTurnIdForThread(const qodex::codex::Thread &thread) const;
     void rebuildModelFromThread(const qodex::codex::Thread &thread);
-    [[nodiscard]] qodex::domain::threadmodel::Turn *turnForId(const QString &turnId);
-    [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
+    [[nodiscard]] int turnRow(const QString &turnId) const;
+    [[nodiscard]] qodex::domain::threadmodel::Turn *turnForIdMutable(const QString &turnId);
     [[nodiscard]] qodex::domain::threadmodel::Turn *ensureTurn(const QString &turnId);
     [[nodiscard]] qodex::codex::JsonRpcId dispatchPendingThreadUiUserInputRequest(
         const PendingThreadUiUserInputRequest &pendingRequest
