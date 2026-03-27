@@ -610,6 +610,7 @@ std::unique_ptr<LoadedThreadsModel::Node> LoadedThreadsModel::buildTurnNode(
     turnNode->parent = parent;
     turnNode->threadId = loadedThread->threadId();
     turnNode->turnId = turn.id();
+    turnNode->loadedThread = loadedThread;
     updateTurnNodeData(turnNode.get());
 
     const QList<const qodex::domain::threadmodel::AbstractItem *> items = turn.orderedItems();
@@ -639,6 +640,7 @@ std::unique_ptr<LoadedThreadsModel::Node> LoadedThreadsModel::buildItemNode(
     itemNode->threadId = loadedThread->threadId();
     itemNode->turnId = turnId;
     itemNode->itemId = item.id();
+    itemNode->loadedThread = loadedThread;
     updateItemNodeData(itemNode.get());
 
     const QList<QPair<QString, QString>> properties = itemProperties(item);
