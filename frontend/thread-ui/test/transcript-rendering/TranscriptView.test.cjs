@@ -11,6 +11,8 @@ function createView({
   overscanPx = 600,
   measureElementHeight,
   scrollHeightGetter,
+  requestAnimationFrameImpl,
+  cancelAnimationFrameImpl,
 } = {}) {
   const dom = new JSDOM(`
     <!doctype html>
@@ -48,6 +50,14 @@ function createView({
   const container = dom.window.document.getElementById('thread-items');
   const emptyStateElement = dom.window.document.getElementById('thread-empty-state');
   let scrollTop = 0;
+
+  if (typeof requestAnimationFrameImpl === 'function') {
+    dom.window.requestAnimationFrame = requestAnimationFrameImpl;
+  }
+
+  if (typeof cancelAnimationFrameImpl === 'function') {
+    dom.window.cancelAnimationFrame = cancelAnimationFrameImpl;
+  }
 
   Object.defineProperty(container, 'clientHeight', {
     configurable: true,
@@ -290,6 +300,46 @@ test('sticks to the transcript end after full-history resume settles measured he
       text: `Reply ${index}`,
     })),
   );
+
+  assert.equal(container.scrollTop, 4000);
+  assert.ok(container.querySelector('[data-item-id="item-19"]'));
+});
+
+test('sticks to the transcript end after scroll metrics become available on the next frame', () => {
+  let frameCount = 0;
+  let nextFrameId = 1;
+  const scheduledFrames = [];
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    scrollHeightGetter() {
+      return frameCount === 0 ? 0 : 4000;
+    },
+    requestAnimationFrameImpl(callback) {
+      const frameId = nextFrameId++;
+      scheduledFrames.push(() => {
+        frameCount += 1;
+        callback();
+      });
+      return frameId;
+    },
+    cancelAnimationFrameImpl() {},
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 20 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'agent',
+      text: `Reply ${index}`,
+    })),
+  );
+
+  assert.equal(container.scrollTop, 0);
+  while (scheduledFrames.length > 0) {
+    const frame = scheduledFrames.shift();
+    frame();
+  }
 
   assert.equal(container.scrollTop, 4000);
   assert.ok(container.querySelector('[data-item-id="item-19"]'));

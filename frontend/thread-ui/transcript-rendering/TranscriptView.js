@@ -74,6 +74,7 @@ function createTranscriptView({
   let currentEmptyStateElement = emptyStateElement || null;
   let anonymousItemSequence = 1;
   let renderFrameId = null;
+  let stickToBottomFrameId = null;
   let lastRenderedRangeKey = '';
   let lastMeasuredViewportWidth = null;
 
@@ -166,6 +167,18 @@ function createTranscriptView({
     renderVisibleWindow();
     scrollToBottom();
     renderVisibleWindow();
+  }
+
+  function scheduleStickToBottom() {
+    cancelFrame(stickToBottomFrameId);
+    stickToBottomFrameId = requestFrame(() => {
+      stickToBottomFrameId = null;
+      stickToBottom();
+      stickToBottomFrameId = requestFrame(() => {
+        stickToBottomFrameId = null;
+        stickToBottom();
+      });
+    });
   }
 
   function renderIntoArticle(article, item) {
@@ -507,6 +520,7 @@ function createTranscriptView({
 
     if (shouldStickToBottom) {
       stickToBottom();
+      scheduleStickToBottom();
     }
   }
 
@@ -526,7 +540,9 @@ function createTranscriptView({
     upsertItems,
     dispose() {
       cancelFrame(renderFrameId);
+      cancelFrame(stickToBottomFrameId);
       renderFrameId = null;
+      stickToBottomFrameId = null;
       container.removeEventListener('scroll', handleScroll);
       domWindow.removeEventListener('resize', handleResize);
     },
