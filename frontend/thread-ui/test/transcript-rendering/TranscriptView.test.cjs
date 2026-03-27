@@ -290,6 +290,38 @@ test('reuses the same DOM node when an item scrolls out of view and back', () =>
   assert.strictEqual(itemNodeAfter, itemNodeBefore);
 });
 
+test('premeasures transcript item heights so scrolling does not discover new geometry', () => {
+  const measuredItemIds = [];
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 200,
+    measureElementHeight(element, fallbackHeight) {
+      measuredItemIds.push(element.dataset.itemId);
+      if (element.dataset.itemId === 'item-3' || element.dataset.itemId === 'item-4') {
+        return 200;
+      }
+
+      return fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 40 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'user',
+      text: `Message ${index}`,
+    })),
+  );
+
+  const measurementCountAfterUpsert = measuredItemIds.length;
+  assert.ok(measuredItemIds.includes('item-30'));
+
+  scrollContainer(container, 560);
+
+  assert.equal(container.scrollTop, 560);
+  assert.equal(measuredItemIds.length, measurementCountAfterUpsert);
+});
+
 test('sticks to the transcript end after full-history resume settles measured heights', () => {
   let scrollHeightValue = 0;
   const { container, transcriptView } = createView({

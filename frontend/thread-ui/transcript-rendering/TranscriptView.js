@@ -71,6 +71,7 @@ function createTranscriptView({
   const topSpacer = document.createElement('div');
   const mountedItemsHost = document.createElement('div');
   const bottomSpacer = document.createElement('div');
+  const measurementHost = document.createElement('div');
   let currentEmptyStateElement = emptyStateElement || null;
   let anonymousItemSequence = 1;
   let renderFrameId = null;
@@ -87,6 +88,16 @@ function createTranscriptView({
   mountedItemsHost.className = 'thread-view__mounted';
   virtualRoot.append(topSpacer, mountedItemsHost, bottomSpacer);
   container.append(virtualRoot);
+  Object.assign(measurementHost.style, {
+    position: 'absolute',
+    left: '-100000px',
+    top: '0',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+    contain: 'layout style paint',
+    overflow: 'hidden',
+  });
+  document.body.append(measurementHost);
 
   function normalizeKind(item) {
     return typeof item?.kind === 'string' && item.kind.trim() !== '' ? item.kind : 'item';
@@ -157,6 +168,15 @@ function createTranscriptView({
 
   function effectiveScrollHeight() {
     return Math.max(container.scrollHeight, totalTranscriptHeight());
+  }
+
+  function currentMeasurementWidthPx() {
+    const measuredWidth = container.clientWidth || mountedItemsHost.clientWidth || container.getBoundingClientRect().width;
+    if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
+      return measuredWidth;
+    }
+
+    return 800;
   }
 
   function isScrolledNearBottom() {
@@ -297,6 +317,25 @@ function createTranscriptView({
     return article;
   }
 
+  function prepareMeasurementHost() {
+    measurementHost.style.width = `${Math.max(1, Math.round(currentMeasurementWidthPx()))}px`;
+  }
+
+  function measureItemHeight(item, fallbackHeight) {
+    prepareMeasurementHost();
+    const article = document.createElement('article');
+    article.dataset.itemId = item.id;
+    renderIntoArticle(article, item);
+    measurementHost.replaceChildren(article);
+    const measuredHeight = measureElementHeight(article, fallbackHeight);
+    measurementHost.replaceChildren();
+    if (Number.isFinite(measuredHeight) && measuredHeight > 0) {
+      return measuredHeight;
+    }
+
+    return fallbackHeight;
+  }
+
   function sumHeights(startIndex, endIndexExclusive) {
     if (endIndexExclusive <= startIndex) {
       return 0;
@@ -320,6 +359,56 @@ function createTranscriptView({
 
   function totalTranscriptHeight() {
     return sumHeights(0, itemOrder.length);
+  }
+
+  function itemTopForIndex(index) {
+    if (index <= 0) {
+      return 0;
+    }
+
+    return sumHeights(0, index) + normalizedItemGapPx;
+  }
+
+  function captureScrollAnchor() {
+    if (itemOrder.length === 0) {
+      return null;
+    }
+
+    const targetOffset = Math.max(0, container.scrollTop);
+    let prefixHeight = 0;
+
+    for (let index = 0; index < itemOrder.length; index += 1) {
+      const record = itemRecordsById.get(itemOrder[index]);
+      if (!record) {
+        continue;
+      }
+
+      const itemTop = prefixHeight;
+      const itemBottom = itemTop + record.height;
+      if (targetOffset <= itemBottom || index === itemOrder.length - 1) {
+        return {
+          itemId: itemOrder[index],
+          offsetWithinItem: Math.max(0, targetOffset - itemTop),
+        };
+      }
+
+      prefixHeight = itemBottom + normalizedItemGapPx;
+    }
+
+    return null;
+  }
+
+  function restoreScrollAnchor(anchor) {
+    if (!anchor || typeof anchor.itemId !== 'string' || anchor.itemId.length === 0) {
+      return;
+    }
+
+    const anchorIndex = itemOrder.indexOf(anchor.itemId);
+    if (anchorIndex < 0) {
+      return;
+    }
+
+    container.scrollTop = Math.max(0, itemTopForIndex(anchorIndex) + anchor.offsetWithinItem);
   }
 
   function viewportHeight() {
@@ -395,29 +484,6 @@ function createTranscriptView({
     bottomSpacer.style.height = `${range.bottomSpacerHeight}px`;
   }
 
-  function measureVisibleItems(range) {
-    let heightsChanged = false;
-
-    for (let index = range.startIndex; index < range.endIndexExclusive; index += 1) {
-      const record = itemRecordsById.get(itemOrder[index]);
-      if (!record || !record.element || record.element.parentNode !== mountedItemsHost) {
-        continue;
-      }
-
-      const measuredHeight = measureElementHeight(record.element, record.height);
-      if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) {
-        continue;
-      }
-
-      if (Math.abs(record.height - measuredHeight) >= 1) {
-        record.height = measuredHeight;
-        heightsChanged = true;
-      }
-    }
-
-    return heightsChanged;
-  }
-
   function mountVisibleRange(range) {
     const rangeKey = `${range.startIndex}:${range.endIndexExclusive}:${range.topSpacerHeight}:${range.bottomSpacerHeight}`;
     if (rangeKey === lastRenderedRangeKey) {
@@ -458,11 +524,6 @@ function createTranscriptView({
     const initialRange = computeVisibleRange();
     mountVisibleRange(initialRange);
 
-    if (measureVisibleItems(initialRange)) {
-      const measuredRange = computeVisibleRange();
-      mountVisibleRange(measuredRange);
-    }
-
     const measuredViewportWidth = mountedItemsHost.clientWidth;
     if (
       Number.isFinite(measuredViewportWidth) &&
@@ -470,18 +531,18 @@ function createTranscriptView({
       lastMeasuredViewportWidth !== null &&
       measuredViewportWidth !== lastMeasuredViewportWidth
     ) {
-      for (const itemId of itemOrder) {
-        const record = itemRecordsById.get(itemId);
-        if (!record) {
-          continue;
-        }
-
-        record.height = estimateItemHeight(record.item);
+      const shouldStickToBottom = isScrolledNearBottom();
+      const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
+      remeasureAllHeights();
+      if (scrollAnchor) {
+        restoreScrollAnchor(scrollAnchor);
+      }
+      if (shouldStickToBottom) {
+        scrollToBottom();
       }
 
       const resizedRange = computeVisibleRange();
       mountVisibleRange(resizedRange);
-      measureVisibleItems(resizedRange);
     }
 
     if (Number.isFinite(measuredViewportWidth) && measuredViewportWidth > 0) {
@@ -548,6 +609,20 @@ function createTranscriptView({
     lastRenderedRangeKey = '';
   }
 
+  function remeasureAllHeights() {
+    for (const itemId of itemOrder) {
+      const record = itemRecordsById.get(itemId);
+      if (!record) {
+        continue;
+      }
+
+      record.height = measureItemHeight(record.item, estimateItemHeight(record.item));
+    }
+
+    lastMeasuredViewportWidth = null;
+    lastRenderedRangeKey = '';
+  }
+
   function upsertItems(items) {
     if (!Array.isArray(items) || items.length === 0) {
       return;
@@ -567,7 +642,7 @@ function createTranscriptView({
           item: normalizedItem,
           signature,
           element: null,
-          height: estimateItemHeight(normalizedItem),
+          height: measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem)),
         });
         lastRenderedRangeKey = '';
         continue;
@@ -579,7 +654,7 @@ function createTranscriptView({
 
       record.item = normalizedItem;
       record.signature = signature;
-      record.height = estimateItemHeight(normalizedItem);
+      record.height = measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem));
       if (record.element) {
         renderIntoArticle(record.element, normalizedItem);
       }
@@ -599,7 +674,16 @@ function createTranscriptView({
   }
 
   function handleResize() {
+    const shouldStickToBottom = isScrolledNearBottom();
+    const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
     resetEstimatedHeights();
+    remeasureAllHeights();
+    if (scrollAnchor) {
+      restoreScrollAnchor(scrollAnchor);
+    }
+    if (shouldStickToBottom) {
+      scrollToBottom();
+    }
     scheduleRenderVisibleWindow();
   }
 
@@ -627,6 +711,7 @@ function createTranscriptView({
       lateStickToBottomTimeoutId = null;
       container.removeEventListener('scroll', handleScroll);
       domWindow.removeEventListener('resize', handleResize);
+      measurementHost.remove();
     },
   };
 }
