@@ -34,7 +34,7 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
     header->setStretchLastSection(false);
     header->setSectionsClickable(false);
     header->setSortIndicatorShown(true);
-    header->setSortIndicator(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+    header->setSortIndicator(ApiLogModel::TimeColumn, Qt::AscendingOrder);
     header->setContextMenuPolicy(Qt::CustomContextMenu);
     header->setSectionsMovable(true);
     for (int column = ApiLogModel::TimeColumn; column < ApiLogModel::ColumnCount; ++column) {
@@ -43,7 +43,7 @@ ApiLogPane::ApiLogPane(ApiLogModel *model, QWidget *parent)
 
     applyDefaultColumnState();
     resizeDefaultColumns();
-    m_model->sort(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+    m_model->sort(ApiLogModel::TimeColumn, Qt::AscendingOrder);
 
     layout->addWidget(m_tableView, 1);
 
@@ -105,9 +105,9 @@ bool ApiLogPane::restoreViewState(const QByteArray &state) {
     }
 
     m_restoredViewState = true;
-    m_tableView->horizontalHeader()->setSortIndicator(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+    m_tableView->horizontalHeader()->setSortIndicator(ApiLogModel::TimeColumn, Qt::AscendingOrder);
     if (m_model != nullptr) {
-        m_model->sort(ApiLogModel::TimeColumn, Qt::DescendingOrder);
+        m_model->sort(ApiLogModel::TimeColumn, Qt::AscendingOrder);
     }
     return true;
 }
