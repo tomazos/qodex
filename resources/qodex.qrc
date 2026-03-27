@@ -2,6 +2,8 @@
     <qresource prefix="/">
         <file alias="db/migrations/0001_initial.sql">../db/migrations/0001_initial.sql</file>
         <file alias="db/migrations/0002_api_log.sql">../db/migrations/0002_api_log.sql</file>
+        <file alias="db/migrations/0003_instructions.sql">../db/migrations/0003_instructions.sql</file>
+        <file alias="codex/prompt.md">../third_party/codex/codex-rs/core/prompt.md</file>
         <file alias="images/brain-icon-16x16.png">../images/brain-icon-16x16.png</file>
         <file alias="images/brain-icon-20x20.png">../images/brain-icon-20x20.png</file>
         <file alias="images/brain-icon-22x22.png">../images/brain-icon-22x22.png</file>

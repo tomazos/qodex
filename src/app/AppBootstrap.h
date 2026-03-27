@@ -10,6 +10,7 @@
 #include "app/ThreadUiProcessManager.h"
 #include "codex/AppServerTransport.h"
 #include "codex/TrafficLogger.h"
+#include "domain/InstructionCatalog.h"
 #include "domain/ThreadStore.h"
 #include "storage/DatabaseManager.h"
 #include "ui/ApiLogModel.h"
@@ -18,6 +19,7 @@
 #include "ui/ModelsModel.h"
 #include "ui/ProgressSplashScreen.h"
 #include "ui/ThreadListModel.h"
+#include "ui/InstructionsModel.h"
 
 #include "CodexClient.h"
 #include "app/SessionController.h"
@@ -84,9 +86,11 @@ private:
     qodex::codex::TrafficLogger m_trafficLogger;
     qodex::codex::CodexClient m_client;
     qodex::domain::ThreadStore m_threadStore;
+    qodex::domain::InstructionCatalog m_instructionCatalog;
     qodex::ui::ThreadListModel m_threadListModel;
     qodex::ui::ApiLogModel m_apiLogModel;
     qodex::ui::LoadedThreadsModel m_loadedThreadsModel;
+    qodex::ui::InstructionsModel m_instructionsModel;
     qodex::ui::ModelsModel m_modelsModel;
     qodex::ui::MainWindow m_mainWindow;
     std::vector<std::unique_ptr<qodex::ui::MainWindow>> m_additionalWindows;

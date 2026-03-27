@@ -586,6 +586,8 @@ qt_add_executable(qodex
     src/codex/TrafficLogger.cpp
     src/codex/TrafficLogger.h
     src/domain/CodexTypes.h
+    src/domain/InstructionCatalog.cpp
+    src/domain/InstructionCatalog.h
     src/domain/ThreadUiLinkPolicy.cpp
     src/domain/ThreadUiLinkPolicy.h
     src/domain/ThreadUiProjector.cpp
@@ -606,6 +608,12 @@ qt_add_executable(qodex
     src/ui/ApiLogInspectorPane.h
     src/ui/ApiLogPane.cpp
     src/ui/ApiLogPane.h
+    src/ui/InstructionEditorPane.cpp
+    src/ui/InstructionEditorPane.h
+    src/ui/InstructionsModel.cpp
+    src/ui/InstructionsModel.h
+    src/ui/InstructionsPane.cpp
+    src/ui/InstructionsPane.h
     src/ui/LoadedThreadsModel.cpp
     src/ui/LoadedThreadsModel.h
     src/ui/LoadedThreadsPane.cpp
@@ -950,6 +958,26 @@ if(BUILD_TESTING)
     target_link_libraries(DatabaseManagerTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3)
 
     add_test(NAME DatabaseManagerTest COMMAND DatabaseManagerTest)
+
+    qt_add_executable(InstructionCatalogTest
+        resources/qodex.qrc
+        tests/domain/InstructionCatalogTest.cpp
+        src/domain/InstructionCatalog.cpp
+        src/domain/InstructionCatalog.h
+        src/storage/DatabaseManager.cpp
+        src/storage/DatabaseManager.h
+        src/storage/Migration.h
+        src/storage/MigrationRunner.cpp
+        src/storage/MigrationRunner.h
+    )
+
+    target_include_directories(InstructionCatalogTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(InstructionCatalogTest PRIVATE Qt6::Core Qt6::Sql Qt6::Test SQLite::SQLite3)
+
+    add_test(NAME InstructionCatalogTest COMMAND InstructionCatalogTest)
 
     qt_add_executable(ThreadListModelTest
         resources/qodex.qrc

@@ -17,6 +17,9 @@ namespace qodex::ui {
 class ApiLogModel;
 class ApiLogPane;
 class ApiLogInspectorPane;
+class InstructionEditorPane;
+class InstructionsModel;
+class InstructionsPane;
 class LoadedThreadsModel;
 class LoadedThreadsPane;
 class ModelsModel;
@@ -28,6 +31,10 @@ class MainWindow;
 
 namespace qodex::storage {
 class DatabaseManager;
+}
+
+namespace qodex::domain {
+class InstructionCatalog;
 }
 
 namespace qodex::ui {
@@ -48,6 +55,8 @@ public:
         ApiLogModel *apiLogModel = nullptr,
         qodex::storage::DatabaseManager *databaseManager = nullptr,
         LoadedThreadsModel *loadedThreadsModel = nullptr,
+        qodex::domain::InstructionCatalog *instructionCatalog = nullptr,
+        InstructionsModel *instructionsModel = nullptr,
         ModelsModel *modelsModel = nullptr,
         QWidget *parent = nullptr
     );
@@ -56,6 +65,8 @@ public:
     [[nodiscard]] ThreadListPane *threadListPane() const;
     [[nodiscard]] ApiLogPane *apiLogPane() const;
     [[nodiscard]] ApiLogInspectorPane *apiLogInspectorPane() const;
+    [[nodiscard]] InstructionsPane *instructionsPane() const;
+    [[nodiscard]] InstructionEditorPane *instructionEditorPane() const;
     [[nodiscard]] LoadedThreadsPane *loadedThreadsPane() const;
     [[nodiscard]] ModelsPane *modelsPane() const;
     [[nodiscard]] QString windowKey() const;
@@ -73,6 +84,8 @@ signals:
 
 private:
     void inspectApiLog(qint64 apiLogId);
+    void viewInstruction(const QString &instructionKey);
+    void editInstruction(const QString &instructionKey);
     QString windowMenuTitleFor(const MainWindow *window, int index) const;
     void closeEvent(QCloseEvent *event) override;
 
@@ -83,6 +96,10 @@ private:
     ApiLogPane *m_apiLogPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_apiLogInspectorDock = nullptr;
     ApiLogInspectorPane *m_apiLogInspectorPane = nullptr;
+    KDDockWidgets::QtWidgets::DockWidget *m_instructionsDock = nullptr;
+    InstructionsPane *m_instructionsPane = nullptr;
+    KDDockWidgets::QtWidgets::DockWidget *m_instructionEditorDock = nullptr;
+    InstructionEditorPane *m_instructionEditorPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_loadedThreadsDock = nullptr;
     LoadedThreadsPane *m_loadedThreadsPane = nullptr;
     KDDockWidgets::QtWidgets::DockWidget *m_modelsDock = nullptr;

@@ -9,6 +9,9 @@
 #include "ui/ApiLogModel.h"
 #include "ui/ApiLogInspectorPane.h"
 #include "ui/ApiLogPane.h"
+#include "ui/InstructionEditorPane.h"
+#include "ui/InstructionsModel.h"
+#include "ui/InstructionsPane.h"
 #include "ui/LoadedThreadsModel.h"
 #include "ui/LoadedThreadsPane.h"
 #include "ui/ModelsModel.h"
@@ -25,6 +28,8 @@ MainWindow::MainWindow(
     ApiLogModel *apiLogModel,
     qodex::storage::DatabaseManager *databaseManager,
     LoadedThreadsModel *loadedThreadsModel,
+    qodex::domain::InstructionCatalog *instructionCatalog,
+    InstructionsModel *instructionsModel,
     ModelsModel *modelsModel,
     QWidget *parent
 )
@@ -98,6 +103,41 @@ MainWindow::MainWindow(
             addDockWidgetAsTab(m_loadedThreadsDock);
         }
     }
+    if (instructionsModel != nullptr && instructionCatalog != nullptr) {
+        m_instructionsPane = new InstructionsPane(instructionsModel, instructionCatalog);
+        m_instructionsDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.Instructions"));
+        m_instructionsDock->setTitle(QStringLiteral("Instructions"));
+        m_instructionsDock->setWidget(m_instructionsPane);
+        if (m_loadedThreadsDock != nullptr) {
+            m_loadedThreadsDock->addDockWidgetAsTab(
+                m_instructionsDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else if (m_threadListDock != nullptr) {
+            m_threadListDock->addDockWidgetAsTab(
+                m_instructionsDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else {
+            addDockWidgetAsTab(m_instructionsDock);
+            m_instructionsDock->close();
+        }
+
+        m_instructionEditorPane = new InstructionEditorPane(instructionCatalog);
+        m_instructionEditorDock =
+            new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.InstructionEditor"));
+        m_instructionEditorDock->setTitle(QStringLiteral("Instruction"));
+        m_instructionEditorDock->setWidget(m_instructionEditorPane);
+        if (m_instructionsDock != nullptr) {
+            m_instructionsDock->addDockWidgetAsTab(
+                m_instructionEditorDock,
+                KDDockWidgets::InitialOption(KDDockWidgets::InitialVisibilityOption::StartHidden)
+            );
+        } else {
+            addDockWidgetAsTab(m_instructionEditorDock);
+            m_instructionEditorDock->close();
+        }
+    }
     if (modelsModel != nullptr) {
         m_modelsPane = new ModelsPane(modelsModel);
         m_modelsDock = new KDDockWidgets::QtWidgets::DockWidget(QStringLiteral("qodex.Models"));
@@ -121,6 +161,18 @@ MainWindow::MainWindow(
     if (m_apiLogPane != nullptr) {
         connect(m_apiLogPane, &ApiLogPane::inspectApiLogRequested, this, &MainWindow::inspectApiLog);
     }
+    if (m_instructionsPane != nullptr) {
+        connect(m_instructionsPane, &InstructionsPane::viewInstructionRequested, this, &MainWindow::viewInstruction);
+        connect(m_instructionsPane, &InstructionsPane::editInstructionRequested, this, &MainWindow::editInstruction);
+        if (m_instructionEditorPane != nullptr) {
+            connect(
+                m_instructionsPane,
+                &InstructionsPane::instructionRenamed,
+                m_instructionEditorPane,
+                &InstructionEditorPane::refreshIfCurrentInstruction
+            );
+        }
+    }
 
     m_windowMenu = menuBar()->addMenu(QStringLiteral("&Window"));
 }
@@ -128,6 +180,8 @@ MainWindow::MainWindow(
 MainWindow::~MainWindow() {
     delete m_modelsDock;
     delete m_loadedThreadsDock;
+    delete m_instructionEditorDock;
+    delete m_instructionsDock;
     delete m_apiLogInspectorDock;
     delete m_apiLogDock;
     delete m_threadListDock;
@@ -143,6 +197,14 @@ ApiLogPane *MainWindow::apiLogPane() const {
 
 ApiLogInspectorPane *MainWindow::apiLogInspectorPane() const {
     return m_apiLogInspectorPane;
+}
+
+InstructionsPane *MainWindow::instructionsPane() const {
+    return m_instructionsPane;
+}
+
+InstructionEditorPane *MainWindow::instructionEditorPane() const {
+    return m_instructionEditorPane;
 }
 
 LoadedThreadsPane *MainWindow::loadedThreadsPane() const {
@@ -168,6 +230,12 @@ QList<QAction *> MainWindow::viewActions() const {
     if (m_apiLogInspectorDock != nullptr) {
         actions.append(m_apiLogInspectorDock->toggleAction());
     }
+    if (m_instructionsDock != nullptr) {
+        actions.append(m_instructionsDock->toggleAction());
+    }
+    if (m_instructionEditorDock != nullptr) {
+        actions.append(m_instructionEditorDock->toggleAction());
+    }
     if (m_loadedThreadsDock != nullptr) {
         actions.append(m_loadedThreadsDock->toggleAction());
     }
@@ -189,6 +257,26 @@ void MainWindow::inspectApiLog(const qint64 apiLogId) {
     m_apiLogInspectorPane->inspectApiLog(apiLogId);
     m_apiLogInspectorDock->show();
     m_apiLogInspectorDock->raise();
+}
+
+void MainWindow::viewInstruction(const QString &instructionKey) {
+    if (m_instructionEditorPane == nullptr || m_instructionEditorDock == nullptr || instructionKey.isEmpty()) {
+        return;
+    }
+
+    m_instructionEditorPane->viewInstruction(instructionKey);
+    m_instructionEditorDock->show();
+    m_instructionEditorDock->raise();
+}
+
+void MainWindow::editInstruction(const QString &instructionKey) {
+    if (m_instructionEditorPane == nullptr || m_instructionEditorDock == nullptr || instructionKey.isEmpty()) {
+        return;
+    }
+
+    m_instructionEditorPane->editInstruction(instructionKey);
+    m_instructionEditorDock->show();
+    m_instructionEditorDock->raise();
 }
 
 void MainWindow::rebuildThreadMenu(const QList<ThreadUiMenuEntry> &entries) {

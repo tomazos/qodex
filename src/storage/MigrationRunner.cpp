@@ -28,6 +28,11 @@ QList<Migration> availableMigrations() {
             QStringLiteral("0002_api_log"),
             QStringLiteral(":/db/migrations/0002_api_log.sql"),
         },
+        {
+            3,
+            QStringLiteral("0003_instructions"),
+            QStringLiteral(":/db/migrations/0003_instructions.sql"),
+        },
     };
 }
 

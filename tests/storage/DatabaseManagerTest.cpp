@@ -23,6 +23,8 @@ private slots:
     void appendsApiLogRows();
     void loadsApiLogPages();
     void loadsApiLogDetail();
+    void persistsInstructions();
+    void loadsInstructionById();
 };
 
 void DatabaseManagerTest::persistsWindowAndViewState() {
@@ -321,6 +323,75 @@ void DatabaseManagerTest::loadsApiLogDetail() {
     QCOMPARE(detail->method, QStringLiteral("thread/resume"));
     QCOMPARE(detail->payloadJson, QStringLiteral(R"({"threadId":"thread-detail","includeItems":true})"));
     QCOMPARE(detail->summaryText, QStringLiteral("detail row"));
+}
+
+void DatabaseManagerTest::persistsInstructions() {
+    QTemporaryDir temporaryDir;
+    QVERIFY(temporaryDir.isValid());
+
+    const QString databasePath = temporaryDir.filePath(QStringLiteral("qodex.sqlite3"));
+    QString errorMessage;
+
+    DatabaseManager databaseManager(databasePath);
+    QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
+
+    const auto created = databaseManager.createInstruction(
+        QStringLiteral("My Instructions"),
+        QStringLiteral("Line one\nLine two"),
+        &errorMessage
+    );
+    QVERIFY2(created.has_value(), qPrintable(errorMessage));
+    QCOMPARE(created->name, QStringLiteral("My Instructions"));
+    QCOMPARE(created->content, QStringLiteral("Line one\nLine two"));
+
+    const QList<qodex::storage::InstructionRecord> instructions = databaseManager.loadInstructions(&errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QCOMPARE(instructions.size(), 1);
+    QCOMPARE(instructions.at(0).id, created->id);
+    QCOMPARE(instructions.at(0).name, QStringLiteral("My Instructions"));
+    QCOMPARE(instructions.at(0).content, QStringLiteral("Line one\nLine two"));
+
+    QVERIFY2(
+        databaseManager.renameInstruction(created->id, QStringLiteral("Renamed Instructions"), &errorMessage),
+        qPrintable(errorMessage)
+    );
+    QVERIFY2(
+        databaseManager.updateInstructionContent(created->id, QStringLiteral("Updated body"), &errorMessage),
+        qPrintable(errorMessage)
+    );
+
+    const QList<qodex::storage::InstructionRecord> updatedInstructions = databaseManager.loadInstructions(&errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QCOMPARE(updatedInstructions.size(), 1);
+    QCOMPARE(updatedInstructions.at(0).name, QStringLiteral("Renamed Instructions"));
+    QCOMPARE(updatedInstructions.at(0).content, QStringLiteral("Updated body"));
+}
+
+void DatabaseManagerTest::loadsInstructionById() {
+    QTemporaryDir temporaryDir;
+    QVERIFY(temporaryDir.isValid());
+
+    const QString databasePath = temporaryDir.filePath(QStringLiteral("qodex.sqlite3"));
+    QString errorMessage;
+
+    DatabaseManager databaseManager(databasePath);
+    QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
+
+    const auto first = databaseManager.createInstruction(QStringLiteral("First"), QStringLiteral("Alpha"), &errorMessage);
+    QVERIFY2(first.has_value(), qPrintable(errorMessage));
+    const auto second = databaseManager.createInstruction(QStringLiteral("Second"), QStringLiteral("Beta"), &errorMessage);
+    QVERIFY2(second.has_value(), qPrintable(errorMessage));
+
+    const auto loaded = databaseManager.loadInstruction(second->id, &errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QVERIFY(loaded.has_value());
+    QCOMPARE(loaded->id, second->id);
+    QCOMPARE(loaded->name, QStringLiteral("Second"));
+    QCOMPARE(loaded->content, QStringLiteral("Beta"));
+
+    const auto missing = databaseManager.loadInstruction(999999, &errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QVERIFY(!missing.has_value());
 }
 
 QTEST_GUILESS_MAIN(DatabaseManagerTest)

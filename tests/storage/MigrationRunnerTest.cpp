@@ -70,6 +70,7 @@ void MigrationRunnerTest::migratesFreshDatabaseToHead() {
     QVERIFY(tableExists(database, QStringLiteral("thread_metadata")));
     QVERIFY(tableExists(database, QStringLiteral("api_log")));
     QVERIFY(tableExists(database, QStringLiteral("api_log_fts")));
+    QVERIFY(tableExists(database, QStringLiteral("instruction_document")));
 
     sqlite3_close(database);
 }

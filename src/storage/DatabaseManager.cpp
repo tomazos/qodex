@@ -34,6 +34,16 @@ QVariant nullableInteger(const std::optional<qint64> value) {
     return QVariant::fromValue(*value);
 }
 
+InstructionRecord instructionRecordFromQuery(const QSqlQuery &query) {
+    return InstructionRecord{
+        .id = query.value(0).toLongLong(),
+        .name = query.value(1).toString(),
+        .content = query.value(2).toString(),
+        .createdAtUtc = query.value(3).toString(),
+        .updatedAtUtc = query.value(4).toString(),
+    };
+}
+
 QString apiLogSortExpression(const ApiLogSortField sortField) {
     switch (sortField) {
     case ApiLogSortField::TimestampUtc:
@@ -360,6 +370,40 @@ std::optional<ApiLogDetailRecord> DatabaseManager::loadApiLogDetail(const qint64
     };
 }
 
+QList<InstructionRecord> DatabaseManager::loadInstructions(QString *errorMessage) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return {};
+    }
+
+    QList<InstructionRecord> records;
+    QSqlQuery query(*m_database);
+    if (!query.exec(QStringLiteral(
+            "SELECT id, name, content, created_at, updated_at "
+            "FROM instruction_document "
+            "ORDER BY lower(name) ASC, id ASC;"
+        ))) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return {};
+    }
+
+    while (query.next()) {
+        records.append(instructionRecordFromQuery(query));
+    }
+    return records;
+}
+
+std::optional<InstructionRecord> DatabaseManager::loadInstruction(const qint64 id, QString *errorMessage) const {
+    return loadInstructionRecordById(id, errorMessage);
+}
+
 bool DatabaseManager::replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage) {
     if (errorMessage != nullptr) {
         errorMessage->clear();
@@ -526,6 +570,61 @@ std::optional<ApiLogListRecord> DatabaseManager::appendApiLog(const ApiLogRecord
     return loadApiLogListRecordById(insertedIdVariant.toLongLong(), errorMessage);
 }
 
+std::optional<InstructionRecord> DatabaseManager::createInstruction(
+    const QString &name,
+    const QString &content,
+    QString *errorMessage
+) {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "INSERT INTO instruction_document(name, content) VALUES (?, ?);"
+    ));
+    query.addBindValue(name);
+    query.addBindValue(content);
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+
+    const QVariant insertedIdVariant = query.lastInsertId();
+    if (!insertedIdVariant.isValid()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to determine inserted instruction_document row id.");
+        }
+        return std::nullopt;
+    }
+
+    return loadInstructionRecordById(insertedIdVariant.toLongLong(), errorMessage);
+}
+
+bool DatabaseManager::renameInstruction(const qint64 id, const QString &name, QString *errorMessage) {
+    return executeStatement(
+        QStringLiteral("UPDATE instruction_document SET name = ? WHERE id = ?;"),
+        {name, id},
+        errorMessage
+    );
+}
+
+bool DatabaseManager::updateInstructionContent(const qint64 id, const QString &content, QString *errorMessage) {
+    return executeStatement(
+        QStringLiteral("UPDATE instruction_document SET content = ? WHERE id = ?;"),
+        {content, id},
+        errorMessage
+    );
+}
+
 bool DatabaseManager::initializeConnection(QString *errorMessage) {
     if (errorMessage != nullptr) {
         errorMessage->clear();
@@ -634,6 +733,37 @@ std::optional<ApiLogListRecord> DatabaseManager::loadApiLogListRecordById(const 
         .summaryText = query.value(11).toString(),
         .payloadPreview = query.value(12).toString(),
     };
+}
+
+std::optional<InstructionRecord> DatabaseManager::loadInstructionRecordById(const qint64 id, QString *errorMessage) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral(
+        "SELECT id, name, content, created_at, updated_at "
+        "FROM instruction_document "
+        "WHERE id = ?;"
+    ));
+    query.addBindValue(id);
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+    if (!query.next()) {
+        return std::nullopt;
+    }
+
+    return instructionRecordFromQuery(query);
 }
 
 }  // namespace qodex::storage

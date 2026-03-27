@@ -84,6 +84,14 @@ struct ApiLogDetailRecord {
     QString payloadJson;
 };
 
+struct InstructionRecord {
+    qint64 id = 0;
+    QString name;
+    QString content;
+    QString createdAtUtc;
+    QString updatedAtUtc;
+};
+
 class DatabaseManager final {
 public:
     explicit DatabaseManager(const QString &databasePath);
@@ -106,16 +114,26 @@ public:
         QString *errorMessage
     ) const;
     [[nodiscard]] std::optional<ApiLogDetailRecord> loadApiLogDetail(qint64 id, QString *errorMessage) const;
+    [[nodiscard]] QList<InstructionRecord> loadInstructions(QString *errorMessage) const;
+    [[nodiscard]] std::optional<InstructionRecord> loadInstruction(qint64 id, QString *errorMessage) const;
 
     [[nodiscard]] bool replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage);
     [[nodiscard]] bool replaceViewStates(const QList<ViewStateRecord> &viewStates, QString *errorMessage);
     [[nodiscard]] bool saveSetting(const QString &key, const QString &valueJson, QString *errorMessage);
     [[nodiscard]] std::optional<ApiLogListRecord> appendApiLog(const ApiLogRecord &record, QString *errorMessage);
+    [[nodiscard]] std::optional<InstructionRecord> createInstruction(
+        const QString &name,
+        const QString &content,
+        QString *errorMessage
+    );
+    [[nodiscard]] bool renameInstruction(qint64 id, const QString &name, QString *errorMessage);
+    [[nodiscard]] bool updateInstructionContent(qint64 id, const QString &content, QString *errorMessage);
 
 private:
     [[nodiscard]] bool initializeConnection(QString *errorMessage);
     [[nodiscard]] bool executeStatement(const QString &sql, const QList<QVariant> &bindings, QString *errorMessage) const;
     [[nodiscard]] std::optional<ApiLogListRecord> loadApiLogListRecordById(qint64 id, QString *errorMessage) const;
+    [[nodiscard]] std::optional<InstructionRecord> loadInstructionRecordById(qint64 id, QString *errorMessage) const;
 
     QString m_databasePath;
     QString m_connectionName;
