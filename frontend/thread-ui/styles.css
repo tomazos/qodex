@@ -445,8 +445,14 @@ main {
 
 .thread-status {
   min-height: 1lh;
-  padding-top: 0.5rem;
+  margin-inline: -1rem;
+  margin-bottom: -1rem;
+  padding: 0.6rem 1rem 0.75rem;
+  background: color-mix(in srgb, canvastext 6%, canvas);
+  border-top: 1px solid color-mix(in srgb, canvastext 12%, transparent);
   color: color-mix(in srgb, canvastext 68%, canvas 32%);
   text-align: left;
-  font-size: 0.92rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  line-height: 1.35;
 }
