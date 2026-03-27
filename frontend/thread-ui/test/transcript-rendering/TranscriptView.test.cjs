@@ -253,6 +253,45 @@ test('virtualizes long transcripts to a bounded mounted window', () => {
   );
 });
 
+test('uses a fixed-height virtual canvas with absolutely positioned items', () => {
+  const heightsById = new Map();
+  for (let index = 0; index < 10; index += 1) {
+    heightsById.set(`item-${index}`, 100);
+  }
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    measureElementHeight(element, fallbackHeight) {
+      return heightsById.get(element.dataset.itemId) || fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems(
+    Array.from({ length: 10 }, (_value, index) => ({
+      id: `item-${index}`,
+      kind: 'user',
+      text: `Message ${index}`,
+    })),
+  );
+  scrollContainer(container, 0);
+
+  const virtualRoot = container.querySelector('.thread-view__items-virtual');
+  const mountedHost = container.querySelector('.thread-view__mounted');
+  const mountedItems = Array.from(container.querySelectorAll('.thread-item'));
+
+  assert.ok(virtualRoot);
+  assert.ok(mountedHost);
+  assert.equal(container.querySelector('.thread-view__spacer'), null);
+  assert.equal(virtualRoot.style.height, '1108px');
+  assert.equal(mountedHost.style.height, '1108px');
+  assert.ok(mountedItems.length > 0);
+  assert.equal(mountedItems[0].style.position, 'absolute');
+  assert.equal(mountedItems[0].style.top, '0px');
+  assert.equal(mountedItems[1].style.top, '112px');
+  assert.equal(mountedItems[2].style.top, '224px');
+});
+
 test('reuses the same DOM node when an item scrolls out of view and back', () => {
   const heightsById = new Map();
   for (let index = 0; index < 40; index += 1) {
@@ -313,6 +352,8 @@ test('premeasures transcript item heights so scrolling does not discover new geo
     })),
   );
 
+  const virtualRoot = container.querySelector('.thread-view__items-virtual');
+  const canvasHeightBeforeScroll = virtualRoot.style.height;
   const measurementCountAfterUpsert = measuredItemIds.length;
   assert.ok(measuredItemIds.includes('item-30'));
 
@@ -320,6 +361,7 @@ test('premeasures transcript item heights so scrolling does not discover new geo
 
   assert.equal(container.scrollTop, 560);
   assert.equal(measuredItemIds.length, measurementCountAfterUpsert);
+  assert.equal(virtualRoot.style.height, canvasHeightBeforeScroll);
 });
 
 test('sticks to the transcript end after full-history resume settles measured heights', () => {

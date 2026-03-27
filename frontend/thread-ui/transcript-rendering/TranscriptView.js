@@ -68,9 +68,7 @@ function createTranscriptView({
   const itemRecordsById = new Map();
   const itemOrder = [];
   const virtualRoot = document.createElement('div');
-  const topSpacer = document.createElement('div');
   const mountedItemsHost = document.createElement('div');
-  const bottomSpacer = document.createElement('div');
   const measurementHost = document.createElement('div');
   let currentEmptyStateElement = emptyStateElement || null;
   let anonymousItemSequence = 1;
@@ -80,13 +78,12 @@ function createTranscriptView({
   let lateStickToBottomTimeoutId = null;
   let lastRenderedRangeKey = '';
   let lastMeasuredViewportWidth = null;
+  let cachedTotalTranscriptHeight = 0;
 
   virtualRoot.className = 'thread-view__items-virtual';
   virtualRoot.hidden = true;
-  topSpacer.className = 'thread-view__spacer';
-  bottomSpacer.className = 'thread-view__spacer';
   mountedItemsHost.className = 'thread-view__mounted';
-  virtualRoot.append(topSpacer, mountedItemsHost, bottomSpacer);
+  virtualRoot.append(mountedItemsHost);
   container.append(virtualRoot);
   Object.assign(measurementHost.style, {
     position: 'absolute',
@@ -312,6 +309,9 @@ function createTranscriptView({
 
     const article = document.createElement('article');
     article.dataset.itemId = record.item.id;
+    article.style.position = 'absolute';
+    article.style.left = '0';
+    article.style.right = '0';
     renderIntoArticle(article, record.item);
     record.element = article;
     return article;
@@ -336,37 +336,39 @@ function createTranscriptView({
     return fallbackHeight;
   }
 
-  function sumHeights(startIndex, endIndexExclusive) {
-    if (endIndexExclusive <= startIndex) {
-      return 0;
-    }
+  function totalTranscriptHeight() {
+    return cachedTotalTranscriptHeight;
+  }
 
-    let totalHeight = 0;
-    for (let index = startIndex; index < endIndexExclusive; index += 1) {
-      const record = itemRecordsById.get(itemOrder[index]);
+  function recomputeLayoutMetrics() {
+    let nextTop = 0;
+    for (const itemId of itemOrder) {
+      const record = itemRecordsById.get(itemId);
       if (!record) {
         continue;
       }
 
-      totalHeight += record.height;
-      if (index > startIndex) {
-        totalHeight += normalizedItemGapPx;
-      }
+      record.top = nextTop;
+      nextTop += record.height + normalizedItemGapPx;
     }
 
-    return totalHeight;
-  }
-
-  function totalTranscriptHeight() {
-    return sumHeights(0, itemOrder.length);
+    cachedTotalTranscriptHeight = nextTop > 0 ? nextTop - normalizedItemGapPx : 0;
+    lastRenderedRangeKey = '';
   }
 
   function itemTopForIndex(index) {
-    if (index <= 0) {
+    if (index < 0 || index >= itemOrder.length) {
       return 0;
     }
 
-    return sumHeights(0, index) + normalizedItemGapPx;
+    const record = itemRecordsById.get(itemOrder[index]);
+    return record ? record.top : 0;
+  }
+
+  function updateVirtualCanvasHeight() {
+    const canvasHeightPx = Math.max(totalTranscriptHeight(), viewportHeight());
+    virtualRoot.style.height = `${canvasHeightPx}px`;
+    mountedItemsHost.style.height = `${canvasHeightPx}px`;
   }
 
   function captureScrollAnchor() {
@@ -375,7 +377,6 @@ function createTranscriptView({
     }
 
     const targetOffset = Math.max(0, container.scrollTop);
-    let prefixHeight = 0;
 
     for (let index = 0; index < itemOrder.length; index += 1) {
       const record = itemRecordsById.get(itemOrder[index]);
@@ -383,7 +384,7 @@ function createTranscriptView({
         continue;
       }
 
-      const itemTop = prefixHeight;
+      const itemTop = record.top;
       const itemBottom = itemTop + record.height;
       if (targetOffset <= itemBottom || index === itemOrder.length - 1) {
         return {
@@ -391,8 +392,6 @@ function createTranscriptView({
           offsetWithinItem: Math.max(0, targetOffset - itemTop),
         };
       }
-
-      prefixHeight = itemBottom + normalizedItemGapPx;
     }
 
     return null;
@@ -424,14 +423,11 @@ function createTranscriptView({
       return {
         startIndex: 0,
         endIndexExclusive: 0,
-        topSpacerHeight: 0,
-        bottomSpacerHeight: 0,
       };
     }
 
     const viewTop = Math.max(0, container.scrollTop - normalizedOverscanPx);
     const viewBottom = container.scrollTop + viewportHeight() + normalizedOverscanPx;
-    let prefixHeight = 0;
     let startIndex = 0;
     let foundStart = false;
     let endIndexExclusive = itemOrder.length;
@@ -442,7 +438,7 @@ function createTranscriptView({
         continue;
       }
 
-      const itemTop = prefixHeight;
+      const itemTop = record.top;
       const itemBottom = itemTop + record.height;
 
       if (!foundStart && itemBottom >= viewTop) {
@@ -454,8 +450,6 @@ function createTranscriptView({
         endIndexExclusive = index;
         break;
       }
-
-      prefixHeight = itemBottom + normalizedItemGapPx;
     }
 
     if (!foundStart) {
@@ -467,59 +461,53 @@ function createTranscriptView({
       endIndexExclusive = Math.min(itemOrder.length, startIndex + 1);
     }
 
-    const topSpacerHeight = sumHeights(0, startIndex) + (startIndex > 0 ? normalizedItemGapPx : 0);
-    const mountedHeight = sumHeights(startIndex, endIndexExclusive);
-    const bottomSpacerHeight = Math.max(0, totalTranscriptHeight() - topSpacerHeight - mountedHeight);
-
     return {
       startIndex,
       endIndexExclusive,
-      topSpacerHeight,
-      bottomSpacerHeight,
     };
   }
 
-  function updateSpacerHeights(range) {
-    topSpacer.style.height = `${range.topSpacerHeight}px`;
-    bottomSpacer.style.height = `${range.bottomSpacerHeight}px`;
-  }
-
   function mountVisibleRange(range) {
-    const rangeKey = `${range.startIndex}:${range.endIndexExclusive}:${range.topSpacerHeight}:${range.bottomSpacerHeight}`;
-    if (rangeKey === lastRenderedRangeKey) {
-      updateSpacerHeights(range);
-      return range;
+    const rangeKey = `${range.startIndex}:${range.endIndexExclusive}`;
+    if (rangeKey !== lastRenderedRangeKey) {
+      const fragment = document.createDocumentFragment();
+      for (let index = range.startIndex; index < range.endIndexExclusive; index += 1) {
+        const record = itemRecordsById.get(itemOrder[index]);
+        if (!record) {
+          continue;
+        }
+
+        fragment.append(ensureRecordElement(record));
+      }
+
+      mountedItemsHost.replaceChildren(fragment);
+      lastRenderedRangeKey = rangeKey;
     }
 
-    const fragment = document.createDocumentFragment();
     for (let index = range.startIndex; index < range.endIndexExclusive; index += 1) {
       const record = itemRecordsById.get(itemOrder[index]);
-      if (!record) {
+      if (!record || !record.element) {
         continue;
       }
 
-      fragment.append(ensureRecordElement(record));
+      record.element.style.top = `${record.top}px`;
     }
 
-    mountedItemsHost.replaceChildren(fragment);
-    updateSpacerHeights(range);
-    lastRenderedRangeKey = rangeKey;
     return range;
   }
 
   function renderVisibleWindow() {
     if (itemOrder.length === 0) {
       mountedItemsHost.replaceChildren();
-      updateSpacerHeights({
-        topSpacerHeight: 0,
-        bottomSpacerHeight: 0,
-      });
+      virtualRoot.style.height = '0px';
+      mountedItemsHost.style.height = '0px';
       lastRenderedRangeKey = '';
       virtualRoot.hidden = true;
       return;
     }
 
     virtualRoot.hidden = false;
+    updateVirtualCanvasHeight();
 
     const initialRange = computeVisibleRange();
     mountVisibleRange(initialRange);
@@ -605,8 +593,8 @@ function createTranscriptView({
       record.height = estimateItemHeight(record.item);
     }
 
+    recomputeLayoutMetrics();
     lastMeasuredViewportWidth = null;
-    lastRenderedRangeKey = '';
   }
 
   function remeasureAllHeights() {
@@ -619,8 +607,8 @@ function createTranscriptView({
       record.height = measureItemHeight(record.item, estimateItemHeight(record.item));
     }
 
+    recomputeLayoutMetrics();
     lastMeasuredViewportWidth = null;
-    lastRenderedRangeKey = '';
   }
 
   function upsertItems(items) {
@@ -643,8 +631,8 @@ function createTranscriptView({
           signature,
           element: null,
           height: measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem)),
+          top: 0,
         });
-        lastRenderedRangeKey = '';
         continue;
       }
 
@@ -658,9 +646,9 @@ function createTranscriptView({
       if (record.element) {
         renderIntoArticle(record.element, normalizedItem);
       }
-      lastRenderedRangeKey = '';
     }
 
+    recomputeLayoutMetrics();
     renderVisibleWindow();
 
     if (shouldStickToBottom) {

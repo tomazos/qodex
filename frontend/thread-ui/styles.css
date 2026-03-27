@@ -45,25 +45,20 @@ main {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .thread-view__items-virtual {
+  position: relative;
   width: 100%;
   min-height: 100%;
-  display: flex;
   flex: 1 0 auto;
-  flex-direction: column;
-}
-
-.thread-view__spacer {
-  flex: 0 0 auto;
-  height: 0;
 }
 
 .thread-view__mounted {
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
 }
 
 .thread-view__empty {
@@ -78,6 +73,7 @@ main {
   border-radius: 10px;
   padding: 0.75rem 0.9rem;
   background: var(--thread-item-background);
+  box-sizing: border-box;
 }
 
 .thread-item--user {
