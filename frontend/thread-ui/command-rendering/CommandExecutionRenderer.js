@@ -108,16 +108,31 @@ function unwrapShellCommand(command) {
     return '';
   }
 
-  const match = command.match(/^\/bin\/bash -lc ("(?:[^"\\]|\\.)*")$/s);
-  if (!match) {
+  const prefix = '/bin/bash -lc ';
+  if (!command.startsWith(prefix)) {
     return command;
   }
 
-  try {
-    return JSON.parse(match[1]);
-  } catch {
-    return match[1].slice(1, -1);
+  const payload = command.slice(prefix.length);
+  if (payload.length < 2) {
+    return command;
   }
+
+  if (payload.startsWith('"') && payload.endsWith('"')) {
+    try {
+      return JSON.parse(payload);
+    } catch {
+      return payload.slice(1, -1);
+    }
+  }
+
+  if (payload.startsWith('\'') && payload.endsWith('\'')) {
+    return payload
+      .slice(1, -1)
+      .replace(/'\\''/g, '\'');
+  }
+
+  return command;
 }
 
 function normalizeActions(commandExecution) {

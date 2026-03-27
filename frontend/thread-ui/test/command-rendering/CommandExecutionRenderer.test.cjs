@@ -137,7 +137,7 @@ test('renders list files and search titles from structured command actions', () 
   assert.equal(listElement.querySelector('.command-execution__title a').getAttribute('href'), 'src');
 
   const searchElement = renderCommandExecution({
-    command: 'rg ThreadUi src',
+    command: '/bin/bash -lc \'rg "renderTitle" frontend/thread-ui/command-rendering/CommandExecutionRenderer.js\'',
     cwd: '/home/zos/qodex',
     status: 'completed',
     hasExitCode: false,
@@ -149,15 +149,25 @@ test('renders list files and search titles from structured command actions', () 
     actions: [
       {
         kind: 'search',
-        path: 'src',
-        query: 'ThreadUi',
+        path: 'frontend/thread-ui/command-rendering/CommandExecutionRenderer.js',
+        query: 'renderTitle',
         name: '',
-        command: 'rg ThreadUi src',
+        command: 'rg "renderTitle" frontend/thread-ui/command-rendering/CommandExecutionRenderer.js',
       },
     ],
   });
 
-  assert.equal(searchElement.querySelector('.command-execution__title').textContent, 'Search ThreadUi in src');
+  assert.equal(
+    searchElement.querySelector('.command-execution__title').textContent,
+    'Search renderTitle in frontend/thread-ui/command-rendering/CommandExecutionRenderer.js'
+  );
   assert.equal(searchElement.querySelector('.command-execution__title strong').textContent, 'Search');
-  assert.equal(searchElement.querySelector('.command-execution__title a').getAttribute('href'), 'src');
+  assert.equal(
+    searchElement.querySelector('.command-execution__title a').getAttribute('href'),
+    'frontend/thread-ui/command-rendering/CommandExecutionRenderer.js'
+  );
+  assert.equal(
+    searchElement.querySelector('.command-execution__prompt').textContent,
+    'zos@zoidberg:~/qodex$ rg "renderTitle" frontend/thread-ui/command-rendering/CommandExecutionRenderer.js'
+  );
 });
