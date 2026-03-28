@@ -20,9 +20,11 @@ public:
     void setCurrentThreadId(const QString &threadId);
 
 signals:
+    void createThreadRequested();
     void refreshRequested();
     void threadSelected(const QString &threadId);
     void resumeThreadRequested(const QString &threadId);
+    void editThreadSettingsRequested(const QString &threadId);
     void renameThreadRequested(const QString &threadId);
     void closeThreadsRequested(const QStringList &threadIds);
     void forkThreadRequested(const QString &threadId);

@@ -53,6 +53,7 @@ AppBootstrap::AppBootstrap(
           &m_client,
           &m_threadStore,
           &m_threadUiProcessManager,
+          &m_instructionCatalog,
           &m_mainWindow
       ) {
     m_loadedThreadsModel.setSessionController(&m_sessionController);

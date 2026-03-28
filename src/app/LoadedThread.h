@@ -39,6 +39,7 @@ public:
     [[nodiscard]] const QString &activeTurnId() const;
     [[nodiscard]] QList<const qodex::domain::threadmodel::Turn *> orderedTurns() const;
     [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
+    void load(const QString &title, const qodex::codex::Ref<qodex::codex::Thread> &thread);
     void resume(const QString &title, const qodex::codex::ThreadResumeResponse &response);
     void onThreadClosed();
     void onThreadStatusChanged(const qodex::codex::ThreadStatus &status);
@@ -124,6 +125,7 @@ private:
         const QString &message,
         const qodex::threadui::ipc::common::ResolvedLink &resolvedLink
     );
+    void applyThreadSnapshot(const qodex::codex::Ref<qodex::codex::Thread> &thread);
     void queueDisplayItemIfSupported(const qodex::domain::threadmodel::AbstractItem &item);
     [[nodiscard]] QList<qodex::codex::Ref<qodex::codex::UserInput>> buildTextUserInput(const QString &text) const;
     template <typename T>

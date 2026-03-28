@@ -630,6 +630,8 @@ qt_add_executable(qodex
     src/ui/ThreadListModel.h
     src/ui/ThreadListPane.cpp
     src/ui/ThreadListPane.h
+    src/ui/ThreadSettingsDialog.cpp
+    src/ui/ThreadSettingsDialog.h
 )
 
 target_include_directories(qodex PRIVATE

@@ -198,12 +198,12 @@ QList<const qodex::domain::threadmodel::Turn *> LoadedThread::orderedTurns() con
     return turns;
 }
 
-void LoadedThread::resume(const QString &title, const ThreadResumeResponse &response) {
+void LoadedThread::load(const QString &title, const Ref<Thread> &thread) {
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
-    m_cwd = response.thread ? response.thread->cwd : QString{};
-    m_activeTurnId = response.thread ? activeTurnIdForThread(*response.thread) : QString{};
-    if (response.thread && response.thread->status) {
-        applyProtocolThreadStatus(*response.thread->status);
+    m_cwd = thread ? thread->cwd : QString{};
+    m_activeTurnId = thread ? activeTurnIdForThread(*thread) : QString{};
+    if (thread && thread->status) {
+        applyProtocolThreadStatus(*thread->status);
     } else if (!m_activeTurnId.isEmpty()) {
         setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_ACTIVE, QStringLiteral("Active"));
     } else {
@@ -212,13 +212,15 @@ void LoadedThread::resume(const QString &title, const ThreadResumeResponse &resp
     m_pendingThreadUiUserInputRequests.clear();
     m_turnOrder.clear();
     m_turnsById.clear();
-    if (response.thread) {
-        rebuildModelFromThread(*response.thread);
-    }
+    applyThreadSnapshot(thread);
     m_threadUiProcess->relaunch(m_title);
     queueThreadStatus();
     m_threadUiProcess->queueAddItems(m_threadUiProjector.projectTurns(orderedTurns()));
     emit snapshotRebuilt();
+}
+
+void LoadedThread::resume(const QString &title, const ThreadResumeResponse &response) {
+    load(title, response.thread);
 }
 
 void LoadedThread::onThreadClosed() {
@@ -230,6 +232,12 @@ void LoadedThread::onThreadClosed() {
     m_turnsById.clear();
     queueThreadStatus();
     emit snapshotRebuilt();
+}
+
+void LoadedThread::applyThreadSnapshot(const Ref<Thread> &thread) {
+    if (thread) {
+        rebuildModelFromThread(*thread);
+    }
 }
 
 void LoadedThread::onThreadStatusChanged(const ThreadStatus &status) {
