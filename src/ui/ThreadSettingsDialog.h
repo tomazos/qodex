@@ -11,6 +11,7 @@
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QPushButton;
 
 namespace qodex::ui {
 
@@ -40,9 +41,14 @@ public:
 
     struct Selection {
         QString threadName;
-        std::optional<QString> model;
-        std::optional<qodex::codex::ReasoningEffort> reasoningEffort;
-        std::optional<QString> instructionKey;
+        QString workingDirectory;
+        QString model;
+        qodex::codex::ReasoningEffort reasoningEffort = qodex::codex::ReasoningEffort::Medium;
+        QString instructionKey;
+        bool workingDirectoryUnchanged = false;
+        bool modelUnchanged = false;
+        bool reasoningEffortUnchanged = false;
+        bool instructionUnchanged = false;
     };
 
     explicit ThreadSettingsDialog(Mode mode, QWidget *parent = nullptr);
@@ -58,18 +64,19 @@ private:
     void rebuildModelCombo();
     void rebuildReasoningCombo();
     void rebuildInstructionCombo();
+    void browseForWorkingDirectory();
     [[nodiscard]] const ModelOption *selectedModelOption() const;
     [[nodiscard]] const ModelOption *modelOptionFor(const QString &model) const;
-    [[nodiscard]] QString optionalModelLabel() const;
-    [[nodiscard]] QString optionalInstructionLabel() const;
     [[nodiscard]] QString disabledReasoningLabel() const;
-    [[nodiscard]] QString optionalReasoningLabel() const;
+    [[nodiscard]] bool tracksUnchangedFields() const;
 
     Mode m_mode = Mode::Create;
     QList<ModelOption> m_modelOptions;
     QList<InstructionOption> m_instructionOptions;
     Selection m_initialSelection;
     QLineEdit *m_threadNameEdit = nullptr;
+    QLineEdit *m_workingDirectoryEdit = nullptr;
+    QPushButton *m_browseWorkingDirectoryButton = nullptr;
     QComboBox *m_modelCombo = nullptr;
     QComboBox *m_reasoningCombo = nullptr;
     QComboBox *m_instructionCombo = nullptr;

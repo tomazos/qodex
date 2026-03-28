@@ -92,6 +92,14 @@ struct InstructionRecord {
     QString updatedAtUtc;
 };
 
+struct ThreadSettingsRecord {
+    QString threadId;
+    std::optional<QString> cwd;
+    std::optional<QString> model;
+    std::optional<QString> reasoningEffort;
+    std::optional<QString> instructionKey;
+};
+
 class DatabaseManager final {
 public:
     explicit DatabaseManager(const QString &databasePath);
@@ -116,6 +124,10 @@ public:
     [[nodiscard]] std::optional<ApiLogDetailRecord> loadApiLogDetail(qint64 id, QString *errorMessage) const;
     [[nodiscard]] QList<InstructionRecord> loadInstructions(QString *errorMessage) const;
     [[nodiscard]] std::optional<InstructionRecord> loadInstruction(qint64 id, QString *errorMessage) const;
+    [[nodiscard]] std::optional<ThreadSettingsRecord> loadThreadSettings(
+        const QString &threadId,
+        QString *errorMessage
+    ) const;
 
     [[nodiscard]] bool replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage);
     [[nodiscard]] bool replaceViewStates(const QList<ViewStateRecord> &viewStates, QString *errorMessage);
@@ -128,6 +140,7 @@ public:
     );
     [[nodiscard]] bool renameInstruction(qint64 id, const QString &name, QString *errorMessage);
     [[nodiscard]] bool updateInstructionContent(qint64 id, const QString &content, QString *errorMessage);
+    [[nodiscard]] bool saveThreadSettings(const ThreadSettingsRecord &record, QString *errorMessage);
 
 private:
     [[nodiscard]] bool initializeConnection(QString *errorMessage);

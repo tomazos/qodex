@@ -5,6 +5,9 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -42,6 +45,43 @@ InstructionRecord instructionRecordFromQuery(const QSqlQuery &query) {
         .createdAtUtc = query.value(3).toString(),
         .updatedAtUtc = query.value(4).toString(),
     };
+}
+
+std::optional<QString> optionalStringFromJsonObject(const QJsonObject &object, const QString &key) {
+    const QJsonValue value = object.value(key);
+    if (!value.isString()) {
+        return std::nullopt;
+    }
+
+    const QString text = value.toString().trimmed();
+    return text.isEmpty() ? std::nullopt : std::optional<QString>(text);
+}
+
+QJsonObject parseMetadataObject(const QString &metadataJson, QString *errorMessage) {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+
+    if (metadataJson.trimmed().isEmpty()) {
+        return {};
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(metadataJson.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Invalid thread metadata JSON: %1").arg(parseError.errorString());
+        }
+        return {};
+    }
+    if (!document.isObject()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Invalid thread metadata JSON: expected object.");
+        }
+        return {};
+    }
+
+    return document.object();
 }
 
 QString apiLogSortExpression(const ApiLogSortField sortField) {
@@ -404,6 +444,60 @@ std::optional<InstructionRecord> DatabaseManager::loadInstruction(const qint64 i
     return loadInstructionRecordById(id, errorMessage);
 }
 
+std::optional<ThreadSettingsRecord> DatabaseManager::loadThreadSettings(
+    const QString &threadId,
+    QString *errorMessage
+) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return std::nullopt;
+    }
+
+    QSqlQuery query(*m_database);
+    query.prepare(QStringLiteral("SELECT metadata_json FROM thread_metadata WHERE thread_id = ?;"));
+    query.addBindValue(threadId);
+    if (!query.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = query.lastError().text();
+        }
+        return std::nullopt;
+    }
+    if (!query.next()) {
+        return std::nullopt;
+    }
+
+    QString parseError;
+    const QJsonObject metadataObject = parseMetadataObject(query.value(0).toString(), &parseError);
+    if (!parseError.isEmpty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = parseError;
+        }
+        return std::nullopt;
+    }
+
+    const QJsonValue threadSettingsValue = metadataObject.value(QStringLiteral("threadSettings"));
+    if (!threadSettingsValue.isObject()) {
+        return std::nullopt;
+    }
+
+    const QJsonObject threadSettingsObject = threadSettingsValue.toObject();
+    ThreadSettingsRecord record{
+        .threadId = threadId,
+        .cwd = optionalStringFromJsonObject(threadSettingsObject, QStringLiteral("cwd")),
+        .model = optionalStringFromJsonObject(threadSettingsObject, QStringLiteral("model")),
+        .instructionKey = optionalStringFromJsonObject(threadSettingsObject, QStringLiteral("instructionKey")),
+    };
+
+    record.reasoningEffort = optionalStringFromJsonObject(threadSettingsObject, QStringLiteral("reasoningEffort"));
+
+    return record;
+}
+
 bool DatabaseManager::replaceWindowStates(const QList<WindowStateRecord> &windowStates, QString *errorMessage) {
     if (errorMessage != nullptr) {
         errorMessage->clear();
@@ -621,6 +715,70 @@ bool DatabaseManager::updateInstructionContent(const qint64 id, const QString &c
     return executeStatement(
         QStringLiteral("UPDATE instruction_document SET content = ? WHERE id = ?;"),
         {content, id},
+        errorMessage
+    );
+}
+
+bool DatabaseManager::saveThreadSettings(const ThreadSettingsRecord &record, QString *errorMessage) {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (!isOpen()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Database is not open.");
+        }
+        return false;
+    }
+
+    QJsonObject metadataObject;
+    QSqlQuery loadQuery(*m_database);
+    loadQuery.prepare(QStringLiteral("SELECT metadata_json FROM thread_metadata WHERE thread_id = ?;"));
+    loadQuery.addBindValue(record.threadId);
+    if (!loadQuery.exec()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = loadQuery.lastError().text();
+        }
+        return false;
+    }
+    if (loadQuery.next()) {
+        QString parseError;
+        metadataObject = parseMetadataObject(loadQuery.value(0).toString(), &parseError);
+        if (!parseError.isEmpty()) {
+            if (errorMessage != nullptr) {
+                *errorMessage = parseError;
+            }
+            return false;
+        }
+    }
+
+    QJsonObject threadSettingsObject;
+    if (metadataObject.value(QStringLiteral("threadSettings")).isObject()) {
+        threadSettingsObject = metadataObject.value(QStringLiteral("threadSettings")).toObject();
+    }
+
+    auto setOptionalString = [&threadSettingsObject](const QString &key, const std::optional<QString> &value) {
+        if (value.has_value() && !value->trimmed().isEmpty()) {
+            threadSettingsObject.insert(key, value->trimmed());
+        } else {
+            threadSettingsObject.remove(key);
+        }
+    };
+
+    setOptionalString(QStringLiteral("cwd"), record.cwd);
+    setOptionalString(QStringLiteral("model"), record.model);
+    setOptionalString(QStringLiteral("instructionKey"), record.instructionKey);
+    setOptionalString(QStringLiteral("reasoningEffort"), record.reasoningEffort);
+
+    metadataObject.insert(QStringLiteral("threadSettings"), threadSettingsObject);
+    const QString metadataJson = QString::fromUtf8(QJsonDocument(metadataObject).toJson(QJsonDocument::Compact));
+
+    return executeStatement(
+        QStringLiteral(
+            "INSERT INTO thread_metadata(thread_id, metadata_json, updated_at) "
+            "VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(thread_id) DO UPDATE SET metadata_json = excluded.metadata_json, updated_at = CURRENT_TIMESTAMP;"
+        ),
+        {record.threadId, metadataJson},
         errorMessage
     );
 }

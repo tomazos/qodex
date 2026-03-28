@@ -51,6 +51,7 @@ AppBootstrap::AppBootstrap(
           m_config,
           &m_transport,
           &m_client,
+          m_databaseManager,
           &m_threadStore,
           &m_threadUiProcessManager,
           &m_instructionCatalog,

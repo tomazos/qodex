@@ -2,10 +2,14 @@
 
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
+#include <QFileDialog>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 namespace qodex::ui {
@@ -82,6 +86,15 @@ int indexForComboData(const QComboBox *combo, const QVariant &data) {
     return -1;
 }
 
+QString normalizeDirectoryPath(const QString &path) {
+    const QString trimmed = path.trimmed();
+    if (trimmed.isEmpty()) {
+        return {};
+    }
+
+    return QDir::cleanPath(trimmed);
+}
+
 }  // namespace
 
 ThreadSettingsDialog::ThreadSettingsDialog(const Mode mode, QWidget *parent)
@@ -89,8 +102,8 @@ ThreadSettingsDialog::ThreadSettingsDialog(const Mode mode, QWidget *parent)
       m_mode(mode) {
     setWindowTitle(dialogWindowTitle(mode));
     setModal(true);
-    resize(760, 360);
-    setMinimumSize(680, 320);
+    resize(780, 420);
+    setMinimumSize(700, 360);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(18, 18, 18, 18);
@@ -119,6 +132,19 @@ ThreadSettingsDialog::ThreadSettingsDialog(const Mode mode, QWidget *parent)
     }
     formLayout->addRow(QStringLiteral("Thread name"), m_threadNameEdit);
 
+    auto *workingDirectoryLayout = new QHBoxLayout();
+    workingDirectoryLayout->setContentsMargins(0, 0, 0, 0);
+    workingDirectoryLayout->setSpacing(8);
+
+    m_workingDirectoryEdit = new QLineEdit(this);
+    m_workingDirectoryEdit->setPlaceholderText(QStringLiteral("/path/to/working/directory"));
+    workingDirectoryLayout->addWidget(m_workingDirectoryEdit, 1);
+
+    m_browseWorkingDirectoryButton = new QPushButton(QStringLiteral("Browse..."), this);
+    workingDirectoryLayout->addWidget(m_browseWorkingDirectoryButton);
+
+    formLayout->addRow(QStringLiteral("Working directory"), workingDirectoryLayout);
+
     m_modelCombo = new QComboBox(this);
     formLayout->addRow(QStringLiteral("Model"), m_modelCombo);
 
@@ -138,6 +164,7 @@ ThreadSettingsDialog::ThreadSettingsDialog(const Mode mode, QWidget *parent)
     connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_modelCombo, &QComboBox::currentIndexChanged, this, [this](int) { rebuildReasoningCombo(); });
+    connect(m_browseWorkingDirectoryButton, &QPushButton::clicked, this, &ThreadSettingsDialog::browseForWorkingDirectory);
 
     switch (m_mode) {
     case Mode::Create:
@@ -146,14 +173,14 @@ ThreadSettingsDialog::ThreadSettingsDialog(const Mode mode, QWidget *parent)
     case Mode::Edit:
         setHelperText(
             QStringLiteral(
-                "Leave any setting on \"Leave unchanged\" to preserve the thread's current value. Non-name settings only apply when the thread is not loaded."
+                "Current settings are shown below. Unchanged values will be preserved. Non-name settings only apply when the thread is not loaded."
             )
         );
         break;
     case Mode::Fork:
         setHelperText(
             QStringLiteral(
-                "Leave any setting on \"Inherit from source thread\" to copy it from the source thread."
+                "Current source-thread settings are shown below. Unchanged values will be inherited by the fork."
             )
         );
         break;
@@ -176,6 +203,9 @@ void ThreadSettingsDialog::setInitialSelection(const Selection &selection) {
     if (m_threadNameEdit != nullptr) {
         m_threadNameEdit->setText(selection.threadName);
     }
+    if (m_workingDirectoryEdit != nullptr) {
+        m_workingDirectoryEdit->setText(normalizeDirectoryPath(selection.workingDirectory));
+    }
     rebuildModelCombo();
     rebuildReasoningCombo();
     rebuildInstructionCombo();
@@ -193,8 +223,14 @@ ThreadSettingsDialog::Selection ThreadSettingsDialog::selection() const {
     if (m_threadNameEdit != nullptr) {
         value.threadName = m_threadNameEdit->text();
     }
+    if (m_workingDirectoryEdit != nullptr) {
+        value.workingDirectory = normalizeDirectoryPath(m_workingDirectoryEdit->text());
+        if (value.workingDirectory.isEmpty()) {
+            value.workingDirectory = normalizeDirectoryPath(m_initialSelection.workingDirectory);
+        }
+    }
 
-    if (m_modelCombo != nullptr && m_modelCombo->currentData().isValid()) {
+    if (m_modelCombo != nullptr) {
         value.model = m_modelCombo->currentData().toString();
     }
 
@@ -203,8 +239,15 @@ ThreadSettingsDialog::Selection ThreadSettingsDialog::selection() const {
             static_cast<qodex::codex::ReasoningEffort>(m_reasoningCombo->currentData().toInt());
     }
 
-    if (m_instructionCombo != nullptr && m_instructionCombo->currentData().isValid()) {
+    if (m_instructionCombo != nullptr) {
         value.instructionKey = m_instructionCombo->currentData().toString();
+    }
+
+    if (tracksUnchangedFields()) {
+        value.workingDirectoryUnchanged = value.workingDirectory == normalizeDirectoryPath(m_initialSelection.workingDirectory);
+        value.modelUnchanged = value.model == m_initialSelection.model;
+        value.reasoningEffortUnchanged = value.reasoningEffort == m_initialSelection.reasoningEffort;
+        value.instructionUnchanged = value.instructionKey == m_initialSelection.instructionKey;
     }
 
     return value;
@@ -216,14 +259,8 @@ void ThreadSettingsDialog::rebuildModelCombo() {
     }
 
     const QSignalBlocker blocker(m_modelCombo);
-    const QVariant selectedModelData = m_initialSelection.model.has_value()
-        ? QVariant::fromValue(m_initialSelection.model.value())
-        : QVariant{};
+    const QVariant selectedModelData = QVariant::fromValue(m_initialSelection.model);
     m_modelCombo->clear();
-
-    if (m_mode != Mode::Create) {
-        m_modelCombo->addItem(optionalModelLabel(), QVariant{});
-    }
 
     int defaultIndex = -1;
     for (const ModelOption &option : m_modelOptions) {
@@ -235,11 +272,7 @@ void ThreadSettingsDialog::rebuildModelCombo() {
 
     int selectedIndex = indexForComboData(m_modelCombo, selectedModelData);
     if (selectedIndex < 0) {
-        if (m_mode == Mode::Create) {
-            selectedIndex = defaultIndex >= 0 ? defaultIndex : (m_modelCombo->count() > 0 ? 0 : -1);
-        } else {
-            selectedIndex = 0;
-        }
+        selectedIndex = defaultIndex >= 0 ? defaultIndex : (m_modelCombo->count() > 0 ? 0 : -1);
     }
 
     if (selectedIndex >= 0) {
@@ -253,6 +286,7 @@ void ThreadSettingsDialog::rebuildReasoningCombo() {
     }
 
     const QSignalBlocker blocker(m_reasoningCombo);
+    const QVariant currentReasoningData = m_reasoningCombo->currentData();
     m_reasoningCombo->clear();
 
     const ModelOption *modelOption = selectedModelOption();
@@ -263,10 +297,6 @@ void ThreadSettingsDialog::rebuildReasoningCombo() {
     }
 
     m_reasoningCombo->setEnabled(true);
-    if (m_mode != Mode::Create) {
-        m_reasoningCombo->addItem(optionalReasoningLabel(), QVariant{});
-    }
-
     int defaultIndex = -1;
     for (const qodex::codex::Ref<qodex::codex::ReasoningEffortOption> &option : modelOption->supportedReasoningEfforts) {
         if (!option) {
@@ -290,27 +320,22 @@ void ThreadSettingsDialog::rebuildReasoningCombo() {
         }
     }
 
-    if (m_initialSelection.reasoningEffort.has_value()) {
-        const int selectedIndex = indexForComboData(
+    int selectedIndex = -1;
+    if (currentReasoningData.isValid()) {
+        selectedIndex = indexForComboData(m_reasoningCombo, currentReasoningData);
+    }
+    if (selectedIndex < 0) {
+        selectedIndex = indexForComboData(
             m_reasoningCombo,
-            static_cast<int>(m_initialSelection.reasoningEffort.value())
+            static_cast<int>(m_initialSelection.reasoningEffort)
         );
-        if (selectedIndex >= 0) {
-            m_reasoningCombo->setCurrentIndex(selectedIndex);
-            return;
-        }
     }
-
-    if (m_mode == Mode::Create) {
-        if (defaultIndex >= 0) {
-            m_reasoningCombo->setCurrentIndex(defaultIndex);
-        } else if (m_reasoningCombo->count() > 0) {
-            m_reasoningCombo->setCurrentIndex(0);
-        }
-        return;
+    if (selectedIndex < 0) {
+        selectedIndex = defaultIndex >= 0 ? defaultIndex : (m_reasoningCombo->count() > 0 ? 0 : -1);
     }
-
-    m_reasoningCombo->setCurrentIndex(0);
+    if (selectedIndex >= 0) {
+        m_reasoningCombo->setCurrentIndex(selectedIndex);
+    }
 }
 
 void ThreadSettingsDialog::rebuildInstructionCombo() {
@@ -319,14 +344,8 @@ void ThreadSettingsDialog::rebuildInstructionCombo() {
     }
 
     const QSignalBlocker blocker(m_instructionCombo);
-    const QVariant selectedInstructionData = m_initialSelection.instructionKey.has_value()
-        ? QVariant::fromValue(m_initialSelection.instructionKey.value())
-        : QVariant{};
+    const QVariant selectedInstructionData = QVariant::fromValue(m_initialSelection.instructionKey);
     m_instructionCombo->clear();
-
-    if (m_mode != Mode::Create) {
-        m_instructionCombo->addItem(optionalInstructionLabel(), QVariant{});
-    }
 
     int defaultIndex = -1;
     for (const InstructionOption &option : m_instructionOptions) {
@@ -338,15 +357,27 @@ void ThreadSettingsDialog::rebuildInstructionCombo() {
 
     int selectedIndex = indexForComboData(m_instructionCombo, selectedInstructionData);
     if (selectedIndex < 0) {
-        if (m_mode == Mode::Create) {
-            selectedIndex = defaultIndex >= 0 ? defaultIndex : (m_instructionCombo->count() > 0 ? 0 : -1);
-        } else {
-            selectedIndex = 0;
-        }
+        selectedIndex = defaultIndex >= 0 ? defaultIndex : (m_instructionCombo->count() > 0 ? 0 : -1);
     }
 
     if (selectedIndex >= 0) {
         m_instructionCombo->setCurrentIndex(selectedIndex);
+    }
+}
+
+void ThreadSettingsDialog::browseForWorkingDirectory() {
+    if (m_workingDirectoryEdit == nullptr) {
+        return;
+    }
+
+    const QString initialPath = normalizeDirectoryPath(m_workingDirectoryEdit->text());
+    const QString selectedPath = QFileDialog::getExistingDirectory(
+        this,
+        QStringLiteral("Select Working Directory"),
+        initialPath.isEmpty() ? QDir::homePath() : initialPath
+    );
+    if (!selectedPath.isEmpty()) {
+        m_workingDirectoryEdit->setText(QDir::cleanPath(selectedPath));
     }
 }
 
@@ -368,54 +399,12 @@ const ThreadSettingsDialog::ModelOption *ThreadSettingsDialog::modelOptionFor(co
     return nullptr;
 }
 
-QString ThreadSettingsDialog::optionalModelLabel() const {
-    switch (m_mode) {
-    case Mode::Edit:
-        return QStringLiteral("Leave unchanged");
-    case Mode::Fork:
-        return QStringLiteral("Inherit from source thread");
-    case Mode::Create:
-        break;
-    }
-
-    return QStringLiteral("Select a model");
-}
-
-QString ThreadSettingsDialog::optionalInstructionLabel() const {
-    switch (m_mode) {
-    case Mode::Edit:
-        return QStringLiteral("Leave unchanged");
-    case Mode::Fork:
-        return QStringLiteral("Inherit from source thread");
-    case Mode::Create:
-        break;
-    }
-
-    return QStringLiteral("Select instructions");
-}
-
 QString ThreadSettingsDialog::disabledReasoningLabel() const {
-    switch (m_mode) {
-    case Mode::Edit:
-        return QStringLiteral("Leave unchanged");
-    case Mode::Fork:
-        return QStringLiteral("Inherit from source thread");
-    case Mode::Create:
-        break;
-    }
-
     return QStringLiteral("Select a model first");
 }
 
-QString ThreadSettingsDialog::optionalReasoningLabel() const {
-    if (m_mode == Mode::Fork) {
-        return QStringLiteral("Use model default");
-    }
-    if (m_mode == Mode::Edit) {
-        return QStringLiteral("Use model default");
-    }
-
-    return QStringLiteral("Use model default");
+bool ThreadSettingsDialog::tracksUnchangedFields() const {
+    return m_mode != Mode::Create;
 }
 
 }  // namespace qodex::ui

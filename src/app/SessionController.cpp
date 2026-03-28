@@ -2,8 +2,10 @@
 
 #include <algorithm>
 
+#include <QDir>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDebug>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -20,6 +22,7 @@
 #include "codex/AppServerTransport.h"
 #include "domain/InstructionCatalog.h"
 #include "domain/ThreadStore.h"
+#include "storage/DatabaseManager.h"
 #include "ui/MainWindow.h"
 #include "ui/ThreadListPane.h"
 
@@ -83,12 +86,44 @@ QString threadSettingsWindowTitle(const qodex::ui::ThreadSettingsDialog::Mode mo
     return QStringLiteral("Thread Settings");
 }
 
+std::optional<QString> optionalTrimmedString(const QString &value) {
+    const QString trimmed = value.trimmed();
+    return trimmed.isEmpty() ? std::nullopt : std::optional<QString>(trimmed);
+}
+
+std::optional<QString> reasoningEffortKey(const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort) {
+    if (!reasoningEffort.hasValue()) {
+        return std::nullopt;
+    }
+
+    return qodex::codex::toJson(reasoningEffort.value()).toString();
+}
+
+std::optional<QString> reasoningEffortKey(const qodex::codex::ReasoningEffort reasoningEffort) {
+    return qodex::codex::toJson(reasoningEffort).toString();
+}
+
+std::optional<qodex::codex::ReasoningEffort> reasoningEffortFromKey(const std::optional<QString> &key) {
+    if (!key.has_value() || key->trimmed().isEmpty()) {
+        return std::nullopt;
+    }
+
+    qodex::codex::ReasoningEffort reasoningEffort{};
+    QString errorMessage;
+    if (!qodex::codex::fromJson(QJsonValue(*key), reasoningEffort, &errorMessage)) {
+        return std::nullopt;
+    }
+
+    return reasoningEffort;
+}
+
 }  // namespace
 
 SessionController::SessionController(
     const AppConfig &config,
     qodex::codex::AppServerTransport *transport,
     CodexClient *client,
+    qodex::storage::DatabaseManager *databaseManager,
     qodex::domain::ThreadStore *threadStore,
     ThreadUiProcessManager *threadUiProcessManager,
     qodex::domain::InstructionCatalog *instructionCatalog,
@@ -99,12 +134,14 @@ SessionController::SessionController(
       m_config(config),
       m_transport(transport),
       m_client(client),
+      m_databaseManager(databaseManager),
       m_threadStore(threadStore),
       m_threadUiProcessManager(threadUiProcessManager),
       m_instructionCatalog(instructionCatalog),
       m_mainWindow(mainWindow) {
     Q_ASSERT(m_transport != nullptr);
     Q_ASSERT(m_client != nullptr);
+    Q_ASSERT(m_databaseManager != nullptr);
     Q_ASSERT(m_threadStore != nullptr);
     Q_ASSERT(m_threadUiProcessManager != nullptr);
     Q_ASSERT(m_instructionCatalog != nullptr);
@@ -440,16 +477,26 @@ QList<qodex::ui::ThreadSettingsDialog::InstructionOption> SessionController::thr
 
 qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultCreateThreadSettingsSelection() const {
     qodex::ui::ThreadSettingsDialog::Selection selection;
+    selection.workingDirectory = QDir::homePath();
 
     const QList<qodex::ui::ThreadSettingsDialog::ModelOption> modelOptions = threadSettingsModelOptions();
     for (const qodex::ui::ThreadSettingsDialog::ModelOption &option : modelOptions) {
-        if (option.isDefault) {
+        if (option.model == QStringLiteral("gpt-5.4")) {
             selection.model = option.model;
-            selection.reasoningEffort = option.defaultReasoningEffort;
+            selection.reasoningEffort = qodex::codex::ReasoningEffort::Xhigh;
             break;
         }
     }
-    if (!selection.model.has_value() && !modelOptions.isEmpty()) {
+    if (selection.model.isEmpty()) {
+        for (const qodex::ui::ThreadSettingsDialog::ModelOption &option : modelOptions) {
+            if (option.isDefault) {
+                selection.model = option.model;
+                selection.reasoningEffort = option.defaultReasoningEffort;
+                break;
+            }
+        }
+    }
+    if (selection.model.isEmpty() && !modelOptions.isEmpty()) {
         selection.model = modelOptions.constFirst().model;
         selection.reasoningEffort = modelOptions.constFirst().defaultReasoningEffort;
     }
@@ -457,13 +504,14 @@ qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultCreateThrea
     QString errorMessage;
     const QList<qodex::ui::ThreadSettingsDialog::InstructionOption> instructionOptions =
         threadSettingsInstructionOptions(&errorMessage);
+    selection.instructionKey = qodex::domain::InstructionCatalog::codexDefaultInstructionKey();
     for (const qodex::ui::ThreadSettingsDialog::InstructionOption &option : instructionOptions) {
-        if (option.isDefault) {
+        if (option.key == qodex::domain::InstructionCatalog::codexDefaultInstructionKey()) {
             selection.instructionKey = option.key;
             break;
         }
     }
-    if (!selection.instructionKey.has_value() && !instructionOptions.isEmpty()) {
+    if (selection.instructionKey.isEmpty() && !instructionOptions.isEmpty()) {
         selection.instructionKey = instructionOptions.constFirst().key;
     }
 
@@ -473,17 +521,33 @@ qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultCreateThrea
 qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultForkThreadSettingsSelection(
     const qodex::domain::ThreadSummary &summary
 ) const {
-    Q_UNUSED(summary);
-
-    qodex::ui::ThreadSettingsDialog::Selection selection;
+    qodex::ui::ThreadSettingsDialog::Selection selection = defaultCreateThreadSettingsSelection();
     selection.threadName.clear();
+    selection.workingDirectory = !summary.cwd.trimmed().isEmpty() ? summary.cwd.trimmed() : selection.workingDirectory;
+
+    QString errorMessage;
+    const auto storedSettings = loadStoredThreadSettings(summary.id, &errorMessage);
+    if (errorMessage.isEmpty() && storedSettings.has_value()) {
+        if (storedSettings->cwd.has_value()) {
+            selection.workingDirectory = *storedSettings->cwd;
+        }
+        if (storedSettings->model.has_value()) {
+            selection.model = *storedSettings->model;
+        }
+        if (const auto reasoningEffort = reasoningEffortFromKey(storedSettings->reasoningEffort); reasoningEffort.has_value()) {
+            selection.reasoningEffort = *reasoningEffort;
+        }
+        if (storedSettings->instructionKey.has_value()) {
+            selection.instructionKey = *storedSettings->instructionKey;
+        }
+    }
     return selection;
 }
 
 qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultEditThreadSettingsSelection(
     const qodex::domain::ThreadSummary &summary
 ) const {
-    qodex::ui::ThreadSettingsDialog::Selection selection;
+    qodex::ui::ThreadSettingsDialog::Selection selection = defaultForkThreadSettingsSelection(summary);
     selection.threadName = summary.title;
     return selection;
 }
@@ -557,15 +621,42 @@ Nullable<QString> SessionController::baseInstructionsFromInstructionKey(
 }
 
 Nullable<QMap<QString, QJsonValue>> SessionController::configForReasoningEffort(
-    const std::optional<qodex::codex::ReasoningEffort> &reasoningEffort
+    const qodex::codex::ReasoningEffort &reasoningEffort
 ) const {
-    if (!reasoningEffort.has_value()) {
-        return missing<QMap<QString, QJsonValue>>();
+    QMap<QString, QJsonValue> config;
+    config.insert(QStringLiteral("modelReasoningEffort"), qodex::codex::toJson(reasoningEffort));
+    return Nullable<QMap<QString, QJsonValue>>::fromValue(config);
+}
+
+std::optional<qodex::storage::ThreadSettingsRecord> SessionController::loadStoredThreadSettings(
+    const QString &threadId,
+    QString *errorMessage
+) const {
+    if (errorMessage != nullptr) {
+        errorMessage->clear();
+    }
+    if (m_databaseManager == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Thread settings database is unavailable.");
+        }
+        return std::nullopt;
     }
 
-    QMap<QString, QJsonValue> config;
-    config.insert(QStringLiteral("modelReasoningEffort"), qodex::codex::toJson(*reasoningEffort));
-    return Nullable<QMap<QString, QJsonValue>>::fromValue(config);
+    return m_databaseManager->loadThreadSettings(threadId, errorMessage);
+}
+
+bool SessionController::saveStoredThreadSettings(const qodex::storage::ThreadSettingsRecord &record) {
+    if (m_databaseManager == nullptr) {
+        return false;
+    }
+
+    QString errorMessage;
+    if (m_databaseManager->saveThreadSettings(record, &errorMessage)) {
+        return true;
+    }
+
+    qWarning().noquote() << QStringLiteral("Failed to save thread settings for %1: %2").arg(record.threadId, errorMessage);
+    return false;
 }
 
 bool SessionController::queueThreadRenameRequest(const QString &threadId, const QString &newName) {
@@ -757,6 +848,13 @@ void SessionController::onThreadStartSucceeded(const JsonRpcId &id, const Thread
         queueThreadRenameRequest(response.thread->id, pendingRequest.desiredName);
     }
     m_threadStore->setSelectedThreadId(response.thread->id);
+    saveStoredThreadSettings(qodex::storage::ThreadSettingsRecord{
+        .threadId = response.thread->id,
+        .cwd = response.cwd,
+        .model = response.model,
+        .reasoningEffort = reasoningEffortKey(response.reasoningEffort),
+        .instructionKey = pendingRequest.instructionKey,
+    });
 
     LoadedThread *loadedThread = ensureLoadedThread(response.thread->id, title);
     if (loadedThread == nullptr) {
@@ -777,13 +875,24 @@ void SessionController::onThreadStartFailed(const JsonRpcId &id, const JsonRpcEr
 }
 
 void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const qodex::codex::ThreadResumeResponse &response) {
-    const QString threadId = m_pendingThreadResumeRequests.take(id.toKey());
-    if (threadId.isEmpty() || !response.thread) {
+    const PendingThreadResumeRequest pendingRequest = m_pendingThreadResumeRequests.take(id.toKey());
+    if (pendingRequest.threadId.isEmpty() || !response.thread) {
         return;
     }
 
+    const auto existingSettings = loadStoredThreadSettings(pendingRequest.threadId);
+    saveStoredThreadSettings(qodex::storage::ThreadSettingsRecord{
+        .threadId = pendingRequest.threadId,
+        .cwd = response.cwd,
+        .model = response.model,
+        .reasoningEffort = reasoningEffortKey(response.reasoningEffort),
+        .instructionKey = pendingRequest.instructionKey.has_value()
+            ? pendingRequest.instructionKey
+            : (existingSettings.has_value() ? existingSettings->instructionKey : std::nullopt),
+    });
+
     const QString title = threadDisplayTitle(*response.thread);
-    LoadedThread *loadedThread = ensureLoadedThread(threadId, title);
+    LoadedThread *loadedThread = ensureLoadedThread(pendingRequest.threadId, title);
     if (loadedThread == nullptr) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to launch Thread UI for %1.").arg(title));
         return;
@@ -811,7 +920,8 @@ void SessionController::onCreateThreadRequested() {
     }
 
     QString errorMessage;
-    const Nullable<QString> baseInstructions = baseInstructionsFromInstructionKey(selection->instructionKey, &errorMessage);
+    const Nullable<QString> baseInstructions =
+        baseInstructionsFromInstructionKey(optionalTrimmedString(selection->instructionKey), &errorMessage);
     if (!errorMessage.isEmpty()) {
         QMessageBox::warning(m_mainWindow, QStringLiteral("Create New Thread"), errorMessage);
         return;
@@ -822,13 +932,13 @@ void SessionController::onCreateThreadRequested() {
         missing<qodex::codex::ApprovalsReviewer>(),
         baseInstructions,
         configForReasoningEffort(selection->reasoningEffort),
-        missing<QString>(),
+        Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
         missing<QList<Ref<qodex::codex::DynamicToolSpec>>>(),
         missing<bool>(),
         std::nullopt,
         missing<QString>(),
-        selection->model.has_value() ? Nullable<QString>::fromValue(*selection->model) : missing<QString>(),
+        Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
@@ -843,6 +953,7 @@ void SessionController::onCreateThreadRequested() {
 
     m_pendingThreadStartRequests.insert(requestId.toKey(), PendingThreadStartRequest{
         .desiredName = selection->threadName,
+        .instructionKey = optionalTrimmedString(selection->instructionKey),
     });
     m_mainWindow->setStatusMessage(QStringLiteral("Creating thread..."));
 }
@@ -898,7 +1009,11 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         return;
     }
 
-    m_pendingThreadResumeRequests.insert(requestId.toKey(), threadId);
+    const auto existingSettings = loadStoredThreadSettings(threadId);
+    m_pendingThreadResumeRequests.insert(requestId.toKey(), PendingThreadResumeRequest{
+        .threadId = threadId,
+        .instructionKey = existingSettings.has_value() ? existingSettings->instructionKey : std::nullopt,
+    });
     m_mainWindow->setStatusMessage(QStringLiteral("Resuming thread..."));
 }
 
@@ -908,8 +1023,7 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         return;
     }
 
-    QString helperText =
-        QStringLiteral("Leave model, reasoning effort, and instructions unchanged unless you want to override them.");
+    QString helperText = QStringLiteral("Current settings are shown below. Unchanged values will be preserved.");
     if (summary->statusText != QStringLiteral("Not Loaded")) {
         helperText.append(
             QStringLiteral(" This thread is currently loaded, so non-name overrides will not be applied until it is closed.")
@@ -926,8 +1040,8 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
     }
 
     const bool nameChanged = selection->threadName != summary->title;
-    const bool overridesRequested = selection->model.has_value() || selection->reasoningEffort.has_value() ||
-        selection->instructionKey.has_value();
+    const bool overridesRequested = !selection->workingDirectoryUnchanged || !selection->modelUnchanged ||
+        !selection->reasoningEffortUnchanged || !selection->instructionUnchanged;
 
     if (nameChanged) {
         if (!queueThreadRenameRequest(threadId, selection->threadName)) {
@@ -945,14 +1059,16 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
             m_mainWindow,
             QStringLiteral("Edit Thread Settings"),
             QStringLiteral(
-                "Model, reasoning effort, and instructions can only be changed while the thread is not loaded. Close the thread first, then try again."
+                "Model, reasoning effort, working directory, and instructions can only be changed while the thread is not loaded. Close the thread first, then try again."
             )
         );
         return;
     }
 
     QString errorMessage;
-    const Nullable<QString> baseInstructions = baseInstructionsFromInstructionKey(selection->instructionKey, &errorMessage);
+    const Nullable<QString> baseInstructions = selection->instructionUnchanged
+        ? missing<QString>()
+        : baseInstructionsFromInstructionKey(selection->instructionKey, &errorMessage);
     if (!errorMessage.isEmpty()) {
         QMessageBox::warning(m_mainWindow, QStringLiteral("Edit Thread Settings"), errorMessage);
         return;
@@ -962,11 +1078,13 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
         baseInstructions,
-        configForReasoningEffort(selection->reasoningEffort),
-        missing<QString>(),
+        selection->reasoningEffortUnchanged ? missing<QMap<QString, QJsonValue>>()
+                                            : configForReasoningEffort(selection->reasoningEffort),
+        selection->workingDirectoryUnchanged ? missing<QString>()
+                                            : Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
         missing<QList<Ref<qodex::codex::ResponseItem>>>(),
-        selection->model.has_value() ? Nullable<QString>::fromValue(*selection->model) : missing<QString>(),
+        selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
         std::nullopt,
@@ -980,7 +1098,13 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         return;
     }
 
-    m_pendingThreadResumeRequests.insert(requestId.toKey(), threadId);
+    const auto existingSettings = loadStoredThreadSettings(threadId);
+    m_pendingThreadResumeRequests.insert(requestId.toKey(), PendingThreadResumeRequest{
+        .threadId = threadId,
+        .instructionKey = selection->instructionUnchanged
+            ? (existingSettings.has_value() ? existingSettings->instructionKey : std::nullopt)
+            : optionalTrimmedString(selection->instructionKey),
+    });
     m_mainWindow->setStatusMessage(QStringLiteral("Applying thread settings..."));
 }
 
@@ -1065,21 +1189,27 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
     }
 
     QString errorMessage;
-    const Nullable<QString> baseInstructions = baseInstructionsFromInstructionKey(selection->instructionKey, &errorMessage);
+    const Nullable<QString> baseInstructions = selection->instructionUnchanged
+        ? missing<QString>()
+        : baseInstructionsFromInstructionKey(selection->instructionKey, &errorMessage);
     if (!errorMessage.isEmpty()) {
         QMessageBox::warning(m_mainWindow, QStringLiteral("Fork Thread"), errorMessage);
         return;
     }
 
+    const auto sourceSettings = loadStoredThreadSettings(threadId);
+
     const JsonRpcId requestId = m_client->sendThreadForkRequest(
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
         baseInstructions,
-        configForReasoningEffort(selection->reasoningEffort),
-        missing<QString>(),
+        selection->reasoningEffortUnchanged ? missing<QMap<QString, QJsonValue>>()
+                                            : configForReasoningEffort(selection->reasoningEffort),
+        selection->workingDirectoryUnchanged ? missing<QString>()
+                                            : Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
         std::nullopt,
-        selection->model.has_value() ? Nullable<QString>::fromValue(*selection->model) : missing<QString>(),
+        selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
         std::nullopt,
@@ -1095,6 +1225,9 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
     m_pendingForkRequests.insert(requestId.toKey(), PendingThreadForkRequest{
         .sourceThreadId = threadId,
         .desiredName = selection->threadName,
+        .instructionKey = selection->instructionUnchanged
+            ? (sourceSettings.has_value() ? sourceSettings->instructionKey : std::nullopt)
+            : optionalTrimmedString(selection->instructionKey),
     });
     m_mainWindow->setStatusMessage(QStringLiteral("Forking thread..."));
 }
@@ -1299,6 +1432,13 @@ void SessionController::onThreadForkSucceeded(const JsonRpcId &id, const ThreadF
         queueThreadRenameRequest(response.thread->id, pendingRequest.desiredName);
     }
     m_threadStore->setSelectedThreadId(summary.id);
+    saveStoredThreadSettings(qodex::storage::ThreadSettingsRecord{
+        .threadId = response.thread->id,
+        .cwd = response.cwd,
+        .model = response.model,
+        .reasoningEffort = reasoningEffortKey(response.reasoningEffort),
+        .instructionKey = pendingRequest.instructionKey,
+    });
     m_mainWindow->setStatusMessage(QStringLiteral("Thread forked."));
 }
 

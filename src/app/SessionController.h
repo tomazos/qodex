@@ -24,6 +24,11 @@ class ThreadStore;
 class InstructionCatalog;
 }
 
+namespace qodex::storage {
+class DatabaseManager;
+struct ThreadSettingsRecord;
+}
+
 namespace qodex::ui {
 class MainWindow;
 }
@@ -41,6 +46,7 @@ public:
         const AppConfig &config,
         codex::AppServerTransport *transport,
         codex::CodexClient *client,
+        qodex::storage::DatabaseManager *databaseManager,
         domain::ThreadStore *threadStore,
         ThreadUiProcessManager *threadUiProcessManager,
         domain::InstructionCatalog *instructionCatalog,
@@ -135,11 +141,18 @@ private slots:
 private:
     struct PendingThreadStartRequest {
         QString desiredName;
+        std::optional<QString> instructionKey;
+    };
+
+    struct PendingThreadResumeRequest {
+        QString threadId;
+        std::optional<QString> instructionKey;
     };
 
     struct PendingThreadForkRequest {
         QString sourceThreadId;
         QString desiredName;
+        std::optional<QString> instructionKey;
     };
 
     [[nodiscard]] domain::ThreadSummary projectThreadSummary(const qodex::codex::Thread &thread, bool archived) const;
@@ -167,8 +180,13 @@ private:
         QString *errorMessage = nullptr
     ) const;
     [[nodiscard]] qodex::codex::Nullable<QMap<QString, QJsonValue>> configForReasoningEffort(
-        const std::optional<qodex::codex::ReasoningEffort> &reasoningEffort
+        const qodex::codex::ReasoningEffort &reasoningEffort
     ) const;
+    [[nodiscard]] std::optional<qodex::storage::ThreadSettingsRecord> loadStoredThreadSettings(
+        const QString &threadId,
+        QString *errorMessage = nullptr
+    ) const;
+    bool saveStoredThreadSettings(const qodex::storage::ThreadSettingsRecord &record);
     bool queueThreadRenameRequest(const QString &threadId, const QString &newName);
     [[nodiscard]] LoadedThread *loadedThreadForId(const QString &threadId) const;
     [[nodiscard]] bool isThreadUnsubscribePending(const QString &threadId) const;
@@ -190,6 +208,7 @@ private:
     AppConfig m_config;
     codex::AppServerTransport *m_transport = nullptr;
     codex::CodexClient *m_client = nullptr;
+    qodex::storage::DatabaseManager *m_databaseManager = nullptr;
     domain::ThreadStore *m_threadStore = nullptr;
     ThreadUiProcessManager *m_threadUiProcessManager = nullptr;
     domain::InstructionCatalog *m_instructionCatalog = nullptr;
@@ -206,7 +225,7 @@ private:
     QList<qodex::codex::Ref<qodex::codex::Model>> m_models;
     QList<qodex::codex::Ref<qodex::codex::Model>> m_pendingModels;
     QHash<QString, PendingThreadStartRequest> m_pendingThreadStartRequests;
-    QHash<QString, QString> m_pendingThreadResumeRequests;
+    QHash<QString, PendingThreadResumeRequest> m_pendingThreadResumeRequests;
     QHash<QString, LoadedThread *> m_loadedThreads;
     QHash<QString, std::pair<QString, QString>> m_pendingRenameRequests;
     QHash<QString, QString> m_pendingArchiveRequests;

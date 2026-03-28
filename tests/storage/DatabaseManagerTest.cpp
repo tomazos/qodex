@@ -1,5 +1,7 @@
 #include <QtTest>
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -11,6 +13,7 @@
 using qodex::storage::ApiLogRecord;
 using qodex::storage::ApiLogSortField;
 using qodex::storage::DatabaseManager;
+using qodex::storage::ThreadSettingsRecord;
 using qodex::storage::ViewStateRecord;
 using qodex::storage::WindowStateRecord;
 
@@ -24,6 +27,7 @@ private slots:
     void loadsApiLogPages();
     void loadsApiLogDetail();
     void persistsInstructions();
+    void persistsThreadSettings();
     void loadsInstructionById();
 };
 
@@ -365,6 +369,83 @@ void DatabaseManagerTest::persistsInstructions() {
     QCOMPARE(updatedInstructions.size(), 1);
     QCOMPARE(updatedInstructions.at(0).name, QStringLiteral("Renamed Instructions"));
     QCOMPARE(updatedInstructions.at(0).content, QStringLiteral("Updated body"));
+}
+
+void DatabaseManagerTest::persistsThreadSettings() {
+    QTemporaryDir temporaryDir;
+    QVERIFY(temporaryDir.isValid());
+
+    const QString databasePath = temporaryDir.filePath(QStringLiteral("qodex.sqlite3"));
+    QString errorMessage;
+
+    DatabaseManager databaseManager(databasePath);
+    QVERIFY2(databaseManager.open(&errorMessage), qPrintable(errorMessage));
+
+    const QString connectionName =
+        QStringLiteral("DatabaseManagerTest.ThreadSettings.%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(databasePath);
+        QVERIFY2(database.open(), qPrintable(database.lastError().text()));
+
+        QSqlQuery query(database);
+        QVERIFY2(
+            query.exec(QStringLiteral(
+                "INSERT INTO thread_metadata(thread_id, metadata_json) VALUES ('thread-1', '{\"other\":true}');"
+            )),
+            qPrintable(query.lastError().text())
+        );
+
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(connectionName);
+
+    QVERIFY2(
+        databaseManager.saveThreadSettings(
+            ThreadSettingsRecord{
+                .threadId = QStringLiteral("thread-1"),
+                .cwd = QStringLiteral("/home/zos"),
+                .model = QStringLiteral("gpt-5.4"),
+                .reasoningEffort = QStringLiteral("xhigh"),
+                .instructionKey = QStringLiteral("codex-default"),
+            },
+            &errorMessage
+        ),
+        qPrintable(errorMessage)
+    );
+
+    const auto record = databaseManager.loadThreadSettings(QStringLiteral("thread-1"), &errorMessage);
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+    QVERIFY(record.has_value());
+    QCOMPARE(record->threadId, QStringLiteral("thread-1"));
+    QVERIFY(record->cwd.has_value());
+    QCOMPARE(*record->cwd, QStringLiteral("/home/zos"));
+    QVERIFY(record->model.has_value());
+    QCOMPARE(*record->model, QStringLiteral("gpt-5.4"));
+    QVERIFY(record->reasoningEffort.has_value());
+    QCOMPARE(*record->reasoningEffort, QStringLiteral("xhigh"));
+    QVERIFY(record->instructionKey.has_value());
+    QCOMPARE(*record->instructionKey, QStringLiteral("codex-default"));
+
+    const QString verifyConnectionName =
+        QStringLiteral("DatabaseManagerTest.ThreadSettingsVerify.%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), verifyConnectionName);
+        database.setDatabaseName(databasePath);
+        QVERIFY2(database.open(), qPrintable(database.lastError().text()));
+
+        QSqlQuery query(database);
+        query.prepare(QStringLiteral("SELECT metadata_json FROM thread_metadata WHERE thread_id = ?;"));
+        query.addBindValue(QStringLiteral("thread-1"));
+        QVERIFY2(query.exec(), qPrintable(query.lastError().text()));
+        QVERIFY(query.next());
+        const QJsonObject metadataObject = QJsonDocument::fromJson(query.value(0).toString().toUtf8()).object();
+        QCOMPARE(metadataObject.value(QStringLiteral("other")).toBool(), true);
+        QVERIFY(metadataObject.value(QStringLiteral("threadSettings")).isObject());
+
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(verifyConnectionName);
 }
 
 void DatabaseManagerTest::loadsInstructionById() {
