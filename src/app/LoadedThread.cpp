@@ -751,7 +751,12 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
             return {};
         }
 
-        return m_client->sendTurnSteerRequest(m_activeTurnId, input, m_threadId);
+        return m_client->sendTurnSteerRequest(
+            m_activeTurnId,
+            input,
+            missing<QMap<QString, QString>>(),
+            m_threadId
+        );
     }
 
     return m_client->sendTurnStartRequest(
@@ -764,6 +769,7 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
         missing<QString>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
+        missing<QMap<QString, QString>>(),
         missing<Ref<qodex::codex::SandboxPolicy>>(),
         missing<qodex::codex::ServiceTier>(),
         missing<qodex::codex::ReasoningSummary>(),

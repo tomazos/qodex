@@ -8,6 +8,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from ..inline_object_normalizer import rewrite_inline_object_exprs
 from ..model import (
     ServiceArrayTypeExpr,
     ServiceDescription,
@@ -162,19 +163,19 @@ class CppGenerator:
 
 class _CppTemplateContextBuilder:
     def __init__(self, service: ServiceDescription) -> None:
-        self._service = service
+        self._service = rewrite_inline_object_exprs(service)
         self._plain_enumerations = tuple(
-            entry for entry in service.enumerations if not entry.extended
+            entry for entry in self._service.enumerations if not entry.extended
         )
         self._extended_enumerations = tuple(
-            entry for entry in service.enumerations if entry.extended
+            entry for entry in self._service.enumerations if entry.extended
         )
         self._type_names = self._build_type_name_map()
         self._message_names = self._build_message_name_map()
         self._composite_entity_ids = {
-            *[entry.id for entry in service.types],
-            *[entry.id for entry in service.structs],
-            *[entry.id for entry in service.unions],
+            *[entry.id for entry in self._service.types],
+            *[entry.id for entry in self._service.structs],
+            *[entry.id for entry in self._service.unions],
             *[entry.id for entry in self._extended_enumerations],
         }
         self._all_entity_ids = {
@@ -425,7 +426,7 @@ class _CppTemplateContextBuilder:
             return self._variant_alias(alternatives)
 
         if isinstance(expr, ServiceObjectTypeExpr):
-            raise ValueError("Inline object expressions are not supported by the cpp generator")
+            raise ValueError("Inline object expressions should be normalized before cpp generation")
 
         raise TypeError(f"Unsupported type expression: {type(expr)!r}")
 

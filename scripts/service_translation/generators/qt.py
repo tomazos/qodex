@@ -8,6 +8,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from ..inline_object_normalizer import rewrite_inline_object_exprs
 from ..model import (
     ServiceArrayTypeExpr,
     ServiceDescription,
@@ -15,6 +16,7 @@ from ..model import (
     ServiceMapTypeExpr,
     ServiceMember,
     ServiceMessage,
+    ServiceObjectTypeExpr,
     ServiceStruct,
     ServiceTextTypeExpr,
     ServiceTypeExpr,
@@ -193,15 +195,19 @@ class QtGenerator:
 
 class _QtTemplateContextBuilder:
     def __init__(self, service: ServiceDescription) -> None:
-        self._service = service
-        self._plain_enums = tuple(entry for entry in service.enumerations if not entry.extended)
-        self._extended_enums = tuple(entry for entry in service.enumerations if entry.extended)
+        self._service = rewrite_inline_object_exprs(service)
+        self._plain_enums = tuple(
+            entry for entry in self._service.enumerations if not entry.extended
+        )
+        self._extended_enums = tuple(
+            entry for entry in self._service.enumerations if entry.extended
+        )
         self._message_param_structs = self._build_message_param_structs()
-        self._structs = tuple(service.structs) + self._message_param_structs
+        self._structs = tuple(self._service.structs) + self._message_param_structs
         self._plain_enum_ids = {entry.id for entry in self._plain_enums}
         self._extended_enum_ids = {entry.id for entry in self._extended_enums}
         self._struct_ids = {entry.id for entry in self._structs}
-        self._union_ids = {entry.id for entry in service.unions}
+        self._union_ids = {entry.id for entry in self._service.unions}
         self._composite_ids = self._struct_ids | self._extended_enum_ids | self._union_ids
         self._type_name_map = self._build_type_name_map()
         self._plain_enum_cpp_names = {
@@ -209,7 +215,7 @@ class _QtTemplateContextBuilder:
         }
         self._message_param_type_ids = {
             message.method: self._message_param_struct_id(message)
-            for message in service.messages
+            for message in self._service.messages
             if message.params_fields
         }
 
@@ -635,6 +641,11 @@ class _QtTemplateContextBuilder:
                     self._render_type_expr(alternative.type_expr, nested=True)
                     for alternative in expr.alternatives
                 )
+            )
+
+        if isinstance(expr, ServiceObjectTypeExpr):
+            raise ValueError(
+                "Inline object expressions should be normalized before qt generation"
             )
 
         raise ValueError(

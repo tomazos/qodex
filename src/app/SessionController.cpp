@@ -944,7 +944,8 @@ void SessionController::onCreateThreadRequested() {
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
         missing<QString>(),
-        missing<qodex::codex::ServiceTier>()
+        missing<qodex::codex::ServiceTier>(),
+        missing<qodex::codex::ThreadStartSource>()
     );
     if (!requestId.isValid()) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/start request."));
