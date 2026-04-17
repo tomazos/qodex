@@ -91,6 +91,7 @@ NULL_PARAMS_REQUEST_RESPONSE_BY_METHOD = {
     "account/logout": "LogoutAccountResponse",
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
     "configRequirements/read": "ConfigRequirementsReadResponse",
+    "memory/reset": "MemoryResetResponse",
 }
 
 PARAMS_TYPE_RESPONSE_OVERRIDES = {
