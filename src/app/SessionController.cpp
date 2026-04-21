@@ -1873,6 +1873,7 @@ void SessionController::requestThreadList(const bool archived) {
         missing<qint64>(),
         missing<QList<QString>>(),
         missing<QString>(),
+        missing<qodex::codex::SortDirection>(),
         missing<ThreadSortKey>(),
         missing<QList<ThreadSourceKind>>()
     );
