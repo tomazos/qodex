@@ -217,6 +217,11 @@ main {
   gap: 0.7rem;
 }
 
+.thread-item__image-generation {
+  display: grid;
+  gap: 0.8rem;
+}
+
 .command-execution__badge {
   display: inline-flex;
   align-items: center;
@@ -314,6 +319,50 @@ main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.image-generation__image {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 40rem);
+  border: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, canvas 88%, canvastext 12%);
+  object-fit: contain;
+}
+
+.image-generation__placeholder {
+  padding: 1rem;
+  border: 1px dashed color-mix(in srgb, canvastext 18%, transparent);
+  border-radius: 10px;
+  color: color-mix(in srgb, canvastext 72%, transparent);
+  background: color-mix(in srgb, canvastext 4%, transparent);
+}
+
+.image-generation__details {
+  display: grid;
+  gap: 0.45rem;
+  font-family: var(--font-ui);
+  font-size: 0.94rem;
+}
+
+.image-generation__saved-path,
+.image-generation__prompt,
+.image-generation__status {
+  overflow-wrap: anywhere;
+}
+
+.image-generation__saved-path-link {
+  color: LinkText;
+  text-decoration: none;
+}
+
+.image-generation__saved-path-link:hover {
+  text-decoration: underline;
+}
+
+.image-generation__status {
+  opacity: 0.78;
 }
 
 .file-change__status {

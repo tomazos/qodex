@@ -6,6 +6,7 @@
 #include "domain/threadmodel/CompletedAgentMessage.h"
 #include "domain/threadmodel/CompletedCommandExecution.h"
 #include "domain/threadmodel/CompletedFileChange.h"
+#include "domain/threadmodel/CompletedImageGeneration.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
 
@@ -233,6 +234,29 @@ bool appendFileChangeDisplayItem(
     return displayItem->changes_size() > 0;
 }
 
+bool appendImageGenerationDisplayItem(
+    qodex::threadui::ipc::common::ImageGeneration *displayItem,
+    const qodex::domain::threadmodel::CompletedImageGeneration &imageGenerationItem
+) {
+    if (displayItem == nullptr) {
+        return false;
+    }
+
+    const qodex::codex::ThreadItemImageGeneration &payload = imageGenerationItem.data();
+    displayItem->set_result(payload.result.toStdString());
+    displayItem->set_status(payload.status.toStdString());
+
+    if (payload.revisedPrompt.hasValue()) {
+        displayItem->set_revised_prompt(payload.revisedPrompt.value().toStdString());
+    }
+
+    if (payload.savedPath.hasValue()) {
+        displayItem->set_saved_path(payload.savedPath.value().toStdString());
+    }
+
+    return !payload.result.isEmpty() || payload.savedPath.hasValue() || payload.revisedPrompt.hasValue();
+}
+
 }  // namespace
 
 qodex::threadui::ipc::qodex_to_ui::AddItemsRequest ThreadUiProjector::projectTurns(
@@ -283,6 +307,7 @@ bool ThreadUiProjector::appendCompletedItem(
     using qodex::domain::threadmodel::CompletedAgentMessage;
     using qodex::domain::threadmodel::CompletedCommandExecution;
     using qodex::domain::threadmodel::CompletedFileChange;
+    using qodex::domain::threadmodel::CompletedImageGeneration;
     using qodex::domain::threadmodel::CompletedReasoning;
     using qodex::domain::threadmodel::CompletedUserMessage;
 
@@ -347,8 +372,10 @@ bool ThreadUiProjector::appendCompletedItem(
         displayItem->mutable_image_view()->set_text(summarizeNonMessageItem(item).toStdString());
         return true;
     case ThreadItem::Kind::ImageGeneration:
-        displayItem->mutable_image_generation()->set_text(summarizeNonMessageItem(item).toStdString());
-        return true;
+        return appendImageGenerationDisplayItem(
+            displayItem->mutable_image_generation(),
+            static_cast<const CompletedImageGeneration &>(item)
+        );
     case ThreadItem::Kind::EnteredReviewMode:
         displayItem->mutable_entered_review_mode()->set_text(summarizeNonMessageItem(item).toStdString());
         return true;

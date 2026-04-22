@@ -526,6 +526,45 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
                 }
             }
         }
+
+        if (items[index].kind == "image_generation") {
+            napi_value resultValue = nullptr;
+            napi_value revisedPromptValue = nullptr;
+            napi_value savedPathValue = nullptr;
+            napi_value statusValue = nullptr;
+
+            if (napi_create_string_utf8(
+                    env,
+                    items[index].imageGeneration.result.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &resultValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].imageGeneration.revisedPrompt.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &revisedPromptValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].imageGeneration.savedPath.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &savedPathValue
+                ) != napi_ok ||
+                napi_create_string_utf8(
+                    env,
+                    items[index].imageGeneration.status.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &statusValue
+                ) != napi_ok ||
+                napi_set_named_property(env, itemObject, "result", resultValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "revisedPrompt", revisedPromptValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "savedPath", savedPathValue) != napi_ok ||
+                napi_set_named_property(env, itemObject, "status", statusValue) != napi_ok) {
+                napi_throw_error(env, nullptr, "Failed to create image generation value");
+                return nullptr;
+            }
+        }
     }
 
     return array;

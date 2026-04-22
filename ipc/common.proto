@@ -142,7 +142,10 @@ message ImageView {
 }
 
 message ImageGeneration {
-  string text = 1;
+  string result = 1;
+  string revised_prompt = 2;
+  string saved_path = 3;
+  string status = 4;
 }
 
 message EnteredReviewMode {

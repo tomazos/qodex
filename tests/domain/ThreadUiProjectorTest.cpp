@@ -3,6 +3,7 @@
 #include "domain/ThreadUiProjector.h"
 #include "domain/threadmodel/CompletedCommandExecution.h"
 #include "domain/threadmodel/CompletedFileChange.h"
+#include "domain/threadmodel/CompletedImageGeneration.h"
 #include "domain/threadmodel/CompletedPlan.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
@@ -20,6 +21,7 @@ using qodex::codex::ThreadItem;
 using qodex::codex::ThreadItemAgentMessage;
 using qodex::codex::ThreadItemCommandExecution;
 using qodex::codex::ThreadItemFileChange;
+using qodex::codex::ThreadItemImageGeneration;
 using qodex::codex::ThreadItemPlan;
 using qodex::codex::ThreadItemReasoning;
 using qodex::codex::ThreadItemUserMessage;
@@ -81,6 +83,7 @@ private slots:
     void projectsTurnsInOrderAndSkipsInprogressItems();
     void projectsReasoningSummaryBeforeRawContent();
     void projectsStructuredCommandExecutionAndFileChangeItems();
+    void projectsStructuredImageGenerationItems();
     void summarizesGenericCompletedItemsAsCompactJson();
 };
 
@@ -229,6 +232,41 @@ void ThreadUiProjectorTest::projectsStructuredCommandExecutionAndFileChangeItems
     QCOMPARE(
         QString::fromStdString(projectedFileChange->file_change().changes(0).diff()),
         QStringLiteral("@@ -1 +1 @@\n-old\n+new")
+    );
+}
+
+void ThreadUiProjectorTest::projectsStructuredImageGenerationItems() {
+    ThreadUiProjector projector;
+
+    ThreadItemImageGeneration imagePayload;
+    imagePayload.id = QStringLiteral("image-1");
+    imagePayload.result = QStringLiteral("ZmFrZS1iYXNlNjQ=");
+    imagePayload.revisedPrompt = qodex::codex::Nullable<QString>::fromValue(QStringLiteral("Make it cinematic"));
+    imagePayload.savedPath = qodex::codex::Nullable<QString>::fromValue(
+        QStringLiteral("/home/zos/.codex/generated_images/thread/image-1.png")
+    );
+    imagePayload.status = QStringLiteral("completed");
+
+    qodex::domain::threadmodel::CompletedImageGeneration imageGeneration(imagePayload);
+
+    const auto projectedImage = projector.projectCompletedItem(imageGeneration);
+    QVERIFY(projectedImage.has_value());
+    QCOMPARE(QString::fromStdString(projectedImage->item_id()), QStringLiteral("image-1"));
+    QCOMPARE(
+        QString::fromStdString(projectedImage->image_generation().result()),
+        QStringLiteral("ZmFrZS1iYXNlNjQ=")
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedImage->image_generation().revised_prompt()),
+        QStringLiteral("Make it cinematic")
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedImage->image_generation().saved_path()),
+        QStringLiteral("/home/zos/.codex/generated_images/thread/image-1.png")
+    );
+    QCOMPARE(
+        QString::fromStdString(projectedImage->image_generation().status()),
+        QStringLiteral("completed")
     );
 }
 

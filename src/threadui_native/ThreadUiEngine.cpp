@@ -421,12 +421,17 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
             });
             break;
         case qodex::threadui::ipc::common::Item::kImageGeneration:
-            pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .id = itemId,
-                .kind = "image_generation",
-                .text = item.image_generation().text(),
-            });
+        {
+            qodex::threadui::native::DisplayItem displayItem;
+            displayItem.id = itemId;
+            displayItem.kind = "image_generation";
+            displayItem.imageGeneration.result = item.image_generation().result();
+            displayItem.imageGeneration.revisedPrompt = item.image_generation().revised_prompt();
+            displayItem.imageGeneration.savedPath = item.image_generation().saved_path();
+            displayItem.imageGeneration.status = item.image_generation().status();
+            pendingItems.push_back(std::move(displayItem));
             break;
+        }
         case qodex::threadui::ipc::common::Item::kEnteredReviewMode:
             pendingItems.push_back(qodex::threadui::native::DisplayItem{
                 .id = itemId,

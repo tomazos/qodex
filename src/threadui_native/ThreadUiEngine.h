@@ -43,12 +43,20 @@ struct DisplayCommandExecution {
     std::vector<Action> actions;
 };
 
+struct DisplayImageGeneration {
+    std::string result;
+    std::string revisedPrompt;
+    std::string savedPath;
+    std::string status;
+};
+
 struct DisplayItem {
     std::string id;
     std::string kind;
     std::string text;
     DisplayCommandExecution commandExecution;
     DisplayFileChange fileChange;
+    DisplayImageGeneration imageGeneration;
 };
 
 struct ResolvedLink {
