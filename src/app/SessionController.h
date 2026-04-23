@@ -112,6 +112,7 @@ private slots:
     void onThreadStatusChangedNotificationReceived(const qodex::codex::ThreadStatusChangedNotificationParams &params);
     void onThreadArchivedNotificationReceived(const qodex::codex::ThreadArchivedNotificationParams &params);
     void onThreadUnarchivedNotificationReceived(const qodex::codex::ThreadUnarchivedNotificationParams &params);
+    void onModelReroutedNotificationReceived(const qodex::codex::ModelReroutedNotificationParams &params);
     void onTurnStartedNotificationReceived(const qodex::codex::TurnStartedNotificationParams &params);
     void onTurnCompletedNotificationReceived(const qodex::codex::TurnCompletedNotificationParams &params);
     void onItemStartedNotificationReceived(const qodex::codex::ItemStartedNotificationParams &params);

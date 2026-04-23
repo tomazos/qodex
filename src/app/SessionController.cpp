@@ -38,6 +38,7 @@ using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
 using qodex::codex::Model;
 using qodex::codex::ModelListResponse;
+using qodex::codex::ModelReroutedNotificationParams;
 using qodex::codex::Nullable;
 using qodex::codex::Ref;
 using qodex::codex::SessionSource;
@@ -205,6 +206,12 @@ SessionController::SessionController(
         &CodexClient::threadUnarchivedNotificationReceived,
         this,
         &SessionController::onThreadUnarchivedNotificationReceived
+    );
+    connect(
+        m_client,
+        &CodexClient::modelReroutedNotificationReceived,
+        this,
+        &SessionController::onModelReroutedNotificationReceived
     );
     connect(
         m_client,
@@ -865,7 +872,7 @@ void SessionController::onThreadStartSucceeded(const JsonRpcId &id, const Thread
         return;
     }
 
-    loadedThread->load(title, response.thread);
+    loadedThread->load(title, response.thread, response.model, response.reasoningEffort);
     m_mainWindow->setStatusMessage(QStringLiteral("Created thread %1.").arg(title));
 }
 
@@ -1543,6 +1550,12 @@ void SessionController::onThreadArchivedNotificationReceived(const ThreadArchive
 void SessionController::onThreadUnarchivedNotificationReceived(const ThreadUnarchivedNotificationParams &params) {
     if (!m_threadStore->setThreadArchived(params.threadId, false)) {
         requestThreadList(false);
+    }
+}
+
+void SessionController::onModelReroutedNotificationReceived(const ModelReroutedNotificationParams &params) {
+    if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
+        loadedThread->onModelReroutedNotification(params);
     }
 }
 

@@ -53,6 +53,31 @@ qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlagEnum(const qodex:
     return qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_UNSPECIFIED;
 }
 
+qodex::threadui::ipc::common::ThreadReasoningEffort reasoningEffortEnum(
+    const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+) {
+    if (!reasoningEffort.hasValue()) {
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED;
+    }
+
+    switch (reasoningEffort.value()) {
+    case qodex::codex::ReasoningEffort::NoneValue:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_NONE;
+    case qodex::codex::ReasoningEffort::Minimal:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MINIMAL;
+    case qodex::codex::ReasoningEffort::Low:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_LOW;
+    case qodex::codex::ReasoningEffort::Medium:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MEDIUM;
+    case qodex::codex::ReasoningEffort::High:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_HIGH;
+    case qodex::codex::ReasoningEffort::Xhigh:
+        return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_XHIGH;
+    }
+
+    return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED;
+}
+
 QString threadStatusText(
     const qodex::codex::ThreadStatus &status,
     QList<qodex::threadui::ipc::common::ThreadStatusActiveFlag> *activeFlags = nullptr
@@ -133,6 +158,7 @@ QString threadItemId(const qodex::codex::ThreadItem &item) {
 
 using qodex::codex::JsonRpcErrorObject;
 using qodex::codex::JsonRpcId;
+using qodex::codex::ModelReroutedNotificationParams;
 using qodex::codex::Nullable;
 using qodex::codex::Ref;
 using qodex::codex::Thread;
@@ -198,9 +224,16 @@ QList<const qodex::domain::threadmodel::Turn *> LoadedThread::orderedTurns() con
     return turns;
 }
 
-void LoadedThread::load(const QString &title, const Ref<Thread> &thread) {
+void LoadedThread::load(
+    const QString &title,
+    const Ref<Thread> &thread,
+    const QString &model,
+    const Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+) {
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
     m_cwd = thread ? thread->cwd : QString{};
+    m_model = model.trimmed();
+    m_reasoningEffort = reasoningEffortEnum(reasoningEffort);
     m_activeTurnId = thread ? activeTurnIdForThread(*thread) : QString{};
     if (thread && thread->status) {
         applyProtocolThreadStatus(*thread->status);
@@ -220,11 +253,13 @@ void LoadedThread::load(const QString &title, const Ref<Thread> &thread) {
 }
 
 void LoadedThread::resume(const QString &title, const ThreadResumeResponse &response) {
-    load(title, response.thread);
+    load(title, response.thread, response.model, response.reasoningEffort);
 }
 
 void LoadedThread::onThreadClosed() {
     m_cwd.clear();
+    m_model.clear();
+    m_reasoningEffort = qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED;
     m_activeTurnId.clear();
     setDerivedThreadStatus(qodex::threadui::ipc::common::THREAD_STATUS_KIND_NOT_LOADED, QStringLiteral("Not Loaded"));
     m_pendingThreadUiUserInputRequests.clear();
@@ -249,6 +284,15 @@ void LoadedThread::onThreadStatusChanged(const ThreadStatus &status) {
     if (m_activeTurnId != previousActiveTurnId) {
         emit threadPresentationChanged();
     }
+    queueThreadStatus();
+}
+
+void LoadedThread::onModelReroutedNotification(const ModelReroutedNotificationParams &params) {
+    if (params.threadId != m_threadId || params.toModel.trimmed().isEmpty()) {
+        return;
+    }
+
+    m_model = params.toModel.trimmed();
     queueThreadStatus();
 }
 
@@ -879,6 +923,8 @@ void LoadedThread::queueThreadStatus() {
     request.set_kind(m_threadStatusKind);
     request.set_text(m_threadStatusText.toStdString());
     request.set_active_turn_id(m_activeTurnId.toStdString());
+    request.set_model(m_model.toStdString());
+    request.set_reasoning_effort(m_reasoningEffort);
     for (const qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlag : m_threadActiveFlags) {
         request.add_active_flags(activeFlag);
     }

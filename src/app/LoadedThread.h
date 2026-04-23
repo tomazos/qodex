@@ -39,10 +39,16 @@ public:
     [[nodiscard]] const QString &activeTurnId() const;
     [[nodiscard]] QList<const qodex::domain::threadmodel::Turn *> orderedTurns() const;
     [[nodiscard]] const qodex::domain::threadmodel::Turn *turnForId(const QString &turnId) const;
-    void load(const QString &title, const qodex::codex::Ref<qodex::codex::Thread> &thread);
+    void load(
+        const QString &title,
+        const qodex::codex::Ref<qodex::codex::Thread> &thread,
+        const QString &model,
+        const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+    );
     void resume(const QString &title, const qodex::codex::ThreadResumeResponse &response);
     void onThreadClosed();
     void onThreadStatusChanged(const qodex::codex::ThreadStatus &status);
+    void onModelReroutedNotification(const qodex::codex::ModelReroutedNotificationParams &params);
     void onTurnStartedNotification(const qodex::codex::TurnStartedNotificationParams &params);
     void onTurnCompletedNotification(const qodex::codex::TurnCompletedNotificationParams &params);
     void onItemStartedNotification(const qodex::codex::ItemStartedNotificationParams &params);
@@ -136,6 +142,9 @@ private:
     QString m_threadId;
     QString m_title;
     QString m_cwd;
+    QString m_model;
+    qodex::threadui::ipc::common::ThreadReasoningEffort m_reasoningEffort =
+        qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED;
     QString m_activeTurnId;
     qodex::threadui::ipc::common::ThreadStatusKind m_threadStatusKind =
         qodex::threadui::ipc::common::THREAD_STATUS_KIND_IDLE;

@@ -84,6 +84,8 @@ struct ResolvedLink {
 struct ThreadStatusUpdate {
     std::string kind;
     std::string text;
+    std::string model;
+    std::string reasoningEffort;
     std::vector<std::string> activeFlags;
     std::string activeTurnId;
 };

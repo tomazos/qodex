@@ -23,6 +23,8 @@ message SetThreadStatusRequest {
   string text = 2;
   repeated qodex.threadui.ipc.common.ThreadStatusActiveFlag active_flags = 3;
   string active_turn_id = 4;
+  string model = 5;
+  qodex.threadui.ipc.common.ThreadReasoningEffort reasoning_effort = 6;
 }
 
 message SetThreadStatusResponse {

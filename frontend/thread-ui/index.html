@@ -27,7 +27,10 @@
             aria-label="Send a message"
           ></textarea>
         </form>
-        <div class="thread-status" id="thread-status" aria-live="polite">Idle</div>
+        <div class="thread-status-bar" aria-live="polite">
+          <div class="thread-status" id="thread-status">Idle</div>
+          <div class="thread-settings" id="thread-settings"></div>
+        </div>
       </main>
     </div>
     <script src="./init.js"></script>

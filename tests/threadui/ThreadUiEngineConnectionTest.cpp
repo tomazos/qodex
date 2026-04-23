@@ -165,6 +165,8 @@ void ThreadUiEngineConnectionTest::receivesThreadStatusUpdatesOverIpc() {
     request.set_text("Active - Waiting on approval");
     request.add_active_flags(qodex::threadui::ipc::common::THREAD_STATUS_ACTIVE_FLAG_WAITING_ON_APPROVAL);
     request.set_active_turn_id("turn-123");
+    request.set_model("gpt-5.5");
+    request.set_reasoning_effort(qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_XHIGH);
 
     QVERIFY2(server.sendSetThreadStatus(launchConfig.token, request, &errorMessage), qPrintable(errorMessage));
 
@@ -182,6 +184,8 @@ void ThreadUiEngineConnectionTest::receivesThreadStatusUpdatesOverIpc() {
     QVERIFY(statusUpdate.has_value());
     QCOMPARE(statusUpdate->kind, std::string("active"));
     QCOMPARE(statusUpdate->text, std::string("Active - Waiting on approval"));
+    QCOMPARE(statusUpdate->model, std::string("gpt-5.5"));
+    QCOMPARE(statusUpdate->reasoningEffort, std::string("xhigh"));
     QCOMPARE(statusUpdate->activeTurnId, std::string("turn-123"));
     QCOMPARE(statusUpdate->activeFlags.size(), std::size_t(1));
     QCOMPARE(statusUpdate->activeFlags[0], std::string("waiting_on_approval"));

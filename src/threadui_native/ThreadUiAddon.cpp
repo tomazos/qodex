@@ -699,12 +699,21 @@ napi_value takePendingThreadStatusWrapped(napi_env env, napi_callback_info info)
     napi_value object = nullptr;
     napi_value kindValue = nullptr;
     napi_value textValue = nullptr;
+    napi_value modelValue = nullptr;
+    napi_value reasoningEffortValue = nullptr;
     napi_value activeFlagsArray = nullptr;
     napi_value activeTurnIdValue = nullptr;
 
     if (napi_create_object(env, &object) != napi_ok ||
         napi_create_string_utf8(env, statusUpdate->kind.c_str(), NAPI_AUTO_LENGTH, &kindValue) != napi_ok ||
         napi_create_string_utf8(env, statusUpdate->text.c_str(), NAPI_AUTO_LENGTH, &textValue) != napi_ok ||
+        napi_create_string_utf8(env, statusUpdate->model.c_str(), NAPI_AUTO_LENGTH, &modelValue) != napi_ok ||
+        napi_create_string_utf8(
+            env,
+            statusUpdate->reasoningEffort.c_str(),
+            NAPI_AUTO_LENGTH,
+            &reasoningEffortValue
+        ) != napi_ok ||
         napi_create_array_with_length(env, statusUpdate->activeFlags.size(), &activeFlagsArray) != napi_ok ||
         napi_create_string_utf8(
             env,
@@ -714,6 +723,8 @@ napi_value takePendingThreadStatusWrapped(napi_env env, napi_callback_info info)
         ) != napi_ok ||
         napi_set_named_property(env, object, "kind", kindValue) != napi_ok ||
         napi_set_named_property(env, object, "text", textValue) != napi_ok ||
+        napi_set_named_property(env, object, "model", modelValue) != napi_ok ||
+        napi_set_named_property(env, object, "reasoningEffort", reasoningEffortValue) != napi_ok ||
         napi_set_named_property(env, object, "activeFlags", activeFlagsArray) != napi_ok ||
         napi_set_named_property(env, object, "activeTurnId", activeTurnIdValue) != napi_ok) {
         napi_throw_error(env, nullptr, "Failed to create pending thread status value");

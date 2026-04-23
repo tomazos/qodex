@@ -135,6 +135,27 @@ std::string threadStatusActiveFlagToString(const qodex::threadui::ipc::common::T
     return "unknown";
 }
 
+std::string threadReasoningEffortToString(const qodex::threadui::ipc::common::ThreadReasoningEffort reasoningEffort) {
+    switch (reasoningEffort) {
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_NONE:
+        return "none";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MINIMAL:
+        return "minimal";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_LOW:
+        return "low";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MEDIUM:
+        return "medium";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_HIGH:
+        return "high";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_XHIGH:
+        return "xhigh";
+    case qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED:
+        break;
+    }
+
+    return {};
+}
+
 bool hasIpcTarget(const qodex::threadui::native::LaunchConfig &launchConfig) {
     return !launchConfig.host.empty() && launchConfig.port != 0;
 }
@@ -626,6 +647,8 @@ void handleEnvelope(IpcClientState *state, const qodex::threadui::ipc::common::R
             qodex::threadui::native::ThreadStatusUpdate statusUpdate;
             statusUpdate.kind = threadStatusKindToString(request.kind());
             statusUpdate.text = request.text();
+            statusUpdate.model = request.model();
+            statusUpdate.reasoningEffort = threadReasoningEffortToString(request.reasoning_effort());
             statusUpdate.activeTurnId = request.active_turn_id();
             statusUpdate.activeFlags.reserve(static_cast<std::size_t>(request.active_flags_size()));
             for (const int activeFlagValue : request.active_flags()) {

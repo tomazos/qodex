@@ -497,7 +497,7 @@ main {
   outline-offset: 2px;
 }
 
-.thread-status {
+.thread-status-bar {
   min-height: 1lh;
   margin-inline: -1rem;
   margin-bottom: -1rem;
@@ -509,6 +509,28 @@ main {
   font-family: var(--font-ui);
   font-size: 0.84rem;
   line-height: 1.35;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.thread-status,
+.thread-settings {
+  min-width: 0;
+}
+
+.thread-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-settings {
+  margin-left: auto;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thread-status__active-label {

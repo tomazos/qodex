@@ -34,6 +34,7 @@ let emptyStateElement = null;
 let composerForm = null;
 let composerInput = null;
 let threadStatusElement = null;
+let threadSettingsElement = null;
 let pendingErrorDialogOpen = false;
 let messageRenderer = null;
 let commandExecutionRenderer = null;
@@ -44,7 +45,7 @@ let linkInteractionController = null;
 let composerResizeFrameId = null;
 let lastSubmittedComposerText = null;
 let lastSubmittedComposerAtMs = 0;
-let currentThreadStatus = { kind: 'idle', text: 'Idle' };
+let currentThreadStatus = { kind: 'idle', text: 'Idle', model: '', reasoningEffort: '' };
 const pendingLinkResolutionRequests = new Map();
 
 function describeError(error) {
@@ -89,6 +90,49 @@ function normalizeLaunchConfig(launchConfig) {
   };
 }
 
+function reasoningEffortLabel(reasoningEffort) {
+  switch (reasoningEffort) {
+    case 'none':
+      return 'None';
+    case 'minimal':
+      return 'Minimal';
+    case 'low':
+      return 'Low';
+    case 'medium':
+      return 'Medium';
+    case 'high':
+      return 'High';
+    case 'xhigh':
+      return 'XHigh';
+    default:
+      return '';
+  }
+}
+
+function renderThreadSettings() {
+  if (!threadSettingsElement) {
+    return;
+  }
+
+  const model = typeof currentThreadStatus?.model === 'string' ? currentThreadStatus.model.trim() : '';
+  const reasoningLabel = reasoningEffortLabel(
+    typeof currentThreadStatus?.reasoningEffort === 'string' ? currentThreadStatus.reasoningEffort.trim() : ''
+  );
+
+  const parts = [];
+  if (model.length > 0) {
+    parts.push(model);
+  }
+  if (reasoningLabel.length > 0) {
+    parts.push(reasoningLabel);
+  }
+
+  threadSettingsElement.textContent = parts.join(' · ');
+  threadSettingsElement.title = parts.length > 0
+    ? `Model: ${model || 'Unknown'}\nReasoning: ${reasoningLabel || 'Unknown'}`
+    : '';
+}
+
 function upsertThreadItems(items) {
   if (!transcriptView || !Array.isArray(items) || items.length === 0) {
     return;
@@ -123,10 +167,12 @@ function renderThreadStatus() {
     if (suffix.length > 0) {
       threadStatusElement.append(document.createTextNode(suffix));
     }
+    renderThreadSettings();
     return;
   }
 
   threadStatusElement.textContent = text;
+  renderThreadSettings();
 }
 
 function applyThreadStatus(statusUpdate) {
@@ -140,9 +186,15 @@ function applyThreadStatus(statusUpdate) {
 
   const text = typeof statusUpdate.text === 'string' ? statusUpdate.text.trim() : '';
   const kind = typeof statusUpdate.kind === 'string' ? statusUpdate.kind.trim() : '';
+  const model = typeof statusUpdate.model === 'string' ? statusUpdate.model.trim() : '';
+  const reasoningEffort = typeof statusUpdate.reasoningEffort === 'string'
+    ? statusUpdate.reasoningEffort.trim()
+    : '';
   currentThreadStatus = {
     kind: kind.length > 0 ? kind : 'idle',
     text: text.length > 0 ? text : 'Idle',
+    model,
+    reasoningEffort,
   };
   renderThreadStatus();
 }
@@ -334,6 +386,7 @@ async function initialize() {
     threadItemsContainer = document.getElementById('thread-items');
     emptyStateElement = document.getElementById('thread-empty-state');
     threadStatusElement = document.getElementById('thread-status');
+    threadSettingsElement = document.getElementById('thread-settings');
     renderThreadStatus();
     initializeComposer();
     messageRenderer = createMessageRenderer({ domWindow: window });
