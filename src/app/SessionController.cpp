@@ -119,6 +119,35 @@ std::optional<qodex::codex::ReasoningEffort> reasoningEffortFromKey(const std::o
     return reasoningEffort;
 }
 
+bool modelOptionSupportsReasoningEffort(
+    const qodex::ui::ThreadSettingsDialog::ModelOption &option,
+    const qodex::codex::ReasoningEffort effort
+) {
+    for (const Ref<qodex::codex::ReasoningEffortOption> &supportedEffort : option.supportedReasoningEfforts) {
+        if (supportedEffort && supportedEffort->reasoningEffort == effort) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+qodex::codex::ReasoningEffort preferredCreateReasoningEffort(
+    const qodex::ui::ThreadSettingsDialog::ModelOption &option
+) {
+    return modelOptionSupportsReasoningEffort(option, qodex::codex::ReasoningEffort::Xhigh)
+        ? qodex::codex::ReasoningEffort::Xhigh
+        : option.defaultReasoningEffort;
+}
+
+void applyCreateModelDefaults(
+    qodex::ui::ThreadSettingsDialog::Selection &selection,
+    const qodex::ui::ThreadSettingsDialog::ModelOption &option
+) {
+    selection.model = option.model;
+    selection.reasoningEffort = preferredCreateReasoningEffort(option);
+}
+
 }  // namespace
 
 SessionController::SessionController(
@@ -489,24 +518,21 @@ qodex::ui::ThreadSettingsDialog::Selection SessionController::defaultCreateThrea
 
     const QList<qodex::ui::ThreadSettingsDialog::ModelOption> modelOptions = threadSettingsModelOptions();
     for (const qodex::ui::ThreadSettingsDialog::ModelOption &option : modelOptions) {
-        if (option.model == QStringLiteral("gpt-5.4")) {
-            selection.model = option.model;
-            selection.reasoningEffort = qodex::codex::ReasoningEffort::Xhigh;
+        if (option.model == QStringLiteral("gpt-5.5")) {
+            applyCreateModelDefaults(selection, option);
             break;
         }
     }
     if (selection.model.isEmpty()) {
         for (const qodex::ui::ThreadSettingsDialog::ModelOption &option : modelOptions) {
             if (option.isDefault) {
-                selection.model = option.model;
-                selection.reasoningEffort = option.defaultReasoningEffort;
+                applyCreateModelDefaults(selection, option);
                 break;
             }
         }
     }
     if (selection.model.isEmpty() && !modelOptions.isEmpty()) {
-        selection.model = modelOptions.constFirst().model;
-        selection.reasoningEffort = modelOptions.constFirst().defaultReasoningEffort;
+        applyCreateModelDefaults(selection, modelOptions.constFirst());
     }
 
     QString errorMessage;

@@ -62,7 +62,7 @@ public:
 
 private:
     void rebuildModelCombo();
-    void rebuildReasoningCombo();
+    void rebuildReasoningCombo(bool preserveCurrentSelection = true);
     void rebuildInstructionCombo();
     void browseForWorkingDirectory();
     [[nodiscard]] const ModelOption *selectedModelOption() const;

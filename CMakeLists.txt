@@ -1020,6 +1020,23 @@ if(BUILD_TESTING)
 
     add_test(NAME ThreadListModelTest COMMAND ThreadListModelTest)
 
+    qt_add_executable(ThreadSettingsDialogTest
+        tests/ui/ThreadSettingsDialogTest.cpp
+        src/ui/ThreadSettingsDialog.cpp
+        src/ui/ThreadSettingsDialog.h
+    )
+
+    target_include_directories(ThreadSettingsDialogTest PRIVATE
+        "${PROJECT_SOURCE_DIR}/src"
+        "${QODEX_PROTOCOL_MODEL_ROOT}/${QODEX_CODEX_VERSION}/experimental"
+    )
+
+    target_link_libraries(ThreadSettingsDialogTest PRIVATE Qt6::Core Qt6::Test Qt6::Widgets)
+    add_dependencies(ThreadSettingsDialogTest qodex_protocol_artifacts)
+
+    add_test(NAME ThreadSettingsDialogTest COMMAND ThreadSettingsDialogTest)
+    set_tests_properties(ThreadSettingsDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     qt_add_executable(ApiLogModelTest
         resources/qodex.qrc
         tests/ui/ApiLogModelTest.cpp

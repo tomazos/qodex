@@ -207,7 +207,7 @@ void ThreadSettingsDialog::setInitialSelection(const Selection &selection) {
         m_workingDirectoryEdit->setText(normalizeDirectoryPath(selection.workingDirectory));
     }
     rebuildModelCombo();
-    rebuildReasoningCombo();
+    rebuildReasoningCombo(false);
     rebuildInstructionCombo();
 }
 
@@ -280,7 +280,7 @@ void ThreadSettingsDialog::rebuildModelCombo() {
     }
 }
 
-void ThreadSettingsDialog::rebuildReasoningCombo() {
+void ThreadSettingsDialog::rebuildReasoningCombo(const bool preserveCurrentSelection) {
     if (m_reasoningCombo == nullptr) {
         return;
     }
@@ -321,7 +321,7 @@ void ThreadSettingsDialog::rebuildReasoningCombo() {
     }
 
     int selectedIndex = -1;
-    if (currentReasoningData.isValid()) {
+    if (preserveCurrentSelection && currentReasoningData.isValid()) {
         selectedIndex = indexForComboData(m_reasoningCombo, currentReasoningData);
     }
     if (selectedIndex < 0) {
