@@ -940,6 +940,7 @@ void SessionController::onCreateThreadRequested() {
         missing<QString>(),
         Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
+        missing<Ref<qodex::codex::PermissionProfile>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
@@ -999,6 +1000,7 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
+        missing<Ref<qodex::codex::PermissionProfile>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
@@ -1088,6 +1090,7 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
+        missing<Ref<qodex::codex::PermissionProfile>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
@@ -1213,6 +1216,7 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
+        missing<Ref<qodex::codex::PermissionProfile>>(),
         std::nullopt,
         missing<qodex::codex::SandboxMode>(),
         missing<qodex::codex::ServiceTier>(),
@@ -1869,13 +1873,14 @@ void SessionController::requestThreadList(const bool archived) {
     const JsonRpcId requestId = m_client->sendThreadListRequest(
         Nullable<bool>::fromValue(archived),
         missing<QString>(),
-        missing<QString>(),
+        missing<std::variant<QString, QList<QString>>>(),
         missing<qint64>(),
         missing<QList<QString>>(),
         missing<QString>(),
         missing<qodex::codex::SortDirection>(),
         missing<ThreadSortKey>(),
-        missing<QList<ThreadSourceKind>>()
+        missing<QList<ThreadSourceKind>>(),
+        std::nullopt
     );
     if (!requestId.isValid()) {
         if (archived) {

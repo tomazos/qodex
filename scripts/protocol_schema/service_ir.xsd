@@ -113,6 +113,7 @@
         <xs:restriction base="xs:string">
           <xs:enumeration value="type"/>
           <xs:enumeration value="mode"/>
+          <xs:enumeration value="kind"/>
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
