@@ -156,6 +156,13 @@ private:
     };
 
     [[nodiscard]] domain::ThreadSummary projectThreadSummary(const qodex::codex::Thread &thread, bool archived) const;
+    [[nodiscard]] QString projectedThreadStatusText(const qodex::codex::Thread &thread) const;
+    [[nodiscard]] bool shouldPresentThreadAsLocallyNotLoaded(
+        const QString &threadId,
+        const qodex::codex::ThreadStatus *status
+    ) const;
+    void reconcileLocalUnloadOverride(const QString &threadId, const qodex::codex::ThreadStatus *status);
+    void markThreadLocallyUnloaded(const QString &threadId, bool keepServerIdleOverride);
     [[nodiscard]] QString threadStatusText(const qodex::codex::ThreadStatus &status) const;
     [[nodiscard]] QString threadDisplayTitle(const qodex::codex::Thread &thread) const;
     [[nodiscard]] QString threadSourceText(const qodex::codex::SessionSource &source) const;
@@ -195,6 +202,7 @@ private:
         const QString &title
     );
     void unloadThread(const QString &threadId);
+    void queueUnloadThread(const QString &threadId);
     template <typename T>
     [[nodiscard]] static qodex::codex::Nullable<T> missing() {
         return qodex::codex::Nullable<T>::missing();
@@ -233,6 +241,9 @@ private:
     QHash<QString, PendingThreadForkRequest> m_pendingForkRequests;
     QHash<QString, QString> m_pendingUnarchiveRequests;
     QSet<QString> m_pendingThreadUiCloseUnsubscribes;
+    // Codex may keep an unsubscribed thread cached as Idle; Qodex presents closed ThreadUI
+    // windows as locally unloaded.
+    QSet<QString> m_locallyUnloadedThreadIds;
 };
 
 }  // namespace qodex::app

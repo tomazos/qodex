@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMetaObject>
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
@@ -781,6 +782,7 @@ void SessionController::onThreadListSucceeded(const JsonRpcId &id, const ThreadL
         if (!thread) {
             continue;
         }
+        reconcileLocalUnloadOverride(thread->id, thread->status.data());
         summaries.append(projectThreadSummary(*thread, isArchivedRequest));
     }
 
@@ -838,6 +840,7 @@ void SessionController::onThreadStartSucceeded(const JsonRpcId &id, const Thread
         m_mainWindow->setStatusMessage(QStringLiteral("Thread created."));
         return;
     }
+    m_locallyUnloadedThreadIds.remove(response.thread->id);
 
     const QString desiredName = pendingRequest.desiredName.trimmed();
     const QString title = desiredName.isEmpty() ? threadDisplayTitle(*response.thread) : desiredName;
@@ -879,6 +882,8 @@ void SessionController::onThreadResumeSucceeded(const JsonRpcId &id, const qodex
     if (pendingRequest.threadId.isEmpty() || !response.thread) {
         return;
     }
+    m_locallyUnloadedThreadIds.remove(pendingRequest.threadId);
+    m_threadStore->updateThreadStatusText(pendingRequest.threadId, projectedThreadStatusText(*response.thread));
 
     const auto existingSettings = loadStoredThreadSettings(pendingRequest.threadId);
     saveStoredThreadSettings(qodex::storage::ThreadSettingsRecord{
@@ -1390,18 +1395,23 @@ void SessionController::onThreadUnsubscribeSucceeded(const JsonRpcId &id, const 
     if (threadId.isEmpty()) {
         return;
     }
-    m_pendingThreadUiCloseUnsubscribes.remove(threadId);
+    const bool wasThreadUiClose = m_pendingThreadUiCloseUnsubscribes.remove(threadId);
 
     if (response.status == ThreadUnsubscribeStatus::Unsubscribed
-        || response.status == ThreadUnsubscribeStatus::NotLoaded) {
-        unloadThread(threadId);
-        m_threadStore->updateThreadStatusText(threadId, QStringLiteral("Not Loaded"));
-        m_mainWindow->setStatusMessage(
-            response.status == ThreadUnsubscribeStatus::Unsubscribed ? QStringLiteral("Closed thread.")
-                                                                     : QStringLiteral("Thread was already closed.")
-        );
-    } else {
-        m_mainWindow->setStatusMessage(QStringLiteral("Thread was not subscribed."));
+        || response.status == ThreadUnsubscribeStatus::NotLoaded
+        || response.status == ThreadUnsubscribeStatus::NotSubscribed) {
+        markThreadLocallyUnloaded(threadId, response.status != ThreadUnsubscribeStatus::NotLoaded);
+        QString message;
+        if (response.status == ThreadUnsubscribeStatus::Unsubscribed) {
+            message = QStringLiteral("Closed thread.");
+        } else if (response.status == ThreadUnsubscribeStatus::NotLoaded) {
+            message = QStringLiteral("Thread was already closed.");
+        } else if (wasThreadUiClose) {
+            message = QStringLiteral("Thread UI closed.");
+        } else {
+            message = QStringLiteral("Thread was already not subscribed.");
+        }
+        m_mainWindow->setStatusMessage(message);
     }
 
     requestThreadLists();
@@ -1410,9 +1420,13 @@ void SessionController::onThreadUnsubscribeSucceeded(const JsonRpcId &id, const 
 void SessionController::onThreadUnsubscribeFailed(const JsonRpcId &id, const JsonRpcErrorObject &error) {
     const QString threadId = m_pendingUnsubscribeRequests.take(id.toKey());
     if (!threadId.isEmpty()) {
-        m_pendingThreadUiCloseUnsubscribes.remove(threadId);
-        m_mainWindow->setStatusMessage(
-            QStringLiteral("Failed to close thread %1: %2").arg(threadId, error.message)
+        const bool wasThreadUiClose = m_pendingThreadUiCloseUnsubscribes.remove(threadId);
+        if (wasThreadUiClose) {
+            markThreadLocallyUnloaded(threadId, true);
+        }
+        m_mainWindow->setStatusMessage(wasThreadUiClose
+            ? QStringLiteral("Thread UI closed, but thread/unsubscribe failed for %1: %2").arg(threadId, error.message)
+            : QStringLiteral("Failed to close thread %1: %2").arg(threadId, error.message)
         );
     }
 }
@@ -1482,14 +1496,12 @@ void SessionController::onThreadStartedNotificationReceived(const ThreadStartedN
     if (!params.thread) {
         return;
     }
+    m_locallyUnloadedThreadIds.remove(params.thread->id);
     m_threadStore->upsertThreadSummary(projectThreadSummary(*params.thread, false));
 }
 
 void SessionController::onThreadClosedNotificationReceived(const ThreadClosedNotificationParams &params) {
-    unloadThread(params.threadId);
-    if (!m_threadStore->updateThreadStatusText(params.threadId, QStringLiteral("Not Loaded"))) {
-        return;
-    }
+    markThreadLocallyUnloaded(params.threadId, false);
 }
 
 void SessionController::onThreadNameUpdatedNotificationReceived(const ThreadNameUpdatedNotificationParams &params) {
@@ -1515,7 +1527,11 @@ void SessionController::onThreadStatusChangedNotificationReceived(const ThreadSt
     if (LoadedThread *loadedThread = loadedThreadForId(params.threadId)) {
         loadedThread->onThreadStatusChanged(*params.status);
     }
-    m_threadStore->updateThreadStatusText(params.threadId, threadStatusText(*params.status));
+    reconcileLocalUnloadOverride(params.threadId, params.status.data());
+    const QString statusText = shouldPresentThreadAsLocallyNotLoaded(params.threadId, params.status.data())
+        ? QStringLiteral("Not Loaded")
+        : threadStatusText(*params.status);
+    m_threadStore->updateThreadStatusText(params.threadId, statusText);
 }
 
 void SessionController::onThreadArchivedNotificationReceived(const ThreadArchivedNotificationParams &params) {
@@ -1640,18 +1656,23 @@ void SessionController::onThreadUiProcessExited(const QString &threadId) {
 
     const auto summary = m_threadStore->threadSummaryById(threadId);
     if (summary.has_value() && summary->statusText == QStringLiteral("Not Loaded")) {
-        unloadThread(threadId);
+        queueUnloadThread(threadId);
         return;
     }
 
     const JsonRpcId requestId = m_client->sendThreadUnsubscribeRequest(threadId);
     if (!requestId.isValid()) {
+        m_locallyUnloadedThreadIds.insert(threadId);
+        m_threadStore->updateThreadStatusText(threadId, QStringLiteral("Not Loaded"));
+        queueUnloadThread(threadId);
         m_mainWindow->setStatusMessage(QStringLiteral("Thread UI closed, but thread/unsubscribe could not be sent."));
         return;
     }
 
     m_pendingUnsubscribeRequests.insert(requestId.toKey(), threadId);
     m_pendingThreadUiCloseUnsubscribes.insert(threadId);
+    m_locallyUnloadedThreadIds.insert(threadId);
+    m_threadStore->updateThreadStatusText(threadId, QStringLiteral("Not Loaded"));
     m_mainWindow->setStatusMessage(QStringLiteral("Thread UI closed. Unloading thread..."));
 }
 
@@ -1705,6 +1726,16 @@ void SessionController::unloadThread(const QString &threadId) {
     m_threadUiProcessManager->destroyThreadUiForThread(threadId);
 }
 
+void SessionController::queueUnloadThread(const QString &threadId) {
+    if (threadId.isEmpty()) {
+        return;
+    }
+
+    QMetaObject::invokeMethod(this, [this, threadId] {
+        unloadThread(threadId);
+    }, Qt::QueuedConnection);
+}
+
 qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Thread &thread, const bool archived) const {
     QString gitOrigin;
     QString gitBranch;
@@ -1727,7 +1758,7 @@ qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Threa
         .title = threadDisplayTitle(thread),
         .preview = thread.preview.trimmed(),
         .cwd = thread.cwd,
-        .statusText = thread.status ? threadStatusText(*thread.status) : QStringLiteral("Unknown"),
+        .statusText = projectedThreadStatusText(thread),
         .sourceText = thread.source ? threadSourceText(*thread.source) : QStringLiteral("Unknown"),
         .modelProvider = thread.modelProvider,
         .cliVersion = thread.cliVersion,
@@ -1742,6 +1773,51 @@ qodex::domain::ThreadSummary SessionController::projectThreadSummary(const Threa
         .createdAt = thread.createdAt,
         .updatedAt = thread.updatedAt,
     };
+}
+
+QString SessionController::projectedThreadStatusText(const Thread &thread) const {
+    if (shouldPresentThreadAsLocallyNotLoaded(thread.id, thread.status.data())) {
+        return QStringLiteral("Not Loaded");
+    }
+    return thread.status ? threadStatusText(*thread.status) : QStringLiteral("Unknown");
+}
+
+bool SessionController::shouldPresentThreadAsLocallyNotLoaded(
+    const QString &threadId,
+    const ThreadStatus *status
+) const {
+    if (threadId.isEmpty() || !m_locallyUnloadedThreadIds.contains(threadId) || loadedThreadForId(threadId) != nullptr) {
+        return false;
+    }
+
+    return status == nullptr
+        || status->kind == ThreadStatus::Kind::Idle
+        || status->kind == ThreadStatus::Kind::NotLoaded;
+}
+
+void SessionController::reconcileLocalUnloadOverride(const QString &threadId, const ThreadStatus *status) {
+    if (threadId.isEmpty() || !m_locallyUnloadedThreadIds.contains(threadId)) {
+        return;
+    }
+
+    if (loadedThreadForId(threadId) != nullptr || (status != nullptr && status->kind != ThreadStatus::Kind::Idle)) {
+        m_locallyUnloadedThreadIds.remove(threadId);
+    }
+}
+
+void SessionController::markThreadLocallyUnloaded(const QString &threadId, const bool keepServerIdleOverride) {
+    if (threadId.isEmpty()) {
+        return;
+    }
+
+    if (keepServerIdleOverride) {
+        m_locallyUnloadedThreadIds.insert(threadId);
+    } else {
+        m_locallyUnloadedThreadIds.remove(threadId);
+    }
+
+    unloadThread(threadId);
+    m_threadStore->updateThreadStatusText(threadId, QStringLiteral("Not Loaded"));
 }
 
 QString SessionController::threadStatusText(const ThreadStatus &status) const {
