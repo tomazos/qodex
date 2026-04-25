@@ -4,6 +4,7 @@ const { ipcRenderer } = require('electron');
 
 const { createCommandExecutionRenderer } = require('./command-rendering/CommandExecutionRenderer');
 const { createImageGenerationRenderer } = require('./image-rendering/ImageGenerationRenderer');
+const { createImageViewRenderer } = require('./image-rendering/ImageViewRenderer');
 const { createLinkInteractionController } = require('./link-handling/LinkInteractionController');
 const { createFileChangeRenderer } = require('./diff-rendering/FileChangeRenderer');
 const { createMessageRenderer } = require('./message-rendering/MessageRenderer');
@@ -40,6 +41,7 @@ let messageRenderer = null;
 let commandExecutionRenderer = null;
 let fileChangeRenderer = null;
 let imageGenerationRenderer = null;
+let imageViewRenderer = null;
 let transcriptView = null;
 let linkInteractionController = null;
 let composerResizeFrameId = null;
@@ -393,6 +395,7 @@ async function initialize() {
     commandExecutionRenderer = createCommandExecutionRenderer({ domWindow: window });
     fileChangeRenderer = createFileChangeRenderer({ domWindow: window });
     imageGenerationRenderer = createImageGenerationRenderer({ domWindow: window });
+    imageViewRenderer = createImageViewRenderer({ domWindow: window });
     transcriptView = createTranscriptView({
       domWindow: window,
       container: threadItemsContainer,
@@ -401,6 +404,7 @@ async function initialize() {
       commandExecutionRenderer,
       fileChangeRenderer,
       imageGenerationRenderer,
+      imageViewRenderer,
     });
     linkInteractionController = createLinkInteractionController({
       container: threadItemsContainer,

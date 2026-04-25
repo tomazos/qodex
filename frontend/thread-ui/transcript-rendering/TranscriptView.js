@@ -55,6 +55,7 @@ function createTranscriptView({
   commandExecutionRenderer,
   fileChangeRenderer,
   imageGenerationRenderer,
+  imageViewRenderer,
   itemGapPx = DEFAULT_ITEM_GAP_PX,
   overscanPx = DEFAULT_OVERSCAN_PX,
   measureElementHeight = measureRenderedHeight,
@@ -155,7 +156,7 @@ function createTranscriptView({
       return Math.min(560, 110 + (Math.min(diffLines, 18) * 18));
     }
 
-    if (kind === 'image_generation') {
+    if (kind === 'image_generation' || kind === 'image_view') {
       return 420;
     }
 
@@ -262,6 +263,7 @@ function createTranscriptView({
     const commandExecutionKind = kind === 'command_execution';
     const fileChangeKind = kind === 'file_change';
     const imageGenerationKind = kind === 'image_generation';
+    const imageViewKind = kind === 'image_view';
 
     article.className = 'thread-item';
     article.classList.toggle('thread-item--user', kind === 'user');
@@ -270,6 +272,7 @@ function createTranscriptView({
     article.classList.toggle('thread-item--command-execution', commandExecutionKind);
     article.classList.toggle('thread-item--file-change', fileChangeKind);
     article.classList.toggle('thread-item--image-generation', imageGenerationKind);
+    article.classList.toggle('thread-item--image-view', imageViewKind);
 
     article.replaceChildren();
 
@@ -285,6 +288,11 @@ function createTranscriptView({
 
     if (imageGenerationKind && imageGenerationRenderer) {
       article.append(imageGenerationRenderer.renderToElement(item));
+      return;
+    }
+
+    if (imageViewKind && imageViewRenderer) {
+      article.append(imageViewRenderer.renderToElement(item));
       return;
     }
 

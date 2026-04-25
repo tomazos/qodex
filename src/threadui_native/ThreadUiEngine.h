@@ -50,12 +50,17 @@ struct DisplayImageGeneration {
     std::string status;
 };
 
+struct DisplayImageView {
+    std::string path;
+};
+
 struct DisplayItem {
     std::string id;
     std::string kind;
     std::string text;
     DisplayCommandExecution commandExecution;
     DisplayFileChange fileChange;
+    DisplayImageView imageView;
     DisplayImageGeneration imageGeneration;
 };
 

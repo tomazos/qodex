@@ -217,7 +217,8 @@ main {
   gap: 0.7rem;
 }
 
-.thread-item__image-generation {
+.thread-item__image-generation,
+.thread-item__image-view {
   display: grid;
   gap: 0.8rem;
 }
@@ -321,7 +322,8 @@ main {
   word-break: break-word;
 }
 
-.image-generation__image {
+.image-generation__image,
+.image-view__image {
   display: block;
   max-width: 100%;
   max-height: min(70vh, 40rem);
@@ -331,7 +333,8 @@ main {
   object-fit: contain;
 }
 
-.image-generation__placeholder {
+.image-generation__placeholder,
+.image-view__placeholder {
   padding: 1rem;
   border: 1px dashed color-mix(in srgb, canvastext 18%, transparent);
   border-radius: 10px;
@@ -339,7 +342,8 @@ main {
   background: color-mix(in srgb, canvastext 4%, transparent);
 }
 
-.image-generation__details {
+.image-generation__details,
+.image-view__details {
   display: grid;
   gap: 0.45rem;
   font-family: var(--font-ui);
@@ -348,16 +352,19 @@ main {
 
 .image-generation__saved-path,
 .image-generation__prompt,
-.image-generation__status {
+.image-generation__status,
+.image-view__path {
   overflow-wrap: anywhere;
 }
 
-.image-generation__saved-path-link {
+.image-generation__saved-path-link,
+.image-view__path-link {
   color: LinkText;
   text-decoration: none;
 }
 
-.image-generation__saved-path-link:hover {
+.image-generation__saved-path-link:hover,
+.image-view__path-link:hover {
   text-decoration: underline;
 }
 

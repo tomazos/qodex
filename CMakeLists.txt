@@ -96,12 +96,14 @@ set(QODEX_THREAD_UI_SOURCE_FILES
     "${QODEX_THREAD_UI_SOURCE_DIR}/command-rendering/CommandExecutionRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/diff-rendering/FileChangeRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/image-rendering/ImageGenerationRenderer.js"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/image-rendering/ImageViewRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/link-handling/LinkInteractionController.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/message-rendering/MessageRenderer.js"
     "${QODEX_THREAD_UI_SOURCE_DIR}/scripts/run-commonmark-conformance.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/command-rendering/CommandExecutionRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/diff-rendering/FileChangeRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/image-rendering/ImageGenerationRenderer.test.cjs"
+    "${QODEX_THREAD_UI_SOURCE_DIR}/test/image-rendering/ImageViewRenderer.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/link-handling/LinkInteractionController.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/CommonMarkConformance.test.cjs"
     "${QODEX_THREAD_UI_SOURCE_DIR}/test/message-rendering/MessageRenderer.test.cjs"
@@ -933,6 +935,12 @@ if(BUILD_TESTING)
     add_test(
         NAME ThreadUiImageGenerationRendererTest
         COMMAND "${NODE_EXECUTABLE}" --test ./test/image-rendering/ImageGenerationRenderer.test.cjs
+        WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
+    )
+
+    add_test(
+        NAME ThreadUiImageViewRendererTest
+        COMMAND "${NODE_EXECUTABLE}" --test ./test/image-rendering/ImageViewRenderer.test.cjs
         WORKING_DIRECTORY "${QODEX_THREAD_UI_APP_DIR}"
     )
 

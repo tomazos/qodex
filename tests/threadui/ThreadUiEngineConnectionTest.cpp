@@ -76,6 +76,10 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     fileChangeUpdate->set_path("/tmp/styles.css");
     fileChangeUpdate->set_kind(qodex::threadui::ipc::common::FILE_CHANGE_KIND_UPDATE);
     fileChangeUpdate->set_diff("@@ -1 +1 @@\n-color: Highlight;\n+color: LinkText;");
+    qodex::threadui::ipc::common::Item *imageViewItem = addItemsRequest.add_items();
+    imageViewItem->set_item_id("image-view-1");
+    qodex::threadui::ipc::common::ImageView *imageView = imageViewItem->mutable_image_view();
+    imageView->set_path("/tmp/iota-camera-direct-w.png");
     qodex::threadui::ipc::common::Item *imageGenerationItem = addItemsRequest.add_items();
     imageGenerationItem->set_item_id("image-1");
     qodex::threadui::ipc::common::ImageGeneration *imageGeneration =
@@ -98,7 +102,7 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
         }
     }
 
-    QCOMPARE(items.size(), std::size_t(5));
+    QCOMPARE(items.size(), std::size_t(6));
     QCOMPARE(items[0].id, std::string("user-1"));
     QCOMPARE(items[0].kind, std::string("user"));
     QCOMPARE(items[0].text, std::string("Hello from user"));
@@ -128,15 +132,18 @@ void ThreadUiEngineConnectionTest::establishesTcpConnectionToQodexListener() {
     QCOMPARE(items[3].fileChange.changes[0].path, std::string("/tmp/styles.css"));
     QCOMPARE(items[3].fileChange.changes[0].kind, std::string("update"));
     QCOMPARE(items[3].fileChange.changes[0].diff, std::string("@@ -1 +1 @@\n-color: Highlight;\n+color: LinkText;"));
-    QCOMPARE(items[4].id, std::string("image-1"));
-    QCOMPARE(items[4].kind, std::string("image_generation"));
-    QCOMPARE(items[4].imageGeneration.result, std::string("ZmFrZS1iYXNlNjQ="));
-    QCOMPARE(items[4].imageGeneration.revisedPrompt, std::string("Make it cinematic"));
+    QCOMPARE(items[4].id, std::string("image-view-1"));
+    QCOMPARE(items[4].kind, std::string("image_view"));
+    QCOMPARE(items[4].imageView.path, std::string("/tmp/iota-camera-direct-w.png"));
+    QCOMPARE(items[5].id, std::string("image-1"));
+    QCOMPARE(items[5].kind, std::string("image_generation"));
+    QCOMPARE(items[5].imageGeneration.result, std::string("ZmFrZS1iYXNlNjQ="));
+    QCOMPARE(items[5].imageGeneration.revisedPrompt, std::string("Make it cinematic"));
     QCOMPARE(
-        items[4].imageGeneration.savedPath,
+        items[5].imageGeneration.savedPath,
         std::string("/home/zos/.codex/generated_images/thread/image-1.png")
     );
-    QCOMPARE(items[4].imageGeneration.status, std::string("completed"));
+    QCOMPARE(items[5].imageGeneration.status, std::string("completed"));
 
     qodex::threadui::native::shutdown();
 

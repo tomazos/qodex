@@ -148,7 +148,7 @@ message WebSearch {
 }
 
 message ImageView {
-  string text = 1;
+  string path = 1;
 }
 
 message ImageGeneration {

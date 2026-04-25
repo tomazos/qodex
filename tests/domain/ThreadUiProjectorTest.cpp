@@ -4,6 +4,7 @@
 #include "domain/threadmodel/CompletedCommandExecution.h"
 #include "domain/threadmodel/CompletedFileChange.h"
 #include "domain/threadmodel/CompletedImageGeneration.h"
+#include "domain/threadmodel/CompletedImageView.h"
 #include "domain/threadmodel/CompletedPlan.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
@@ -22,6 +23,7 @@ using qodex::codex::ThreadItemAgentMessage;
 using qodex::codex::ThreadItemCommandExecution;
 using qodex::codex::ThreadItemFileChange;
 using qodex::codex::ThreadItemImageGeneration;
+using qodex::codex::ThreadItemImageView;
 using qodex::codex::ThreadItemPlan;
 using qodex::codex::ThreadItemReasoning;
 using qodex::codex::ThreadItemUserMessage;
@@ -84,6 +86,7 @@ private slots:
     void projectsReasoningSummaryBeforeRawContent();
     void projectsStructuredCommandExecutionAndFileChangeItems();
     void projectsStructuredImageGenerationItems();
+    void projectsStructuredImageViewItems();
     void summarizesGenericCompletedItemsAsCompactJson();
 };
 
@@ -267,6 +270,24 @@ void ThreadUiProjectorTest::projectsStructuredImageGenerationItems() {
     QCOMPARE(
         QString::fromStdString(projectedImage->image_generation().status()),
         QStringLiteral("completed")
+    );
+}
+
+void ThreadUiProjectorTest::projectsStructuredImageViewItems() {
+    ThreadUiProjector projector;
+
+    ThreadItemImageView imagePayload;
+    imagePayload.id = QStringLiteral("image-view-1");
+    imagePayload.path = QStringLiteral("/tmp/iota-camera-direct-w.png");
+
+    qodex::domain::threadmodel::CompletedImageView imageView(imagePayload);
+
+    const auto projectedImage = projector.projectCompletedItem(imageView);
+    QVERIFY(projectedImage.has_value());
+    QCOMPARE(QString::fromStdString(projectedImage->item_id()), QStringLiteral("image-view-1"));
+    QCOMPARE(
+        QString::fromStdString(projectedImage->image_view().path()),
+        QStringLiteral("/tmp/iota-camera-direct-w.png")
     );
 }
 

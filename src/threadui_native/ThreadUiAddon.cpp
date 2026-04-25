@@ -527,6 +527,21 @@ napi_value takePendingItemsWrapped(napi_env env, napi_callback_info info) {
             }
         }
 
+        if (items[index].kind == "image_view") {
+            napi_value pathValue = nullptr;
+
+            if (napi_create_string_utf8(
+                    env,
+                    items[index].imageView.path.c_str(),
+                    NAPI_AUTO_LENGTH,
+                    &pathValue
+                ) != napi_ok ||
+                napi_set_named_property(env, itemObject, "path", pathValue) != napi_ok) {
+                napi_throw_error(env, nullptr, "Failed to create image view value");
+                return nullptr;
+            }
+        }
+
         if (items[index].kind == "image_generation") {
             napi_value resultValue = nullptr;
             napi_value revisedPromptValue = nullptr;

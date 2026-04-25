@@ -435,12 +435,14 @@ void queueDisplayItems(const qodex::threadui::ipc::qodex_to_ui::AddItemsRequest 
             });
             break;
         case qodex::threadui::ipc::common::Item::kImageView:
-            pendingItems.push_back(qodex::threadui::native::DisplayItem{
-                .id = itemId,
-                .kind = "image_view",
-                .text = item.image_view().text(),
-            });
+        {
+            qodex::threadui::native::DisplayItem displayItem;
+            displayItem.id = itemId;
+            displayItem.kind = "image_view";
+            displayItem.imageView.path = item.image_view().path();
+            pendingItems.push_back(std::move(displayItem));
             break;
+        }
         case qodex::threadui::ipc::common::Item::kImageGeneration:
         {
             qodex::threadui::native::DisplayItem displayItem;

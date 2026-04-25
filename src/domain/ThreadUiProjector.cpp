@@ -7,6 +7,7 @@
 #include "domain/threadmodel/CompletedCommandExecution.h"
 #include "domain/threadmodel/CompletedFileChange.h"
 #include "domain/threadmodel/CompletedImageGeneration.h"
+#include "domain/threadmodel/CompletedImageView.h"
 #include "domain/threadmodel/CompletedReasoning.h"
 #include "domain/threadmodel/CompletedUserMessage.h"
 
@@ -257,6 +258,24 @@ bool appendImageGenerationDisplayItem(
     return !payload.result.isEmpty() || payload.savedPath.hasValue() || payload.revisedPrompt.hasValue();
 }
 
+bool appendImageViewDisplayItem(
+    qodex::threadui::ipc::common::ImageView *displayItem,
+    const qodex::domain::threadmodel::CompletedImageView &imageViewItem
+) {
+    if (displayItem == nullptr) {
+        return false;
+    }
+
+    const qodex::codex::ThreadItemImageView &payload = imageViewItem.data();
+    const QString path = payload.path.trimmed();
+    if (path.isEmpty()) {
+        return false;
+    }
+
+    displayItem->set_path(path.toStdString());
+    return true;
+}
+
 }  // namespace
 
 qodex::threadui::ipc::qodex_to_ui::AddItemsRequest ThreadUiProjector::projectTurns(
@@ -308,6 +327,7 @@ bool ThreadUiProjector::appendCompletedItem(
     using qodex::domain::threadmodel::CompletedCommandExecution;
     using qodex::domain::threadmodel::CompletedFileChange;
     using qodex::domain::threadmodel::CompletedImageGeneration;
+    using qodex::domain::threadmodel::CompletedImageView;
     using qodex::domain::threadmodel::CompletedReasoning;
     using qodex::domain::threadmodel::CompletedUserMessage;
 
@@ -369,8 +389,10 @@ bool ThreadUiProjector::appendCompletedItem(
         displayItem->mutable_web_search()->set_text(summarizeNonMessageItem(item).toStdString());
         return true;
     case ThreadItem::Kind::ImageView:
-        displayItem->mutable_image_view()->set_text(summarizeNonMessageItem(item).toStdString());
-        return true;
+        return appendImageViewDisplayItem(
+            displayItem->mutable_image_view(),
+            static_cast<const CompletedImageView &>(item)
+        );
     case ThreadItem::Kind::ImageGeneration:
         return appendImageGenerationDisplayItem(
             displayItem->mutable_image_generation(),
