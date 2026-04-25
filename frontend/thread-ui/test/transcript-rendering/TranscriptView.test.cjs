@@ -16,6 +16,7 @@ function createView({
   scrollIntoViewImpl,
   setTimeoutImpl,
   clearTimeoutImpl,
+  resizeObserverImpl,
 } = {}) {
   const dom = new JSDOM(`
     <!doctype html>
@@ -68,6 +69,10 @@ function createView({
 
   if (typeof clearTimeoutImpl === 'function') {
     dom.window.clearTimeout = clearTimeoutImpl;
+  }
+
+  if (typeof resizeObserverImpl === 'function') {
+    dom.window.ResizeObserver = resizeObserverImpl;
   }
 
   if (typeof scrollIntoViewImpl === 'function') {
@@ -126,6 +131,30 @@ function createView({
 function scrollContainer(container, top) {
   container.scrollTop = top;
   container.dispatchEvent(new container.ownerDocument.defaultView.Event('scroll'));
+}
+
+function createFakeResizeObserverClass(resizeObservers) {
+  return class FakeResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.observedElements = new Set();
+      resizeObservers.push(this);
+    }
+
+    observe(element) {
+      this.observedElements.add(element);
+    }
+
+    disconnect() {
+      this.observedElements.clear();
+    }
+
+    trigger(element) {
+      if (this.observedElements.has(element)) {
+        this.callback([{ target: element }]);
+      }
+    }
+  };
 }
 
 test('upserts items by stable id without recreating unaffected nodes', () => {
@@ -362,6 +391,72 @@ test('premeasures transcript item heights so scrolling does not discover new geo
   assert.equal(container.scrollTop, 560);
   assert.equal(measuredItemIds.length, measurementCountAfterUpsert);
   assert.equal(virtualRoot.style.height, canvasHeightBeforeScroll);
+});
+
+test('remeasures mounted image items after async resize and repositions following items', () => {
+  const heightsById = new Map([
+    ['image-1', 420],
+    ['agent-1', 100],
+  ]);
+  const resizeObservers = [];
+
+  const { container, transcriptView } = createView({
+    clientHeight: 600,
+    overscanPx: 0,
+    resizeObserverImpl: createFakeResizeObserverClass(resizeObservers),
+    measureElementHeight(element, fallbackHeight) {
+      return heightsById.get(element.dataset.itemId) || fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems([
+    { id: 'image-1', kind: 'image_view', imageView: { path: '/tmp/generated.png' } },
+    { id: 'agent-1', kind: 'agent', text: 'After image' },
+  ]);
+
+  const imageNode = container.querySelector('[data-item-id="image-1"]');
+  const agentNode = container.querySelector('[data-item-id="agent-1"]');
+  assert.ok(imageNode);
+  assert.ok(agentNode);
+  assert.equal(agentNode.style.top, '432px');
+
+  heightsById.set('image-1', 640);
+  resizeObservers[0].trigger(imageNode);
+
+  assert.equal(agentNode.style.top, '652px');
+  transcriptView.dispose();
+});
+
+test('keeps the transcript pinned to bottom when an image grows at the end', () => {
+  const heightsById = new Map([
+    ['image-1', 420],
+    ['agent-1', 100],
+  ]);
+  const resizeObservers = [];
+
+  const { container, transcriptView } = createView({
+    clientHeight: 300,
+    overscanPx: 0,
+    resizeObserverImpl: createFakeResizeObserverClass(resizeObservers),
+    measureElementHeight(element, fallbackHeight) {
+      return heightsById.get(element.dataset.itemId) || fallbackHeight;
+    },
+  });
+
+  transcriptView.upsertItems([
+    { id: 'image-1', kind: 'image_generation', imageGeneration: { savedPath: '/tmp/generated.png' } },
+    { id: 'agent-1', kind: 'agent', text: 'After image' },
+  ]);
+
+  assert.equal(container.scrollTop, 232);
+
+  const imageNode = container.querySelector('[data-item-id="image-1"]');
+  assert.ok(imageNode);
+  heightsById.set('image-1', 640);
+  resizeObservers[0].trigger(imageNode);
+
+  assert.equal(container.scrollTop, 452);
+  transcriptView.dispose();
 });
 
 test('sticks to the transcript end after full-history resume settles measured heights', () => {

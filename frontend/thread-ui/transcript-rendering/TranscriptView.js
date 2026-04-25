@@ -78,9 +78,21 @@ function createTranscriptView({
   let stickToBottomFrameId = null;
   let stickToBottomTimeoutId = null;
   let lateStickToBottomTimeoutId = null;
+  let heightRemeasureFrameId = null;
   let lastRenderedRangeKey = '';
   let lastMeasuredViewportWidth = null;
   let cachedTotalTranscriptHeight = 0;
+  const pendingHeightRemeasureItemIds = new Set();
+  const resizeObserver = typeof domWindow.ResizeObserver === 'function'
+    ? new domWindow.ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const itemId = entry?.target?.dataset?.itemId;
+        if (typeof itemId === 'string' && itemId !== '') {
+          queueMountedItemHeightRemeasure(itemId);
+        }
+      }
+    })
+    : null;
 
   virtualRoot.className = 'thread-view__items-virtual';
   virtualRoot.hidden = true;
@@ -184,6 +196,11 @@ function createTranscriptView({
 
   function isScrolledNearBottom() {
     const remaining = effectiveScrollHeight() - container.scrollTop - container.clientHeight;
+    return remaining <= 4;
+  }
+
+  function isScrolledNearVirtualBottom() {
+    const remaining = totalTranscriptHeight() - container.scrollTop - container.clientHeight;
     return remaining <= 4;
   }
 
@@ -334,7 +351,23 @@ function createTranscriptView({
     article.style.right = '0';
     renderIntoArticle(article, record.item);
     record.element = article;
+    attachAsyncLayoutInvalidation(record, article);
+    if (resizeObserver) {
+      resizeObserver.observe(article);
+    }
     return article;
+  }
+
+  function attachAsyncLayoutInvalidation(record, element) {
+    const images = element.querySelectorAll('img');
+    for (const image of images) {
+      const invalidate = () => queueMountedItemHeightRemeasure(record.item.id);
+      image.addEventListener('load', invalidate, { once: true });
+      image.addEventListener('error', invalidate, { once: true });
+      if (image.complete) {
+        queueMountedItemHeightRemeasure(record.item.id);
+      }
+    }
   }
 
   function prepareMeasurementHost() {
@@ -603,6 +636,67 @@ function createTranscriptView({
     });
   }
 
+  function queueMountedItemHeightRemeasure(itemId) {
+    if (!itemRecordsById.has(itemId)) {
+      return;
+    }
+
+    pendingHeightRemeasureItemIds.add(itemId);
+    if (heightRemeasureFrameId !== null) {
+      return;
+    }
+
+    heightRemeasureFrameId = requestFrame(() => {
+      heightRemeasureFrameId = null;
+      flushMountedItemHeightRemeasures();
+    });
+  }
+
+  function flushMountedItemHeightRemeasures() {
+    if (pendingHeightRemeasureItemIds.size === 0) {
+      return;
+    }
+
+    const itemIds = Array.from(pendingHeightRemeasureItemIds);
+    pendingHeightRemeasureItemIds.clear();
+
+    const shouldStickToBottom = isScrolledNearVirtualBottom();
+    const scrollAnchor = shouldStickToBottom ? null : captureScrollAnchor();
+    let heightChanged = false;
+
+    for (const itemId of itemIds) {
+      const record = itemRecordsById.get(itemId);
+      if (!record || !record.element || record.element.parentNode !== mountedItemsHost) {
+        continue;
+      }
+
+      const measuredHeight = measureElementHeight(record.element, record.height);
+      if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) {
+        continue;
+      }
+
+      if (Math.abs(measuredHeight - record.height) <= 0.5) {
+        continue;
+      }
+
+      record.height = measuredHeight;
+      heightChanged = true;
+    }
+
+    if (!heightChanged) {
+      return;
+    }
+
+    recomputeLayoutMetrics();
+    if (scrollAnchor) {
+      restoreScrollAnchor(scrollAnchor);
+    }
+    if (shouldStickToBottom) {
+      scrollToBottom();
+    }
+    renderVisibleWindow();
+  }
+
   function resetEstimatedHeights() {
     for (const itemId of itemOrder) {
       const record = itemRecordsById.get(itemId);
@@ -665,6 +759,8 @@ function createTranscriptView({
       record.height = measureItemHeight(normalizedItem, estimateItemHeight(normalizedItem));
       if (record.element) {
         renderIntoArticle(record.element, normalizedItem);
+        attachAsyncLayoutInvalidation(record, record.element);
+        queueMountedItemHeightRemeasure(normalizedItem.id);
       }
     }
 
@@ -713,12 +809,18 @@ function createTranscriptView({
       cancelFrame(stickToBottomFrameId);
       cancelTimeout(stickToBottomTimeoutId);
       cancelTimeout(lateStickToBottomTimeoutId);
+      cancelFrame(heightRemeasureFrameId);
       renderFrameId = null;
       stickToBottomFrameId = null;
       stickToBottomTimeoutId = null;
       lateStickToBottomTimeoutId = null;
+      heightRemeasureFrameId = null;
+      pendingHeightRemeasureItemIds.clear();
       container.removeEventListener('scroll', handleScroll);
       domWindow.removeEventListener('resize', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       measurementHost.remove();
     },
   };
