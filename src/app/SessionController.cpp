@@ -973,6 +973,7 @@ void SessionController::onCreateThreadRequested() {
         Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
         missing<QList<Ref<qodex::codex::DynamicToolSpec>>>(),
+        missing<QList<Ref<qodex::codex::TurnEnvironmentParams>>>(),
         missing<bool>(),
         std::nullopt,
         missing<QString>(),
@@ -1034,6 +1035,7 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         missing<QMap<QString, QJsonValue>>(),
         missing<QString>(),
         missing<QString>(),
+        std::nullopt,
         missing<QList<Ref<qodex::codex::ResponseItem>>>(),
         missing<QString>(),
         missing<QString>(),
@@ -1124,6 +1126,7 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         selection->workingDirectoryUnchanged ? missing<QString>()
                                             : Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
+        std::nullopt,
         missing<QList<Ref<qodex::codex::ResponseItem>>>(),
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
@@ -1250,6 +1253,7 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         selection->workingDirectoryUnchanged ? missing<QString>()
                                             : Nullable<QString>::fromValue(selection->workingDirectory),
         missing<QString>(),
+        std::nullopt,
         std::nullopt,
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
