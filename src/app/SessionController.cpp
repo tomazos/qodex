@@ -979,13 +979,14 @@ void SessionController::onCreateThreadRequested() {
         missing<QString>(),
         Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
-        missing<Ref<qodex::codex::PermissionProfile>>(),
+        missing<Ref<qodex::codex::PermissionProfileSelectionParams>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
         missing<QString>(),
-        missing<qodex::codex::ServiceTier>(),
-        missing<qodex::codex::ThreadStartSource>()
+        missing<QString>(),
+        missing<qodex::codex::ThreadStartSource>(),
+        missing<qodex::codex::ThreadSource>()
     );
     if (!requestId.isValid()) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/start request."));
@@ -1040,11 +1041,11 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
-        missing<Ref<qodex::codex::PermissionProfile>>(),
+        missing<Ref<qodex::codex::PermissionProfileSelectionParams>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
-        missing<qodex::codex::ServiceTier>(),
+        missing<QString>(),
         threadId
     );
     if (!requestId.isValid()) {
@@ -1131,11 +1132,11 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
-        missing<Ref<qodex::codex::PermissionProfile>>(),
+        missing<Ref<qodex::codex::PermissionProfileSelectionParams>>(),
         std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<qodex::codex::SandboxMode>(),
-        missing<qodex::codex::ServiceTier>(),
+        missing<QString>(),
         threadId
     );
     if (!requestId.isValid()) {
@@ -1258,11 +1259,12 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
-        missing<Ref<qodex::codex::PermissionProfile>>(),
+        missing<Ref<qodex::codex::PermissionProfileSelectionParams>>(),
         std::nullopt,
         missing<qodex::codex::SandboxMode>(),
-        missing<qodex::codex::ServiceTier>(),
-        threadId
+        missing<QString>(),
+        threadId,
+        missing<qodex::codex::ThreadSource>()
     );
     if (!requestId.isValid()) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/fork request."));

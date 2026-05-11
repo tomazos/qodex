@@ -92,6 +92,7 @@ NULL_PARAMS_REQUEST_RESPONSE_BY_METHOD = {
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
     "configRequirements/read": "ConfigRequirementsReadResponse",
     "memory/reset": "MemoryResetResponse",
+    "windowsSandbox/readiness": "WindowsSandboxReadinessResponse",
 }
 
 PARAMS_TYPE_RESPONSE_OVERRIDES = {

@@ -813,11 +813,11 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
         input,
         missing<QString>(),
         std::nullopt,
-        missing<Ref<qodex::codex::PermissionProfile>>(),
+        missing<Ref<qodex::codex::PermissionProfileSelectionParams>>(),
         missing<qodex::codex::Personality>(),
         missing<QMap<QString, QString>>(),
         missing<Ref<qodex::codex::SandboxPolicy>>(),
-        missing<qodex::codex::ServiceTier>(),
+        missing<QString>(),
         missing<qodex::codex::ReasoningSummary>(),
         m_threadId
     );
