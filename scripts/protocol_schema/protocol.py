@@ -92,6 +92,9 @@ NULL_PARAMS_REQUEST_RESPONSE_BY_METHOD = {
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
     "configRequirements/read": "ConfigRequirementsReadResponse",
     "memory/reset": "MemoryResetResponse",
+    "remoteControl/disable": "RemoteControlDisableResponse",
+    "remoteControl/enable": "RemoteControlEnableResponse",
+    "remoteControl/status/read": "RemoteControlStatusReadResponse",
     "windowsSandbox/readiness": "WindowsSandboxReadinessResponse",
 }
 
