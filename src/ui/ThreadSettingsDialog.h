@@ -29,7 +29,7 @@ public:
         QString model;
         QString displayName;
         bool isDefault = false;
-        qodex::codex::ReasoningEffort defaultReasoningEffort = qodex::codex::ReasoningEffort::Medium;
+        QString defaultReasoningEffort = QStringLiteral("medium");
         QList<qodex::codex::Ref<qodex::codex::ReasoningEffortOption>> supportedReasoningEfforts;
     };
 
@@ -43,7 +43,7 @@ public:
         QString threadName;
         QString workingDirectory;
         QString model;
-        qodex::codex::ReasoningEffort reasoningEffort = qodex::codex::ReasoningEffort::Medium;
+        QString reasoningEffort = QStringLiteral("medium");
         QString instructionKey;
         bool workingDirectoryUnchanged = false;
         bool modelUnchanged = false;

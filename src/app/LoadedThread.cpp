@@ -54,24 +54,29 @@ qodex::threadui::ipc::common::ThreadStatusActiveFlag activeFlagEnum(const qodex:
 }
 
 qodex::threadui::ipc::common::ThreadReasoningEffort reasoningEffortEnum(
-    const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+    const qodex::codex::Nullable<QString> &reasoningEffort
 ) {
     if (!reasoningEffort.hasValue()) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_UNSPECIFIED;
     }
 
-    switch (reasoningEffort.value()) {
-    case qodex::codex::ReasoningEffort::NoneValue:
+    const QString normalized = reasoningEffort.value().trimmed().toLower();
+    if (normalized == QStringLiteral("none")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_NONE;
-    case qodex::codex::ReasoningEffort::Minimal:
+    }
+    if (normalized == QStringLiteral("minimal")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MINIMAL;
-    case qodex::codex::ReasoningEffort::Low:
+    }
+    if (normalized == QStringLiteral("low")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_LOW;
-    case qodex::codex::ReasoningEffort::Medium:
+    }
+    if (normalized == QStringLiteral("medium")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_MEDIUM;
-    case qodex::codex::ReasoningEffort::High:
+    }
+    if (normalized == QStringLiteral("high")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_HIGH;
-    case qodex::codex::ReasoningEffort::Xhigh:
+    }
+    if (normalized == QStringLiteral("xhigh")) {
         return qodex::threadui::ipc::common::THREAD_REASONING_EFFORT_XHIGH;
     }
 
@@ -228,7 +233,7 @@ void LoadedThread::load(
     const QString &title,
     const Ref<Thread> &thread,
     const QString &model,
-    const Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+    const Nullable<QString> &reasoningEffort
 ) {
     m_title = title.trimmed().isEmpty() ? m_threadId : title.trimmed();
     m_cwd = thread ? thread->cwd : QString{};
@@ -796,6 +801,8 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
         }
 
         return m_client->sendTurnSteerRequest(
+            missing<QMap<QString, Ref<qodex::codex::AdditionalContextEntry>>>(),
+            missing<QString>(),
             m_activeTurnId,
             input,
             missing<QMap<QString, QString>>(),
@@ -804,14 +811,17 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
     }
 
     return m_client->sendTurnStartRequest(
+        missing<QMap<QString, Ref<qodex::codex::AdditionalContextEntry>>>(),
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
+        missing<QString>(),
         missing<Ref<qodex::codex::CollaborationMode>>(),
         missing<QString>(),
-        missing<qodex::codex::ReasoningEffort>(),
+        missing<QString>(),
         missing<QList<Ref<qodex::codex::TurnEnvironmentParams>>>(),
         input,
         missing<QString>(),
+        missing<qodex::codex::MultiAgentMode>(),
         std::nullopt,
         missing<QString>(),
         missing<qodex::codex::Personality>(),

@@ -188,7 +188,7 @@ private:
         QString *errorMessage = nullptr
     ) const;
     [[nodiscard]] qodex::codex::Nullable<QMap<QString, QJsonValue>> configForReasoningEffort(
-        const qodex::codex::ReasoningEffort &reasoningEffort
+        const QString &reasoningEffort
     ) const;
     [[nodiscard]] std::optional<qodex::storage::ThreadSettingsRecord> loadStoredThreadSettings(
         const QString &threadId,

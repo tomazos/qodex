@@ -5,12 +5,11 @@
 
 namespace {
 
-using qodex::codex::ReasoningEffort;
 using qodex::codex::ReasoningEffortOption;
 using qodex::codex::Ref;
 using qodex::ui::ThreadSettingsDialog;
 
-Ref<ReasoningEffortOption> reasoningOption(const ReasoningEffort effort) {
+Ref<ReasoningEffortOption> reasoningOption(const QString &effort) {
     Ref<ReasoningEffortOption> option = Ref<ReasoningEffortOption>::create();
     option->reasoningEffort = effort;
     return option;
@@ -18,15 +17,15 @@ Ref<ReasoningEffortOption> reasoningOption(const ReasoningEffort effort) {
 
 ThreadSettingsDialog::ModelOption modelOption(
     const QString &model,
-    const ReasoningEffort defaultReasoningEffort,
-    const QList<ReasoningEffort> &supportedReasoningEfforts
+    const QString &defaultReasoningEffort,
+    const QList<QString> &supportedReasoningEfforts
 ) {
     ThreadSettingsDialog::ModelOption option;
     option.model = model;
     option.displayName = model;
     option.isDefault = true;
     option.defaultReasoningEffort = defaultReasoningEffort;
-    for (const ReasoningEffort reasoningEffort : supportedReasoningEfforts) {
+    for (const QString &reasoningEffort : supportedReasoningEfforts) {
         option.supportedReasoningEfforts.append(reasoningOption(reasoningEffort));
     }
     return option;
@@ -46,8 +45,8 @@ void ThreadSettingsDialogTest::initialSelectionOverridesReasoningComboDefault() 
     dialog.setModelOptions({
         modelOption(
             QStringLiteral("gpt-5.5"),
-            ReasoningEffort::Medium,
-            {ReasoningEffort::Medium, ReasoningEffort::Xhigh}
+            QStringLiteral("medium"),
+            {QStringLiteral("medium"), QStringLiteral("xhigh")}
         ),
     });
     dialog.setInstructionOptions({
@@ -61,14 +60,14 @@ void ThreadSettingsDialogTest::initialSelectionOverridesReasoningComboDefault() 
     ThreadSettingsDialog::Selection initialSelection;
     initialSelection.workingDirectory = QStringLiteral("/tmp");
     initialSelection.model = QStringLiteral("gpt-5.5");
-    initialSelection.reasoningEffort = ReasoningEffort::Xhigh;
+    initialSelection.reasoningEffort = QStringLiteral("xhigh");
     initialSelection.instructionKey = QStringLiteral("codex-default");
 
     dialog.setInitialSelection(initialSelection);
 
     const ThreadSettingsDialog::Selection selection = dialog.selection();
     QCOMPARE(selection.model, QStringLiteral("gpt-5.5"));
-    QVERIFY(selection.reasoningEffort == ReasoningEffort::Xhigh);
+    QCOMPARE(selection.reasoningEffort, QStringLiteral("xhigh"));
 }
 
 QTEST_MAIN(ThreadSettingsDialogTest)

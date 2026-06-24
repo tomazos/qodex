@@ -43,7 +43,7 @@ public:
         const QString &title,
         const qodex::codex::Ref<qodex::codex::Thread> &thread,
         const QString &model,
-        const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort
+        const qodex::codex::Nullable<QString> &reasoningEffort
     );
     void resume(const QString &title, const qodex::codex::ThreadResumeResponse &response);
     void onThreadClosed();

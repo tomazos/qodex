@@ -90,7 +90,10 @@ NULL_PARAMS_REQUEST_RESPONSE_BY_METHOD = {
     "config/mcpServer/reload": "McpServerRefreshResponse",
     "account/logout": "LogoutAccountResponse",
     "account/rateLimits/read": "GetAccountRateLimitsResponse",
+    "account/usage/read": "GetAccountTokenUsageResponse",
+    "account/workspaceMessages/read": "GetWorkspaceMessagesResponse",
     "configRequirements/read": "ConfigRequirementsReadResponse",
+    "externalAgentConfig/import/readHistories": "ExternalAgentConfigImportHistoriesReadResponse",
     "memory/reset": "MemoryResetResponse",
     "remoteControl/disable": "RemoteControlDisableResponse",
     "remoteControl/enable": "RemoteControlEnableResponse",
@@ -306,8 +309,8 @@ class ProtocolAnalyzer:
                 errors=errors,
             )
 
-        if params_shape == ParamsShape.REF and params_node is not None and params_node.ref:
-            params_type_name = params_node.ref.split("/")[-1]
+        if params_shape == ParamsShape.REF and params_node is not None:
+            params_type_name = self._params_ref_type_name(params_node)
             if self._lookup_named_schema(named_schemas, params_type_name) is None:
                 errors.append(
                     f"{location} {title} params ref points to unknown named schema {params_type_name!r}"
@@ -507,4 +510,23 @@ class ProtocolAnalyzer:
             return ParamsShape.REF
         if params_node.types == ("null",):
             return ParamsShape.NULL
+        if self._nullable_ref_node(params_node) is not None:
+            return ParamsShape.REF
         return ParamsShape.INLINE
+
+    def _params_ref_type_name(self, params_node: SchemaNode) -> str:
+        if params_node.ref is not None:
+            return params_node.ref.split("/")[-1]
+        nullable_ref_node = self._nullable_ref_node(params_node)
+        if nullable_ref_node is not None and nullable_ref_node.ref is not None:
+            return nullable_ref_node.ref.split("/")[-1]
+        raise ValueError("params node does not contain a named schema reference")
+
+    def _nullable_ref_node(self, params_node: SchemaNode) -> SchemaNode | None:
+        if len(params_node.any_of) != 2:
+            return None
+        ref_nodes = [branch for branch in params_node.any_of if branch.ref is not None]
+        null_nodes = [branch for branch in params_node.any_of if branch.types == ("null",)]
+        if len(ref_nodes) == 1 and len(null_nodes) == 1:
+            return ref_nodes[0]
+        return None

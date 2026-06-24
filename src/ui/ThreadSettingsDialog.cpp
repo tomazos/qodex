@@ -42,25 +42,33 @@ QString acceptButtonText(const ThreadSettingsDialog::Mode mode) {
     return QStringLiteral("OK");
 }
 
-QString humanizeReasoningEffort(const qodex::codex::ReasoningEffort effort) {
-    using qodex::codex::ReasoningEffort;
+QString normalizedReasoningEffort(QString effort) {
+    return effort.trimmed().toLower();
+}
 
-    switch (effort) {
-    case ReasoningEffort::NoneValue:
+QString humanizeReasoningEffort(const QString &effort) {
+    const QString normalized = normalizedReasoningEffort(effort);
+
+    if (normalized == QStringLiteral("none")) {
         return QStringLiteral("None");
-    case ReasoningEffort::Minimal:
+    }
+    if (normalized == QStringLiteral("minimal")) {
         return QStringLiteral("Minimal");
-    case ReasoningEffort::Low:
+    }
+    if (normalized == QStringLiteral("low")) {
         return QStringLiteral("Low");
-    case ReasoningEffort::Medium:
+    }
+    if (normalized == QStringLiteral("medium")) {
         return QStringLiteral("Medium");
-    case ReasoningEffort::High:
+    }
+    if (normalized == QStringLiteral("high")) {
         return QStringLiteral("High");
-    case ReasoningEffort::Xhigh:
+    }
+    if (normalized == QStringLiteral("xhigh")) {
         return QStringLiteral("XHigh");
     }
 
-    return QStringLiteral("Unknown");
+    return effort.trimmed().isEmpty() ? QStringLiteral("Unknown") : effort.trimmed();
 }
 
 QString modelDisplayLabel(const ThreadSettingsDialog::ModelOption &option) {
@@ -235,8 +243,7 @@ ThreadSettingsDialog::Selection ThreadSettingsDialog::selection() const {
     }
 
     if (m_reasoningCombo != nullptr && m_reasoningCombo->currentData().isValid()) {
-        value.reasoningEffort =
-            static_cast<qodex::codex::ReasoningEffort>(m_reasoningCombo->currentData().toInt());
+        value.reasoningEffort = normalizedReasoningEffort(m_reasoningCombo->currentData().toString());
     }
 
     if (m_instructionCombo != nullptr) {
@@ -305,9 +312,10 @@ void ThreadSettingsDialog::rebuildReasoningCombo(const bool preserveCurrentSelec
 
         m_reasoningCombo->addItem(
             humanizeReasoningEffort(option->reasoningEffort),
-            static_cast<int>(option->reasoningEffort)
+            normalizedReasoningEffort(option->reasoningEffort)
         );
-        if (option->reasoningEffort == modelOption->defaultReasoningEffort && defaultIndex < 0) {
+        if (normalizedReasoningEffort(option->reasoningEffort) == normalizedReasoningEffort(modelOption->defaultReasoningEffort) &&
+            defaultIndex < 0) {
             defaultIndex = m_reasoningCombo->count() - 1;
         }
 
@@ -327,7 +335,7 @@ void ThreadSettingsDialog::rebuildReasoningCombo(const bool preserveCurrentSelec
     if (selectedIndex < 0) {
         selectedIndex = indexForComboData(
             m_reasoningCombo,
-            static_cast<int>(m_initialSelection.reasoningEffort)
+            normalizedReasoningEffort(m_initialSelection.reasoningEffort)
         );
     }
     if (selectedIndex < 0) {

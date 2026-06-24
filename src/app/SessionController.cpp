@@ -93,38 +93,38 @@ std::optional<QString> optionalTrimmedString(const QString &value) {
     return trimmed.isEmpty() ? std::nullopt : std::optional<QString>(trimmed);
 }
 
-std::optional<QString> reasoningEffortKey(const qodex::codex::Nullable<qodex::codex::ReasoningEffort> &reasoningEffort) {
+QString normalizedReasoningEffort(QString effort) {
+    return effort.trimmed().toLower();
+}
+
+std::optional<QString> reasoningEffortKey(const qodex::codex::Nullable<QString> &reasoningEffort) {
     if (!reasoningEffort.hasValue()) {
         return std::nullopt;
     }
 
-    return qodex::codex::toJson(reasoningEffort.value()).toString();
+    return normalizedReasoningEffort(reasoningEffort.value());
 }
 
-std::optional<QString> reasoningEffortKey(const qodex::codex::ReasoningEffort reasoningEffort) {
-    return qodex::codex::toJson(reasoningEffort).toString();
+std::optional<QString> reasoningEffortKey(const QString &reasoningEffort) {
+    const QString normalized = normalizedReasoningEffort(reasoningEffort);
+    return normalized.isEmpty() ? std::nullopt : std::optional<QString>(normalized);
 }
 
-std::optional<qodex::codex::ReasoningEffort> reasoningEffortFromKey(const std::optional<QString> &key) {
+std::optional<QString> reasoningEffortFromKey(const std::optional<QString> &key) {
     if (!key.has_value() || key->trimmed().isEmpty()) {
         return std::nullopt;
     }
 
-    qodex::codex::ReasoningEffort reasoningEffort{};
-    QString errorMessage;
-    if (!qodex::codex::fromJson(QJsonValue(*key), reasoningEffort, &errorMessage)) {
-        return std::nullopt;
-    }
-
-    return reasoningEffort;
+    return normalizedReasoningEffort(*key);
 }
 
 bool modelOptionSupportsReasoningEffort(
     const qodex::ui::ThreadSettingsDialog::ModelOption &option,
-    const qodex::codex::ReasoningEffort effort
+    const QString &effort
 ) {
+    const QString normalized = normalizedReasoningEffort(effort);
     for (const Ref<qodex::codex::ReasoningEffortOption> &supportedEffort : option.supportedReasoningEfforts) {
-        if (supportedEffort && supportedEffort->reasoningEffort == effort) {
+        if (supportedEffort && normalizedReasoningEffort(supportedEffort->reasoningEffort) == normalized) {
             return true;
         }
     }
@@ -132,12 +132,12 @@ bool modelOptionSupportsReasoningEffort(
     return false;
 }
 
-qodex::codex::ReasoningEffort preferredCreateReasoningEffort(
+QString preferredCreateReasoningEffort(
     const qodex::ui::ThreadSettingsDialog::ModelOption &option
 ) {
-    return modelOptionSupportsReasoningEffort(option, qodex::codex::ReasoningEffort::Xhigh)
-        ? qodex::codex::ReasoningEffort::Xhigh
-        : option.defaultReasoningEffort;
+    return modelOptionSupportsReasoningEffort(option, QStringLiteral("xhigh"))
+        ? QStringLiteral("xhigh")
+        : normalizedReasoningEffort(option.defaultReasoningEffort);
 }
 
 void applyCreateModelDefaults(
@@ -655,10 +655,10 @@ Nullable<QString> SessionController::baseInstructionsFromInstructionKey(
 }
 
 Nullable<QMap<QString, QJsonValue>> SessionController::configForReasoningEffort(
-    const qodex::codex::ReasoningEffort &reasoningEffort
+    const QString &reasoningEffort
 ) const {
     QMap<QString, QJsonValue> config;
-    config.insert(QStringLiteral("modelReasoningEffort"), qodex::codex::toJson(reasoningEffort));
+    config.insert(QStringLiteral("modelReasoningEffort"), QJsonValue(normalizedReasoningEffort(reasoningEffort)));
     return Nullable<QMap<QString, QJsonValue>>::fromValue(config);
 }
 
@@ -979,15 +979,16 @@ void SessionController::onCreateThreadRequested() {
         missing<QString>(),
         Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
+        missing<qodex::codex::MultiAgentMode>(),
         missing<QString>(),
-        std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<QList<QString>>(),
         missing<qodex::codex::SandboxMode>(),
+        missing<QList<Ref<qodex::codex::SelectedCapabilityRoot>>>(),
         missing<QString>(),
         missing<QString>(),
         missing<qodex::codex::ThreadStartSource>(),
-        missing<qodex::codex::ThreadSource>()
+        missing<QString>()
     );
     if (!requestId.isValid()) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/start request."));
@@ -1039,11 +1040,11 @@ void SessionController::onResumeThreadRequested(const QString &threadId) {
         missing<QString>(),
         std::nullopt,
         missing<QList<Ref<qodex::codex::ResponseItem>>>(),
+        missing<Ref<qodex::codex::ThreadResumeInitialTurnsPageParams>>(),
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
-        std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<QList<QString>>(),
         missing<qodex::codex::SandboxMode>(),
@@ -1131,11 +1132,11 @@ void SessionController::onEditThreadSettingsRequested(const QString &threadId) {
         missing<QString>(),
         std::nullopt,
         missing<QList<Ref<qodex::codex::ResponseItem>>>(),
+        missing<Ref<qodex::codex::ThreadResumeInitialTurnsPageParams>>(),
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
-        std::nullopt,
         missing<qodex::codex::Personality>(),
         missing<QList<QString>>(),
         missing<qodex::codex::SandboxMode>(),
@@ -1263,12 +1264,11 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         missing<QString>(),
         missing<QString>(),
         missing<QString>(),
-        std::nullopt,
         missing<QList<QString>>(),
         missing<qodex::codex::SandboxMode>(),
         missing<QString>(),
         threadId,
-        missing<qodex::codex::ThreadSource>()
+        missing<QString>()
     );
     if (!requestId.isValid()) {
         m_mainWindow->setStatusMessage(QStringLiteral("Failed to send thread/fork request."));
@@ -2001,6 +2001,7 @@ void SessionController::requestThreadList(const bool archived) {
         missing<std::variant<QString, QList<QString>>>(),
         missing<qint64>(),
         missing<QList<QString>>(),
+        missing<QString>(),
         missing<QString>(),
         missing<qodex::codex::SortDirection>(),
         missing<ThreadSortKey>(),
