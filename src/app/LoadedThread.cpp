@@ -821,7 +821,7 @@ JsonRpcId LoadedThread::dispatchPendingThreadUiUserInputRequest(const PendingThr
         missing<QList<Ref<qodex::codex::TurnEnvironmentParams>>>(),
         input,
         missing<QString>(),
-        missing<qodex::codex::MultiAgentMode>(),
+        missing<Ref<qodex::codex::MultiAgentMode>>(),
         std::nullopt,
         missing<QString>(),
         missing<qodex::codex::Personality>(),

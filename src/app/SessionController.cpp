@@ -966,6 +966,7 @@ void SessionController::onCreateThreadRequested() {
     }
 
     const JsonRpcId requestId = m_client->sendThreadStartRequest(
+        std::nullopt,
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
         baseInstructions,
@@ -976,10 +977,11 @@ void SessionController::onCreateThreadRequested() {
         missing<QList<Ref<qodex::codex::TurnEnvironmentParams>>>(),
         missing<bool>(),
         std::nullopt,
+        missing<qodex::codex::ThreadHistoryMode>(),
         missing<QString>(),
         Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
-        missing<qodex::codex::MultiAgentMode>(),
+        missing<Ref<qodex::codex::MultiAgentMode>>(),
         missing<QString>(),
         missing<qodex::codex::Personality>(),
         missing<QList<QString>>(),
@@ -1260,6 +1262,7 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         missing<QString>(),
         std::nullopt,
         std::nullopt,
+        missing<QString>(),
         selection->modelUnchanged ? missing<QString>() : Nullable<QString>::fromValue(selection->model),
         missing<QString>(),
         missing<QString>(),
@@ -1996,6 +1999,7 @@ void SessionController::requestThreadList(const bool archived) {
     m_mainWindow->setStatusMessage(QStringLiteral("Loading threads..."));
 
     const JsonRpcId requestId = m_client->sendThreadListRequest(
+        missing<QString>(),
         Nullable<bool>::fromValue(archived),
         missing<QString>(),
         missing<std::variant<QString, QList<QString>>>(),
