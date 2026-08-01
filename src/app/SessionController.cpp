@@ -1255,10 +1255,12 @@ void SessionController::onForkThreadRequested(const QString &threadId) {
         missing<std::variant<qodex::codex::AskForApprovalEnum, Ref<qodex::codex::AskForApprovalGranular>>>(),
         missing<qodex::codex::ApprovalsReviewer>(),
         baseInstructions,
+        missing<QString>(),
         selection->reasoningEffortUnchanged ? missing<QMap<QString, QJsonValue>>()
                                             : configForReasoningEffort(selection->reasoningEffort),
         selection->workingDirectoryUnchanged ? missing<QString>()
                                             : Nullable<QString>::fromValue(selection->workingDirectory),
+        std::nullopt,
         missing<QString>(),
         std::nullopt,
         std::nullopt,
@@ -2003,6 +2005,7 @@ void SessionController::requestThreadList(const bool archived) {
         Nullable<bool>::fromValue(archived),
         missing<QString>(),
         missing<std::variant<QString, QList<QString>>>(),
+        missing<bool>(),
         missing<qint64>(),
         missing<QList<QString>>(),
         missing<QString>(),
