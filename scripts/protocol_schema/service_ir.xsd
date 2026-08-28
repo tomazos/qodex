@@ -108,12 +108,10 @@
       <xs:element name="alternative" type="AlternativeType" minOccurs="1" maxOccurs="unbounded"/>
     </xs:sequence>
     <xs:attribute name="id" type="xs:string" use="required"/>
-    <xs:attribute name="discriminator">
+    <xs:attribute name="discriminator" use="required">
       <xs:simpleType>
         <xs:restriction base="xs:string">
-          <xs:enumeration value="type"/>
-          <xs:enumeration value="mode"/>
-          <xs:enumeration value="kind"/>
+          <xs:minLength value="1"/>
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
